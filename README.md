@@ -86,6 +86,14 @@ Native Windows Open File, Save As and Open Folder were additionally exercised
 through their actual OS dialogs using disposable fixtures. Save As preserved
 the exact source text; folder selection populated the explorer and recent history.
 
+To check production frontend assets embedded in a native executable, build with
+`pnpm tauri build --debug --no-bundle`, launch the resulting debug executable with
+the temporary CDP environment above, and run `node scripts/production-smoke.mjs`.
+This UI-only test requires `tauri.localhost`, verifies copied sidecar hashes, and
+checks real completion/navigation, Unicode edits/save, argument-count diagnostics,
+themes and Exit without Vite or development-module access. The Rust executable
+uses the debug profile; a release-optimized installer remains unverified.
+
 ## Shortcuts
 
 | Action | Shortcut |

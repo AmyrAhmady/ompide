@@ -78,6 +78,15 @@ configuration come from vscode-pawn commit
 
 ## Compatibility workarounds
 
+- Production CSP needs `data:` in `connect-src`: the editor API registers our
+  bundled grammar and theme contents as data URLs and fetches them as resources.
+  This permits local data fetches without adding external network hosts or
+  executable data scripts. Production-assets smoke tests catch failures that
+  Vite development mode does not expose.
+- Keep the shell header class distinct from VS Code API stylesheet classes.
+  `.menubar` can inherit clipping from upstream CSS; use `.ide-menubar` with
+  explicit stacking and visible overflow. Tab activation must focus the editor
+  so subsequent keyboard input reaches the selected document.
 - pawnlsp 0.34.47 crashes during rapid typing with an index-out-of-range panic in
   pawn-analysis 0.30.24 `preprocess.directiveRange`/`reuseCompatibleContext`.
   Pin 0.33.75, which predates the incremental workspace expansion reuse and passes

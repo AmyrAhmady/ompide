@@ -129,6 +129,7 @@ export class Workbench {
     if (previous) previous.view = this.codeEditor.saveViewState();
     this.codeEditor.setModel(document.model);
     if (document.view) this.codeEditor.restoreViewState(document.view);
+    this.codeEditor.focus();
     this.update({ active: uri });
   }
   async chooseFolder(recent?: string): Promise<void> {
