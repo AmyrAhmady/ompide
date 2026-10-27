@@ -24,7 +24,7 @@ for (const tool of manifest.tools) {
     if (error.code !== 'ENOENT') throw error;
   }
   if (!bytes) {
-    if (!download) throw new Error(`Missing ${archive}. Place the pinned archive there manually, or run pnpm tools:prepare --download. Source: ${tool.url}`);
+    if (!download) throw new Error(`Missing ${archive}. Place the pinned archive there manually, or run npm.cmd run tools:prepare -- --download. Source: ${tool.url}`);
     console.log(`Downloading ${tool.name} ${tool.version}: ${tool.url}`);
     const response = await fetch(tool.url);
     if (!response.ok) throw new Error(`Download failed: ${response.status} ${tool.url}`);

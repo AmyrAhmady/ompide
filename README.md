@@ -21,13 +21,19 @@ and installed packaging remain unfinished. Debugging is outside the project scop
 ## Development
 
 Windows x64 prerequisites: Node.js 22.14 or newer in the supported Node 22 line,
-pnpm 11.25.0, Rust's MSVC toolchain (verified with Rust 1.91.1), Visual Studio C++
+npm (included with Node.js), Rust's MSVC toolchain (verified with Rust 1.91.1), Visual Studio C++
 Build Tools with the Windows SDK, WebView2 Runtime, Git, and Windows `tar`.
 Linux/macOS are intended future targets and have not been verified.
 
 ```powershell
-pnpm install --frozen-lockfile
+npm ci
 ```
+
+Use npm for all project commands; commit `package-lock.json` with dependency
+changes. The project `.npmrc` disables automatic peer installation to avoid
+[npm 10’s optional-peer resolver crash](https://github.com/npm/cli/issues/9787).
+Windows PowerShell examples that forward flags use `npm.cmd` so the installed
+`npm.ps1` shim preserves the argument separator. Editor dependencies are explicit and kept aligned by `package.json` overrides.
 
 Prepare the pinned PawnKit tools and open.mp compiler explicitly before starting
 the native application. This downloads the GitHub release assets listed in
@@ -36,11 +42,11 @@ sidecar files. See [the toolchain notes](toolchain/README.md) for sources, licen
 offline/manual preparation and compatibility workarounds.
 
 ```powershell
-pnpm tools:prepare --download
-pnpm tauri dev
+npm.cmd run tools:prepare -- --download
+npm run tauri -- dev
 ```
 
-`pnpm dev` serves the frontend for development, but filesystem and language
+`npm run dev` serves the frontend for development, but filesystem and language
 operations require the native application. Merely opening a folder does not
 install dependencies or download tools. Native file access is limited to the
 selected workspace and files explicitly selected in native dialogs. UTF-8 files,
@@ -50,14 +56,14 @@ and files over 8 MiB are rejected with guidance.
 ## Verification
 
 ```powershell
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+npm run lint
+npm run typecheck
+npm test
+npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
 cargo test --manifest-path src-tauri/Cargo.toml -p pawn-core
 cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
-pnpm test:tools
+npm run test:tools
 ```
 
 The offline frontend/core tests do not require PawnKit tools. `test:tools` is an
@@ -66,7 +72,7 @@ requires the prepared binaries, and fails if they are missing. Run focused check
 for routine changes; a full native build is needed only when native integration
 or packaging needs verification.
 
-For the real desktop smoke test, start `pnpm dev`, then launch the debug executable
+For the real desktop smoke test, start `npm run dev`, then launch the debug executable
 from a separate PowerShell process with a temporary loopback CDP port:
 
 ```powershell
@@ -87,7 +93,7 @@ through their actual OS dialogs using disposable fixtures. Save As preserved
 the exact source text; folder selection populated the explorer and recent history.
 
 To check production frontend assets embedded in a native executable, build with
-`pnpm tauri build --debug --no-bundle`, launch the resulting debug executable with
+`npm.cmd run tauri -- build --debug --no-bundle`, launch the resulting debug executable with
 the temporary CDP environment above, and run `node scripts/production-smoke.mjs`.
 This UI-only test requires `tauri.localhost`, verifies copied sidecar hashes, and
 checks real completion/navigation, Unicode edits/save, argument-count diagnostics,

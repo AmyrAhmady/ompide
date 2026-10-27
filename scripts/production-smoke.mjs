@@ -1,5 +1,5 @@
 // UI-only verification of the actual bundled frontend. No dev-module imports or mock IPC.
-// Launch a `pnpm tauri build --debug --no-bundle` executable with loopback CDP enabled.
+// Launch an `npm.cmd run tauri -- build --debug --no-bundle` executable with loopback CDP enabled.
 import { chromium, expect } from '@playwright/test';
 import { cp, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';

@@ -42,7 +42,7 @@
   "editor.empty": "Open a Pawn file or folder to start editing.",
   "editor.welcome": "Pawn development for open.mp and SA-MP",
   "editor.loading": "Starting editor…",
-  "editor.desktopRequired": "File and language features require the desktop application. Start it with pnpm tauri dev.",
+  "editor.desktopRequired": "File and language features require the desktop application. Start it with npm run tauri -- dev.",
   "recent.title": "Recent workspaces",
   "recent.files": "Recent files",
   "prompt.unsaved": "Save changes to {name}?",
