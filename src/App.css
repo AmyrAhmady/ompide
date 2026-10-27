@@ -17,6 +17,7 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .menu [role="menu"] { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 290px; padding: 5px; background: var(--editorWidget-background); border: 1px solid var(--editorWidget-border); }
 .menu button { display: flex; justify-content: space-between; gap: 30px; background: transparent; border: 0; width: 100%; padding: 6px 12px; text-align: left; }
 .menu button:hover:enabled { background: var(--list-activeSelectionBackground); }
+.menu-heading { display: block; padding: 6px 12px; color: var(--descriptionForeground); font-size: 11px; }
 kbd { font: 11px "Segoe UI", system-ui, sans-serif; color: var(--descriptionForeground); white-space: nowrap; }
 hr { border: 0; border-top: 1px solid var(--panel-border); margin: 5px 8px; }
 .workspace-body { flex: 1; display: flex; min-height: 0; }

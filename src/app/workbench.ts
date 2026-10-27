@@ -18,14 +18,14 @@ interface OpenDocument {
 export interface Tab { uri: string; name: string; dirty: boolean; external?: 'changed' | 'deleted' }
 type Choice = 'save' | 'discard' | 'cancel';
 export interface WorkbenchState {
-  ready: boolean; root?: string; recent: string[]; tabs: Tab[]; active?: string;
+  ready: boolean; root?: string; recent: string[]; recentFiles: string[]; tabs: Tab[]; active?: string;
   settings: Settings; status: string; error?: string; problems: editor.IMarker[];
   prompt?: { name: string }; position: { line: number; column: number };
   treeVersion: number;
 }
 
 export class Workbench {
-  private state: WorkbenchState = { ready: false, recent: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0 };
+  private state: WorkbenchState = { ready: false, recent: [], recentFiles: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0 };
   private subscribers = new Set<() => void>();
   private documents = new Map<string, OpenDocument>();
   private opening = new Map<string, Promise<void>>();
@@ -39,6 +39,7 @@ export class Workbench {
   private answer?: (choice: Choice) => void;
   private closeListener?: () => void;
   private saving = new Map<string, Promise<boolean>>();
+  private settingsQueue: Promise<void> = Promise.resolve();
   private watchQueue: Promise<void> = Promise.resolve();
   private diskQueue: Promise<void> = Promise.resolve();
   private watchGeneration = 0;
@@ -57,7 +58,7 @@ export class Workbench {
   async mount(container: HTMLElement): Promise<() => void> {
     let settings = defaults;
     if (desktop) {
-      try { const preferences = await native.preferences(); settings = parseSettings(preferences.settings); this.update({ settings, recent: preferences.recentWorkspaces }); }
+      try { const preferences = await native.preferences(); settings = parseSettings(preferences.settings); this.update({ settings, recent: preferences.recentWorkspaces, recentFiles: preferences.recentFiles }); }
       catch (error) { this.report(error); }
     }
     await initializeEditor(settings, async (uri, line, column) => { await this.openUri(uri, line, column); });
@@ -77,6 +78,7 @@ export class Workbench {
   }
 
   async openFile(): Promise<void> { const snapshot = await native.chooseDocument(); if (snapshot) await this.openSnapshot(snapshot); }
+  async recentFile(path: string): Promise<void> { await this.openSnapshot(await native.recentDocument(path)); }
   async openPath(path: string): Promise<void> { await this.openSnapshot(await native.read(path)); }
   async openUri(uri: string, line?: number, column?: number): Promise<void> {
     uri = Uri.parse(uri).toString();
@@ -96,6 +98,7 @@ export class Workbench {
     const opening = this.addDocument(snapshot.uri, snapshot.path.split(/[\\/]/).at(-1) ?? snapshot.path, snapshot.text, snapshot);
     this.opening.set(snapshot.uri, opening);
     try { await opening; } finally { this.opening.delete(snapshot.uri); }
+    try { this.update({ recentFiles: await native.rememberDocument(snapshot.path) }); } catch (error) { this.report(error); }
     await this.ensureLanguage();
     this.sessionDocuments.add(snapshot.uri);
     await this.startWatching();
@@ -259,12 +262,17 @@ export class Workbench {
     else await this.codeEditor?.getAction(id)?.run();
     this.codeEditor?.focus();
   }
-  async settings(settings: Settings): Promise<void> {
-    await applyEditorSettings(settings);
+  settings(patch: Partial<Settings>): Promise<void> {
+    const settings = { ...this.state.settings, ...patch };
+    this.update({ settings });
     this.codeEditor?.updateOptions({ fontSize: settings.fontSize, fontFamily: settings.fontFamily, wordWrap: settings.wordWrap ? 'on' : 'off', minimap: { enabled: settings.minimap } });
     for (const document of this.documents.values()) document.model.updateOptions({ tabSize: settings.tabSize, insertSpaces: settings.insertSpaces });
-    if (desktop) await native.storeSettings(settings);
-    this.update({ settings });
+    this.settingsQueue = this.settingsQueue.catch(() => undefined).then(async () => {
+      if (this.state.settings !== settings) return;
+      await applyEditorSettings(settings);
+      if (desktop) await native.storeSettings(settings);
+    });
+    return this.settingsQueue;
   }
   private ensureLanguage(): Promise<void> {
     this.languageQueue = this.languageQueue.catch(() => undefined).then(async () => {

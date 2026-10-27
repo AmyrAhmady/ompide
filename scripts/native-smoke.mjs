@@ -47,7 +47,7 @@ try {
     const document = session.client.code2ProtocolConverter.asUri(Reflect.get(workbench, 'documents').get(active).model.uri);
     const completion = await session.client.sendRequest('textDocument/completion', { textDocument: { uri: document }, position: { line: 4, character: 19 } });
     const definition = await session.client.sendRequest('textDocument/definition', { textDocument: { uri: document }, position: { line: 4, character: 18 } });
-    return { completion, definition, active };
+    return { completion, definition, active, modelId: Reflect.get(workbench, 'documents').get(active).model.id };
   });
   expect((Array.isArray(results.completion) ? results.completion : results.completion.items).some(item => item.label === 'Add')).toBe(true);
   expect(JSON.stringify(results.definition)).toContain('math.inc');
@@ -64,6 +64,13 @@ try {
   await page.keyboard.press('F12');
   await expect(page.getByRole('tab', { name: 'math.inc', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'main.pwn', exact: true }).click();
+  expect(await page.evaluate(async uri => {
+    const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
+    const { workbench } = await import(moduleUrl);
+    const model = Reflect.get(workbench, 'documents').get(uri).model;
+    await workbench.openUri(uri);
+    return { modelId: Reflect.get(workbench, 'documents').get(uri).model.id, reused: Reflect.get(workbench, 'documents').get(uri).model === model, position: Reflect.get(workbench, 'codeEditor').getPosition() };
+  }, results.active)).toEqual({ modelId: results.modelId, reused: true, position: { lineNumber: 5, column: 20 } });
   await page.screenshot({ path: path.join(root, 'test-results/native-editor-dark.png') });
   // Real typing, save, undo, cancel/discard and reopen preserve the disk contents.
   await page.locator('.monaco-editor').click({ position: { x: 250, y: 100 } });
@@ -123,8 +130,34 @@ try {
   await expect(page.locator('.workbench')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.monaco-editor-background').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect.poll(async () => JSON.parse(await readFile(preferences, 'utf8')).settings.theme).toBe('light');
+  await page.getByLabel('Font family', { exact: true }).fill('Consolas');
+  await page.getByLabel('Font size', { exact: true }).fill('18');
+  await page.getByLabel('Tab size', { exact: true }).fill('2');
+  await page.getByLabel('Word wrap', { exact: true }).check();
+  await page.getByLabel('Minimap', { exact: true }).check();
+  await expect.poll(async () => JSON.parse(await readFile(preferences, 'utf8')).settings).toMatchObject({ theme: 'light', fontFamily: 'Consolas', fontSize: 18, tabSize: 2, wordWrap: true, minimap: true });
   await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await page.screenshot({ path: path.join(root, 'test-results/native-editor-light.png') });
+  // Save All must persist each model, and history must grant only previously opened files.
+  await page.evaluate(async () => {
+    const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
+    const { workbench } = await import(moduleUrl);
+    for (const document of Reflect.get(workbench, 'documents').values()) document.model.setValue(document.model.getValue() + '\n// save all smoke\n');
+  });
+  await page.keyboard.press('Control+Alt+s');
+  await expect(page.locator('.tab .dirty')).toHaveCount(0);
+  for (const file of ['main.pwn', 'math.inc']) expect(await readFile(path.join(workspace, file), 'utf8')).toContain('// save all smoke');
+  expect(JSON.parse(await readFile(preferences, 'utf8')).recentFiles).toContain(path.join(workspace, 'main.pwn'));
+  expect(await page.evaluate(async outside => {
+    const { native } = await import('/src/lib/native.ts');
+    try { await native.recentDocument(outside); return 'unexpected access'; } catch (error) { return error.code; }
+  }, path.join(root, 'README.md'))).toBe('permissionDenied');
+  await page.getByRole('button', { name: 'Close main.pwn', exact: true }).click();
+  await page.getByRole('button', { name: 'Close math.inc', exact: true }).click();
+  await page.getByRole('button', { name: path.join(workspace, 'main.pwn'), exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'main.pwn', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'math.inc', exact: true }).click();
+  await page.getByRole('tab', { name: 'main.pwn', exact: true }).click();
   await page.keyboard.press('Control+n');
   await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
   await page.locator('.monaco-editor').click({ position: { x: 150, y: 30 } });
@@ -151,7 +184,7 @@ try {
     await closed;
     console.log('Native Exit: cancel preserves all tabs and edits; discard closes the real window');
   }
-  console.log('Real desktop: Tauri channel, completion UI, F12 navigation, new/edit/save/undo, dirty close prompts, reopen, external clean/dirty changes and rename, Problems diagnostics, and persisted Light/Dark switching passed');
+  console.log('Real desktop: Tauri channel, completion UI, F12 navigation, new/edit/save/save-all/undo, dirty close prompts, reopen/recent-file scope, external clean/dirty changes and rename, Problems diagnostics, and persisted Light/Dark switching passed');
   if (errors.length) throw new Error(errors.join('\n'));
 } catch (error) {
   console.error('Desktop verification failed:', error);
@@ -172,6 +205,7 @@ try {
   try { if (!page.isClosed()) await page.evaluate(async () => {
     const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
     const { workbench } = await import(moduleUrl);
+    await Reflect.get(workbench, 'settingsQueue');
     await Reflect.get(workbench, 'stopLanguage').call(workbench);
     await Reflect.get(workbench, 'stopWatching').call(workbench);
   });

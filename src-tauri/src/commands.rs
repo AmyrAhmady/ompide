@@ -24,6 +24,7 @@ pub struct NativeState {
     next: AtomicU64,
     chosen_workspace: Mutex<Option<PathBuf>>,
     pub watch: Mutex<Option<FileWatch>>,
+    preferences_lock: Mutex<()>,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,6 +66,8 @@ pub struct Preferences {
     #[serde(default)]
     pub recent_workspaces: Vec<PathBuf>,
     #[serde(default)]
+    pub recent_files: Vec<PathBuf>,
+    #[serde(default)]
     pub settings: serde_json::Value,
 }
 fn preferences_path(app: &AppHandle) -> Result<PathBuf> {
@@ -86,7 +89,12 @@ pub fn load_preferences(app: AppHandle) -> Result<Preferences> {
     }
 }
 #[tauri::command]
-pub fn store_preferences(app: AppHandle, settings: serde_json::Value) -> Result<()> {
+pub fn store_preferences(
+    app: AppHandle,
+    state: State<'_, NativeState>,
+    settings: serde_json::Value,
+) -> Result<()> {
+    let _guard = lock(&state.preferences_lock)?;
     let mut preferences = load_preferences(app.clone())?;
     preferences.settings = settings;
     write_preferences(&app, &preferences)
@@ -106,11 +114,14 @@ fn write_preferences(app: &AppHandle, preferences: &Preferences) -> Result<()> {
 fn select_workspace(app: &AppHandle, state: &NativeState, path: &Path) -> Result<PathBuf> {
     let workspace = Workspace::open(path)?;
     let root = workspace.root().to_path_buf();
-    let mut preferences = load_preferences(app.clone())?;
-    preferences.recent_workspaces.retain(|path| path != &root);
-    preferences.recent_workspaces.insert(0, root.clone());
-    preferences.recent_workspaces.truncate(12);
-    write_preferences(app, &preferences)?;
+    {
+        let _guard = lock(&state.preferences_lock)?;
+        let mut preferences = load_preferences(app.clone())?;
+        preferences.recent_workspaces.retain(|path| path != &root);
+        preferences.recent_workspaces.insert(0, root.clone());
+        preferences.recent_workspaces.truncate(12);
+        write_preferences(app, &preferences)?;
+    }
     lock(&state.lsp)?.take();
     lock(&state.watch)?.take();
     *lock(&state.workspace)? = Some(workspace);
@@ -201,6 +212,36 @@ fn permitted(state: &NativeState, path: &Path) -> Result<PathBuf> {
         .ok_or_else(|| error("noWorkspace", "no workspace selected"))?
         .resolve(&canonical)
         .map_err(Into::into)
+}
+#[tauri::command]
+pub async fn remember_document(
+    app: AppHandle,
+    state: State<'_, NativeState>,
+    path: PathBuf,
+) -> Result<Vec<PathBuf>> {
+    let path = permitted(&state, &path)?;
+    let _guard = lock(&state.preferences_lock)?;
+    let mut preferences = load_preferences(app.clone())?;
+    if preferences.recent_files.first() != Some(&path) {
+        preferences.recent_files.retain(|other| other != &path);
+        preferences.recent_files.insert(0, path);
+        preferences.recent_files.truncate(12);
+        write_preferences(&app, &preferences)?;
+    }
+    Ok(preferences.recent_files)
+}
+#[tauri::command]
+pub async fn recent_document(
+    app: AppHandle,
+    state: State<'_, NativeState>,
+    path: PathBuf,
+) -> Result<FileSnapshot> {
+    if !load_preferences(app)?.recent_files.contains(&path) {
+        return Err(error("permissionDenied", "file is not in recent history"));
+    }
+    let snapshot = workspace::read_document(&path)?;
+    lock(&state.allowed)?.insert(snapshot.path.clone());
+    Ok(snapshot)
 }
 #[tauri::command]
 pub async fn read_document(state: State<'_, NativeState>, path: PathBuf) -> Result<FileSnapshot> {

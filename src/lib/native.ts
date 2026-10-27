@@ -3,7 +3,7 @@ import type { Settings } from '../settings/settings';
 
 export interface FileSnapshot { path: string; uri: string; text: string; bom: boolean; revision: string }
 export interface Entry { name: string; path: string; directory: boolean; symlink: boolean }
-export interface Preferences { recentWorkspaces: string[]; settings: unknown }
+export interface Preferences { recentWorkspaces: string[]; recentFiles: string[]; settings: unknown }
 export interface WatchEvent { paths: string[]; rescan: boolean; error: string | null }
 export const desktop = isTauri();
 export const native = {
@@ -13,6 +13,8 @@ export const native = {
   activateWorkspace: (path: string) => invoke<string>('activate_workspace', { path }),
   recentWorkspace: (path: string) => invoke<string>('recent_workspace', { path }),
   chooseDocument: () => invoke<FileSnapshot | null>('choose_document'),
+  rememberDocument: (path: string) => invoke<string[]>('remember_document', { path }),
+  recentDocument: (path: string) => invoke<FileSnapshot>('recent_document', { path }),
   read: (path: string) => invoke<FileSnapshot>('read_document', { path }),
   save: (path: string, text: string, bom: boolean, revision: string) => invoke<FileSnapshot>('save_document', { path, text, bom, revision }),
   saveAs: (text: string, bom: boolean, protectedPaths: string[]) => invoke<FileSnapshot | null>('save_document_as', { text, bom, protectedPaths }),

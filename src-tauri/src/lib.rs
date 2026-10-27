@@ -10,6 +10,8 @@ pub fn run() {
             commands::activate_workspace,
             commands::recent_workspace,
             commands::choose_document,
+            commands::remember_document,
+            commands::recent_document,
             commands::read_document,
             commands::save_document,
             commands::save_document_as,

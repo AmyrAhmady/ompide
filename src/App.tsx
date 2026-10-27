@@ -58,7 +58,7 @@ function Explorer({ root, active, revision }: { root?: string; active?: string; 
 }
 
 function SettingsDialog({ settings, close }: { settings: Settings; close: () => void }) {
-  const update = (patch: Partial<Settings>) => run(() => workbench.settings({ ...settings, ...patch }));
+  const update = (patch: Partial<Settings>) => run(() => workbench.settings(patch));
   return <Modal label={t('settings.title')} onCancel={close}>
     <h2>{t('settings.title')}</h2>
     <div className="settings-fields">
@@ -131,6 +131,7 @@ function App() {
           <MenuItem label="command.close" shortcut="Ctrl+W" disabled={!active} action={() => run(() => workbench.close(state.active!))} />
           <MenuItem label="command.reopen" shortcut="Ctrl+Shift+T" disabled={!nativeReady} action={() => run(() => workbench.reopen())} />
           <MenuItem label="command.reload" disabled={!active} action={() => run(() => workbench.reload())} />
+          {state.recentFiles.length > 0 && <><hr /><span className="menu-heading">{t('recent.files')}</span>{state.recentFiles.slice(0, 5).map(path => <button type="button" role="menuitem" key={path} title={path} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); run(() => workbench.recentFile(path)); }}>{path.split(/[\\/]/).at(-1)}</button>)}</>}
           <hr /><MenuItem label="command.quit" disabled={!nativeReady} action={() => run(() => workbench.quit())} />
         </Menu>
         <Menu label="menu.edit">
@@ -157,6 +158,7 @@ function App() {
           {!active && <div className="empty-editor"><h1>{t('app.name')}</h1><p>{t('editor.welcome')}</p><p className="muted">{state.ready ? desktop ? t('editor.empty') : t('editor.desktopRequired') : t('editor.loading')}</p>
             <div className="welcome-actions"><button type="button" disabled={!nativeReady} onClick={() => run(() => workbench.openFile())}>{t('command.openFile')}<kbd>Ctrl+O</kbd></button><button type="button" disabled={!nativeReady} onClick={() => run(() => workbench.chooseFolder())}>{t('command.openFolder')}<kbd>Ctrl+K Ctrl+O</kbd></button></div>
             {state.recent.length > 0 && <><h2>{t('recent.title')}</h2><ul className="recent-list">{state.recent.map(path => <li key={path}><button type="button" title={path} onClick={() => run(() => workbench.chooseFolder(path))}>{path}</button></li>)}</ul></>}
+            {state.recentFiles.length > 0 && <><h2>{t('recent.files')}</h2><ul className="recent-list">{state.recentFiles.map(path => <li key={path}><button type="button" title={path} onClick={() => run(() => workbench.recentFile(path))}>{path}</button></li>)}</ul></>}
           </div>}
         </div>
         {problemsOpen && <section className="problems-panel"><div className="panel-heading"><span>{t('command.problems')} ({state.problems.length})</span><button type="button" onClick={() => setProblemsOpen(false)} aria-label={t('command.close')}>×</button></div>

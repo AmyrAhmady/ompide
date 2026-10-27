@@ -6,7 +6,8 @@ in progress; the application is not yet ready for an installed release.
 
 Verified on Windows x64: a compact editor with top tabs, folder explorer, reusable
 Monaco models, real Pawn completion and diagnostics, F12 navigation into includes,
-editing/save/undo, unsaved Cancel/Discard prompts, reopen, external-file change
+editing/save/save-all/undo, unsaved Cancel/Discard prompts, reopen, recent-file
+history, external-file change
 reconciliation, safe window closing, and Light/Dark theme
 switching with persisted settings. English UI resources are in
 `src/locales/en.json`; application colors and syntax themes are JSON data under
