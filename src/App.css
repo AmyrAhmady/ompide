@@ -6,9 +6,9 @@ button { color: inherit; cursor: pointer; }
 button:disabled { cursor: default; opacity: .45; }
 button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 1px solid var(--focusBorder); outline-offset: -1px; }
 .workbench { height: 100%; display: flex; flex-direction: column; color: var(--editor-foreground); background: var(--editor-background); }
-.menubar { height: 34px; flex-shrink: 0; display: flex; align-items: center; background: var(--titleBar-activeBackground); user-select: none; }
+.ide-menubar { height: 34px; flex-shrink: 0; display: flex; align-items: center; background: var(--titleBar-activeBackground); user-select: none; position: relative; z-index: 10; overflow: visible; }
 .app-mark { padding: 0 12px; color: var(--focusBorder); font-size: 22px; }
-.menubar nav { display: flex; height: 100%; }
+.ide-menubar nav { display: flex; height: 100%; }
 .window-title { margin: 0 auto; padding-right: 200px; font-size: 12px; color: var(--descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu { position: relative; }
 .menu summary { cursor: pointer; padding: 8px 10px; list-style: none; }

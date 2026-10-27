@@ -14,7 +14,7 @@ switching with persisted settings. English UI resources are in
 
 The real compiler workflow is verified through an integration harness, but the
 application's Build UI is not implemented yet. Full file
-management/search/replace, custom-theme loading, native file-dialog smoke tests,
+management/search/replace, custom-theme loading,
 and installed packaging remain unfinished. Debugging is outside the project scope.
 
 ## Development
@@ -80,6 +80,10 @@ Add `--close` to verify cancelling a multi-document exit preserves all tabs and
 edits, then discarding closes the real application. The script also verifies
 external clean reloads, conflicting dirty edits, and entry-file rename/restore.
 Do not enable the inspection port for ordinary use or distributed builds.
+
+Native Windows Open File, Save As and Open Folder were additionally exercised
+through their actual OS dialogs using disposable fixtures. Save As preserved
+the exact source text; folder selection populated the explorer and recent history.
 
 ## Shortcuts
 

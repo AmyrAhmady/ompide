@@ -31,6 +31,14 @@ try {
   await expect(page.getByText('Pawn language server connected', { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'main.pwn', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'main.pwn', exact: true })).toBeVisible();
+  await page.locator('.menu summary').getByText('File', { exact: true }).click();
+  const openFolder = page.getByRole('menuitem', { name: 'Open Folder… Ctrl+K Ctrl+O', exact: true });
+  await expect(openFolder).toBeVisible();
+  expect(await openFolder.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return element.contains(element.ownerDocument.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
+  })).toBe(true);
+  await page.locator('.menu summary').getByText('File', { exact: true }).click();
   const results = await page.evaluate(async () => {
     const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
     const { workbench } = await import(moduleUrl);

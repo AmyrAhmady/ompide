@@ -117,7 +117,7 @@ function App() {
   }, [state.tabs]);
 
   return <main className="workbench" style={themeVariables(defaultThemes[state.settings.theme]) as CSSProperties}>
-    <header className="menubar"><span className="app-mark" aria-label={t('app.name')}>♟</span>
+    <header className="ide-menubar"><span className="app-mark" aria-label={t('app.name')}>♟</span>
       <nav aria-label={t('app.name')}>
         <Menu label="menu.file">
           <MenuItem label="command.newFile" shortcut="Ctrl+N" disabled={!nativeReady} action={() => run(() => workbench.newFile())} />
