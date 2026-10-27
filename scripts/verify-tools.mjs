@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { cp, mkdtemp, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, stat, writeFile, mkdir, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -90,6 +90,17 @@ async function verifyLsp(workspace) {
     assert.ok((Array.isArray(definitions) ? definitions : [definitions]).some(location => (location?.uri ?? location?.targetUri) === pathToFileURL(path.join(workspace, 'math.inc')).href), JSON.stringify(definitions));
     const formatting = await request('textDocument/formatting', { textDocument: { uri }, options: { tabSize: 4, insertSpaces: true } });
     assert.ok(Array.isArray(formatting));
+    const includeUri = pathToFileURL(path.join(workspace, 'math.inc')).href;
+    notify('textDocument/didOpen', { textDocument: { uri: includeUri, languageId: 'pawn', version: 1, text: await readFile(path.join(workspace, 'math.inc'), 'utf8') } });
+    notify('workspace/didChangeWatchedFiles', { changes: [{ uri, type: 2 }] });
+    await rename(path.join(workspace, 'main.pwn'), path.join(workspace, 'moved.pwn'));
+    notify('workspace/didChangeWatchedFiles', { changes: [{ uri, type: 2 }] });
+    await request('textDocument/diagnostic', { textDocument: { uri } });
+    for (let attempt = 0; ; attempt++) {
+      try { await rename(path.join(workspace, 'moved.pwn'), path.join(workspace, 'main.pwn')); break; }
+      catch (error) { if (attempt >= 10 || !['EBUSY', 'EPERM'].includes(error.code)) throw error; await new Promise(resolve => setTimeout(resolve, 50)); }
+    }
+    notify('workspace/didChangeWatchedFiles', { changes: [{ uri, type: 2 }] });
     // Sequential incremental edits use UTF-16 positions and CRLF, including a surrogate pair.
     const header = '// 🦀 فارسی\r\n';
     source = header + source;

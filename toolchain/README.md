@@ -96,3 +96,12 @@ configuration come from vscode-pawn commit
   save), and before disposing a confirmed closed/discarded model. The IDE retains
   its own captured saved-version tracking so edits during an in-flight save stay
   dirty. Disk writes remain exclusive to scoped Rust commands.
+- pawnlsp 0.33.75 can retain an empty project graph after an entry file is removed
+  and restored. Restart on open-file presence transitions or watcher overflow;
+  preserve and reopen all unsaved models. Ordinary disk writes use standard
+  watched-file notifications without restarting the server.
+- Serialize document changes above the transport. VS Code's pending initial
+  opens can otherwise race edits when restarting with background documents.
+  Explicitly flush public didOpen providers, order changes/requests/save/close,
+  and cancel retired-session requests during shutdown. The desktop smoke checks
+  real diagnostics after reopen, conflicting external changes and rename/restore.

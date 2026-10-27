@@ -1,5 +1,6 @@
 use pawn_core::{
     lsp::{LspEvent, LspSession},
+    watch::{FileWatch, WatchEvent},
     workspace::{self, Entry, FileSnapshot, Workspace},
 };
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,7 @@ pub struct NativeState {
     pub lsp: Mutex<Option<(u64, LspSession)>>,
     next: AtomicU64,
     chosen_workspace: Mutex<Option<PathBuf>>,
+    pub watch: Mutex<Option<FileWatch>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -110,6 +112,7 @@ fn select_workspace(app: &AppHandle, state: &NativeState, path: &Path) -> Result
     preferences.recent_workspaces.truncate(12);
     write_preferences(app, &preferences)?;
     lock(&state.lsp)?.take();
+    lock(&state.watch)?.take();
     *lock(&state.workspace)? = Some(workspace);
     lock(&state.allowed)?.clear();
     Ok(root)
@@ -200,11 +203,11 @@ fn permitted(state: &NativeState, path: &Path) -> Result<PathBuf> {
         .map_err(Into::into)
 }
 #[tauri::command]
-pub fn read_document(state: State<'_, NativeState>, path: PathBuf) -> Result<FileSnapshot> {
+pub async fn read_document(state: State<'_, NativeState>, path: PathBuf) -> Result<FileSnapshot> {
     Ok(workspace::read_document(&permitted(&state, &path)?)?)
 }
 #[tauri::command]
-pub fn save_document(
+pub async fn save_document(
     state: State<'_, NativeState>,
     path: PathBuf,
     text: String,
@@ -263,7 +266,7 @@ pub async fn save_document_as(
         .transpose()
 }
 #[tauri::command]
-pub fn list_directory(state: State<'_, NativeState>, path: PathBuf) -> Result<Vec<Entry>> {
+pub async fn list_directory(state: State<'_, NativeState>, path: PathBuf) -> Result<Vec<Entry>> {
     Ok(lock(&state.workspace)?
         .as_ref()
         .ok_or_else(|| error("noWorkspace", "no workspace selected"))?
@@ -337,5 +340,89 @@ pub async fn lsp_stop(state: State<'_, NativeState>, session_id: u64) -> Result<
     if owned.as_ref().is_some_and(|(id, _)| *id == session_id) {
         owned.take();
     }
+    Ok(())
+}
+
+fn ignored_watch_path(path: &Path) -> bool {
+    path.components().any(|part| {
+        matches!(
+            part.as_os_str().to_str(),
+            Some(".git" | "node_modules" | "target" | ".tools-cache")
+        )
+    })
+}
+
+#[tauri::command]
+pub async fn watch_start(
+    state: State<'_, NativeState>,
+    paths: Vec<PathBuf>,
+    on_event: Channel<WatchEvent>,
+) -> Result<()> {
+    let workspace = lock(&state.workspace)?
+        .as_ref()
+        .map(|workspace| workspace.root().to_path_buf());
+    let allowed = lock(&state.allowed)?.clone();
+    let mut roots = Vec::new();
+    if let Some(root) = &workspace {
+        roots.push((root.clone(), true));
+        if let Some(parent) = root.parent() {
+            roots.push((parent.to_owned(), false));
+        }
+    }
+    for path in &paths {
+        if !allowed.contains(path) {
+            let scope = lock(&state.workspace)?;
+            let scope = scope
+                .as_ref()
+                .ok_or_else(|| error("permissionDenied", "unselected file"))?;
+            if path.exists() {
+                scope.resolve(path)?;
+            } else {
+                let parent = path
+                    .parent()
+                    .ok_or_else(|| error("permissionDenied", "invalid file parent"))?;
+                scope.resolve(parent)?;
+            }
+        }
+        if !workspace
+            .as_ref()
+            .is_some_and(|root| path.starts_with(root))
+        {
+            let parent = workspace::canonical(
+                path.parent()
+                    .ok_or_else(|| error("permissionDenied", "invalid file parent"))?,
+            )?;
+            if !roots.iter().any(|(root, _)| root == &parent) {
+                roots.push((parent, false));
+            }
+        }
+    }
+    let watch = FileWatch::start(
+        &roots,
+        move |path| {
+            let relative = workspace
+                .as_ref()
+                .and_then(|root| path.strip_prefix(root).ok())
+                .unwrap_or_else(|| path.file_name().map(Path::new).unwrap_or(path));
+            !ignored_watch_path(relative)
+                && (workspace
+                    .as_ref()
+                    .is_some_and(|root| path.starts_with(root))
+                    || paths.iter().any(|allowed| allowed == path))
+        },
+        move |event| {
+            if !event.paths.is_empty() || event.rescan || event.error.is_some() {
+                let _ = on_event.send(event);
+            }
+        },
+    )
+    .map_err(|failure| error("watchFailed", failure.to_string()))?;
+    *lock(&state.watch)? = Some(watch);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn watch_stop(state: State<'_, NativeState>) -> Result<()> {
+    lock(&state.watch)?.take();
     Ok(())
 }

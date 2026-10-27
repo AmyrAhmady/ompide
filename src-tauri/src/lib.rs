@@ -19,6 +19,8 @@ pub fn run() {
             commands::lsp_start,
             commands::lsp_send,
             commands::lsp_stop,
+            commands::watch_start,
+            commands::watch_stop,
         ])
         .build(tauri::generate_context!())
         .expect("could not initialize Pawn IDE")
@@ -27,6 +29,9 @@ pub fn run() {
                 use tauri::Manager;
                 if let Ok(mut session) = app.state::<commands::NativeState>().lsp.lock() {
                     session.take();
+                }
+                if let Ok(mut watch) = app.state::<commands::NativeState>().watch.lock() {
+                    watch.take();
                 }
             }
         });

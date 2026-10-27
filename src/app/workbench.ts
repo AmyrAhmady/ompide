@@ -1,7 +1,7 @@
 import { editor, Uri, type IDisposable } from 'monaco-editor';
 import { createModelReference, type IReference, type ITextFileEditorModel } from '@codingame/monaco-vscode-api/monaco';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { native, desktop, type FileSnapshot, type Entry } from '../lib/native';
+import { native, desktop, type FileSnapshot, type Entry, type WatchEvent } from '../lib/native';
 import { t, describeError } from '../lib/i18n';
 import { applyEditorSettings, files, initializeEditor } from '../editor/services';
 import { defaults, parseSettings, type Settings } from '../settings/settings';
@@ -13,17 +13,19 @@ interface OpenDocument {
   uri: string; name: string; snapshot?: FileSnapshot; model: editor.ITextModel;
   versions: BufferVersion; reference?: IReference<ITextFileEditorModel>;
   file?: IDisposable; listener: IDisposable; view?: editor.ICodeEditorViewState | null;
+  external?: 'changed' | 'deleted';
 }
-export interface Tab { uri: string; name: string; dirty: boolean }
+export interface Tab { uri: string; name: string; dirty: boolean; external?: 'changed' | 'deleted' }
 type Choice = 'save' | 'discard' | 'cancel';
 export interface WorkbenchState {
   ready: boolean; root?: string; recent: string[]; tabs: Tab[]; active?: string;
   settings: Settings; status: string; error?: string; problems: editor.IMarker[];
   prompt?: { name: string }; position: { line: number; column: number };
+  treeVersion: number;
 }
 
 export class Workbench {
-  private state: WorkbenchState = { ready: false, recent: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 } };
+  private state: WorkbenchState = { ready: false, recent: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0 };
   private subscribers = new Set<() => void>();
   private documents = new Map<string, OpenDocument>();
   private opening = new Map<string, Promise<void>>();
@@ -37,10 +39,16 @@ export class Workbench {
   private answer?: (choice: Choice) => void;
   private closeListener?: () => void;
   private saving = new Map<string, Promise<boolean>>();
+  private watchQueue: Promise<void> = Promise.resolve();
+  private diskQueue: Promise<void> = Promise.resolve();
+  private watchGeneration = 0;
+  private watchSignature = '';
+  private pendingDisk = new Set<string>();
+  private closingWindow = false;
   getSnapshot = (): WorkbenchState => this.state;
   subscribe = (listener: () => void): (() => void) => { this.subscribers.add(listener); return () => this.subscribers.delete(listener); };
   private update(patch: Partial<WorkbenchState> = {}): void {
-    this.state = { ...this.state, ...patch, tabs: [...this.documents.values()].map(document => ({ uri: document.uri, name: document.name, dirty: document.versions.dirty })) };
+    this.state = { ...this.state, ...patch, tabs: [...this.documents.values()].map(document => ({ uri: document.uri, name: document.name, dirty: document.versions.dirty, external: document.external })) };
     for (const subscriber of this.subscribers) subscriber();
   }
   report = (error: unknown): void => { console.error(error); this.update({ error: describeError(error) }); };
@@ -58,8 +66,11 @@ export class Workbench {
     const markers = editor.onDidChangeMarkers(() => this.update({ problems: editor.getModelMarkers({}).filter(marker => this.documents.has(marker.resource.toString())) }));
     if (desktop) this.closeListener = await getCurrentWindow().onCloseRequested(async event => {
       event.preventDefault();
-      if (this.state.prompt) return;
-      if (await this.closeAll()) { await this.stopLanguage(); await getCurrentWindow().destroy(); }
+      if (this.state.prompt || this.closingWindow) return;
+      this.closingWindow = true;
+      try { if (await this.closeAll()) { await this.stopLanguage(); await this.stopWatching(); await getCurrentWindow().destroy(); } }
+      catch (error) { this.report(error); }
+      finally { this.closingWindow = false; }
     });
     this.update({ ready: true, status: desktop ? t('status.ready') : t('editor.desktopRequired') });
     return () => { cursor.dispose(); markers.dispose(); this.closeListener?.(); this.codeEditor?.dispose(); this.codeEditor = undefined; };
@@ -87,6 +98,9 @@ export class Workbench {
     try { await opening; } finally { this.opening.delete(snapshot.uri); }
     await this.ensureLanguage();
     this.sessionDocuments.add(snapshot.uri);
+    await this.startWatching();
+    const opened = this.documents.get(snapshot.uri);
+    if (opened) await this.reconcileDocument(opened);
   }
   async newFile(): Promise<void> {
     const name = t('editor.untitled', { count: ++this.untitled });
@@ -121,6 +135,8 @@ export class Workbench {
     const root = recent ? await native.recentWorkspace(selected) : await native.activateWorkspace(selected);
     const preferences = await native.preferences();
     this.update({ root, recent: preferences.recentWorkspaces });
+    this.watchSignature = '';
+    await this.startWatching();
     await this.ensureLanguage();
   }
   entries = (path: string): Promise<Entry[]> => native.entries(path);
@@ -131,7 +147,14 @@ export class Workbench {
     if (saving) return saving;
     const pending = this.saveDocument(uri, saveAs);
     this.saving.set(uri, pending);
-    void pending.finally(() => this.saving.delete(uri)).catch(() => undefined);
+    void pending.finally(() => {
+      this.saving.delete(uri);
+      for (const changed of this.pendingDisk) {
+        this.pendingDisk.delete(changed);
+        const document = this.documents.get(changed);
+        if (document) void this.reconcileDocument(document).catch(this.report);
+      }
+    }).catch(() => undefined);
     return pending;
   }
   private async saveDocument(uri: string, saveAs: boolean): Promise<boolean> {
@@ -148,12 +171,13 @@ export class Workbench {
     if (snapshot.uri !== uri) {
       // Preserve edits made while the native Save dialog or disk write was in flight.
       const current = document.model.getValue();
-      await this.removeDocument(uri);
+      const removed = await this.removeDocument(uri);
       await this.openSnapshot(snapshot);
       const renamed = this.documents.get(snapshot.uri);
-      if (renamed && current !== text) renamed.model.setValue(current);
+      if (removed && renamed && current !== text) renamed.model.setValue(current);
     } else {
       document.snapshot = snapshot;
+      document.external = undefined;
       files.update(document.model.uri, text);
       if (document.model.getAlternativeVersionId() === version) await document.reference?.object.revert({ soft: true });
       document.versions.savedAt(version);
@@ -181,13 +205,15 @@ export class Workbench {
     const confirmed = await this.confirmClose(document);
     if (!confirmed) return false;
     if (confirmed.snapshot) { this.closed.push(confirmed.snapshot.path); this.closed = this.closed.slice(-20); }
-    await this.removeDocument(confirmed.uri);
+    if (!(await this.removeDocument(confirmed.uri))) return this.close(confirmed.uri);
     return true;
   }
-  private async removeDocument(uri: string): Promise<void> {
+  private async removeDocument(uri: string): Promise<boolean> {
     const document = this.documents.get(uri);
-    if (!document) return;
+    if (!document) return true;
+    const version = document.model.getAlternativeVersionId();
     await document.reference?.object.revert({ soft: true });
+    if (document.model.getAlternativeVersionId() !== version) return false;
     if (this.state.active === uri) this.codeEditor?.setModel(null);
     this.documents.delete(uri);
     document.listener.dispose();
@@ -196,15 +222,37 @@ export class Workbench {
     const next = [...this.documents.keys()].at(-1);
     if (this.state.active === uri && next) this.activate(next);
     else this.update({ active: this.state.active === uri ? undefined : this.state.active });
+    void this.startWatching().catch(this.report);
+    return true;
   }
-  async closeAll(): Promise<boolean> { for (const document of [...this.documents.values()]) if (!(await this.close(document.uri))) return false; return true; }
+  async closeAll(): Promise<boolean> {
+    const confirmed: { document: OpenDocument; version: number }[] = [];
+    for (const document of [...this.documents.values()]) {
+      const current = await this.confirmClose(document);
+      if (!current) return false;
+      confirmed.push({ document: current, version: current.model.getAlternativeVersionId() });
+    }
+    if (this.documents.size !== confirmed.length || confirmed.some(({ document, version }) => document.model.getAlternativeVersionId() !== version)) return false;
+    // Stop providers before disposing all models; otherwise their async close/diagnostic
+    // callbacks can race shutdown and try to restart the retired client.
+    await this.stopLanguage();
+    if (confirmed.some(({ document, version }) => document.model.getAlternativeVersionId() !== version)) { await this.ensureLanguage(); return false; }
+    for (const { document } of confirmed) if (!(await this.removeDocument(document.uri))) return false;
+    return true;
+  }
   async reopen(): Promise<void> { const path = this.closed.pop(); if (path) await this.openPath(path); }
   async reload(): Promise<void> {
     const document = this.state.active ? this.documents.get(this.state.active) : undefined;
     if (!document?.snapshot || !(await this.confirmClose(document))) return;
+    const version = document.model.getAlternativeVersionId();
     const snapshot = await native.read(document.snapshot.path);
+    if (this.documents.get(document.uri) !== document || document.model.getAlternativeVersionId() !== version) { this.report({ code: 'conflict' }); return; }
     document.model.setValue(snapshot.text); document.snapshot = snapshot;
-    document.versions.savedAt(document.model.getAlternativeVersionId()); this.update();
+    const reloadedVersion = document.model.getAlternativeVersionId();
+    document.external = undefined;
+    files.update(document.model.uri, snapshot.text);
+    await document.reference?.object.revert({ soft: true });
+    document.versions.savedAt(reloadedVersion); this.update();
   }
   async action(id: string): Promise<void> {
     if (id === 'undo' || id === 'redo') this.codeEditor?.trigger('menu', id, null);
@@ -235,6 +283,82 @@ export class Workbench {
   }
   private async stopLanguage(): Promise<void> { const session = this.language; this.language = undefined; this.languageRoot = undefined; await session?.stop(); }
   async restartLanguage(): Promise<void> { await this.stopLanguage(); await this.ensureLanguage(); }
+  async quit(): Promise<void> { await getCurrentWindow().close(); }
+
+  private pathKey(path: string): string {
+    const normalized = path.replaceAll('\\', '/');
+    return /^[A-Za-z]:\//.test(normalized) || normalized.startsWith('//') ? normalized.toLowerCase() : normalized;
+  }
+  private startWatching(): Promise<void> {
+    this.watchQueue = this.watchQueue.catch(() => undefined).then(async () => {
+      if (!desktop) return;
+      const paths = [...this.documents.values()].flatMap(document => document.snapshot ? [document.snapshot.path] : []);
+      const root = this.state.root ? this.pathKey(this.state.root) : undefined;
+      const external = paths.filter(path => !root || !this.pathKey(path).startsWith(`${root}/`)).sort();
+      const signature = JSON.stringify([root, external]);
+      if (signature === this.watchSignature) return;
+      const generation = ++this.watchGeneration;
+      await native.watch(paths, event => { if (generation === this.watchGeneration) this.onDiskEvent(event, generation); });
+      this.watchSignature = signature;
+    });
+    return this.watchQueue;
+  }
+  private async stopWatching(): Promise<void> {
+    ++this.watchGeneration;
+    await this.watchQueue.catch(() => undefined);
+    await native.stopWatch();
+    this.watchSignature = '';
+  }
+  private onDiskEvent(event: WatchEvent, generation: number): void {
+    this.update({ treeVersion: this.state.treeVersion + 1 });
+    if (event.error) this.report({ code: 'watchFailed', detail: event.error });
+    this.diskQueue = this.diskQueue.catch(() => undefined).then(async () => {
+      if (generation !== this.watchGeneration) return;
+      const changed = new Set(event.paths.map(path => this.pathKey(path)));
+      let reindex = event.rescan;
+      for (const document of this.documents.values()) {
+        if (document.snapshot && (event.rescan || changed.has(this.pathKey(document.snapshot.path)))) {
+          const missing = document.external === 'deleted';
+          await this.reconcileDocument(document);
+          reindex ||= missing !== (document.external === 'deleted');
+        }
+      }
+      const relevant = event.paths.filter(path => /\.(pwn|inc)$/i.test(path) || /(?:^|[\\/])(pawn\.(json|ya?ml)|pawnlint\.toml)$/i.test(path));
+      // pawnlsp 0.33.75 can retain an empty project graph after a missing entry returns.
+      // Restart only on presence transitions/rescan, reopening every unsaved buffer.
+      if (reindex && this.language) await this.restartLanguage();
+      else if (relevant.length && this.language?.client.isRunning()) {
+        await this.language.client.sendNotification('workspace/didChangeWatchedFiles', { changes: relevant.map(path => ({ uri: protocolUri(Uri.file(path)), type: 2 })) });
+      }
+    }).catch(this.report);
+  }
+  private async reconcileDocument(document: OpenDocument): Promise<void> {
+    if (!document.snapshot || this.documents.get(document.uri) !== document) return;
+    if (this.saving.has(document.uri)) { this.pendingDisk.add(document.uri); return; }
+    const version = document.model.getAlternativeVersionId();
+    try {
+      const snapshot = await native.read(document.snapshot.path);
+      if (this.documents.get(document.uri) !== document) return;
+      if (snapshot.revision === document.snapshot.revision) {
+        if (document.external) { document.external = undefined; this.update(); }
+        return;
+      }
+      if (!document.versions.dirty && document.model.getAlternativeVersionId() === version) {
+        if (document.model.getValue() !== snapshot.text) document.model.setValue(snapshot.text);
+        const reloadedVersion = document.model.getAlternativeVersionId();
+        document.snapshot = { ...snapshot, uri: document.uri };
+        files.update(document.model.uri, snapshot.text);
+        await document.reference?.object.revert({ soft: true });
+        document.versions.savedAt(reloadedVersion);
+        document.external = undefined;
+      } else document.external = 'changed';
+      this.update();
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'notFound') {
+        document.external = 'deleted'; this.update();
+      } else this.report(error);
+    }
+  }
 }
 
 export const workbench = new Workbench();

@@ -68,6 +68,9 @@ hr { border: 0; border-top: 1px solid var(--panel-border); margin: 5px 8px; }
 .status-spacer { flex: 1; }
 .error-banner { display: flex; align-items: center; justify-content: space-between; padding: 7px 14px; border-bottom: 1px solid var(--editorError-foreground); background: var(--editorWidget-background); }
 .error-banner button { border: 0; background: none; font-size: 18px; }
+.external-notice { display: flex; gap: 12px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--editorWarning-foreground); background: var(--editorWidget-background); }
+.external-notice span { flex: 1; }
+.external-notice button { background: var(--button-background); color: var(--button-foreground); border: 0; padding: 4px 8px; white-space: nowrap; }
 dialog { color: var(--editor-foreground); background: var(--editorWidget-background); border: 1px solid var(--editorWidget-border); min-width: 400px; max-width: 90vw; padding: 22px; }
 dialog::backdrop { background: var(--editor-background); opacity: .65; }
 dialog h2 { font-size: 16px; font-weight: 500; margin: 0 0 14px; }

@@ -6,13 +6,14 @@ in progress; the application is not yet ready for an installed release.
 
 Verified on Windows x64: a compact editor with top tabs, folder explorer, reusable
 Monaco models, real Pawn completion and diagnostics, F12 navigation into includes,
-editing/save/undo, unsaved Cancel/Discard prompts, reopen, and Light/Dark theme
+editing/save/undo, unsaved Cancel/Discard prompts, reopen, external-file change
+reconciliation, safe window closing, and Light/Dark theme
 switching with persisted settings. English UI resources are in
 `src/locales/en.json`; application colors and syntax themes are JSON data under
 `src/settings/themes/`.
 
 The real compiler workflow is verified through an integration harness, but the
-application's Build UI is not implemented yet. External-file watching, full file
+application's Build UI is not implemented yet. Full file
 management/search/replace, custom-theme loading, native file-dialog smoke tests,
 and installed packaging remain unfinished. Debugging is outside the project scope.
 
@@ -75,6 +76,9 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222 --rem
 In another terminal run `node scripts/native-smoke.mjs`. The script uses real
 Tauri IPC and real PawnKit, backs up/restores preferences, operates on disposable
 fixture copies, and records screenshots under the ignored `test-results/`.
+Add `--close` to verify cancelling a multi-document exit preserves all tabs and
+edits, then discarding closes the real application. The script also verifies
+external clean reloads, conflicting dirty edits, and entry-file rename/restore.
 Do not enable the inspection port for ordinary use or distributed builds.
 
 ## Shortcuts

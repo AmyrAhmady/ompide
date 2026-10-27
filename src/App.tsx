@@ -24,32 +24,37 @@ function Menu({ label, children }: { label: TranslationKey; children: ReactNode 
   return <details className="menu"><summary>{t(label)}</summary><div role="menu" aria-label={t(label)}>{children}</div></details>;
 }
 
-function ExplorerRow({ entry, depth, selected }: { entry: Entry; depth: number; selected?: string }) {
+function ExplorerRow({ entry, depth, selected, revision }: { entry: Entry; depth: number; selected?: string; revision: number }) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<Entry[] | undefined>();
+  useEffect(() => {
+    let live = true;
+    if (expanded) void workbench.entries(entry.path).then(entries => { if (live) setChildren(entries); }).catch(workbench.report);
+    return () => { live = false; };
+  }, [entry.path, expanded, revision]);
   const open = async () => {
     if (!entry.directory) { if (!entry.symlink) await workbench.openPath(entry.path); return; }
-    if (!expanded && !children) setChildren(await workbench.entries(entry.path));
     setExpanded(!expanded);
   };
   return <li role="treeitem" aria-expanded={entry.directory ? expanded : undefined} aria-selected={selected === entry.path}>
     <button type="button" className={`tree-row ${selected === entry.path ? 'selected' : ''}`} style={{ paddingLeft: 10 + depth * 14 }} title={entry.symlink ? t('explorer.symbolicLink') : entry.path} disabled={entry.symlink} onClick={() => run(open)}>
       <span className="tree-chevron" aria-hidden="true">{entry.directory ? expanded ? '⌄' : '›' : ''}</span><span className="file-icon" aria-hidden="true">{entry.directory ? '▱' : entry.name.endsWith('.inc') ? '#' : '⋮'}</span><span>{entry.name}</span>
     </button>
-    {expanded && <ul role="group">{children?.map(child => <ExplorerRow key={child.path} entry={child} depth={depth + 1} selected={selected} />)}</ul>}
+    {expanded && <ul role="group">{children?.map(child => <ExplorerRow key={child.path} entry={child} depth={depth + 1} selected={selected} revision={revision} />)}</ul>}
   </li>;
 }
 
 function Explorer({ root, active, revision }: { root?: string; active?: string; revision: number }) {
-  const [entries, setEntries] = useState<Entry[] | undefined>();
+  const [listing, setListing] = useState<{ root?: string; entries: Entry[] }>({ entries: [] });
   useEffect(() => {
-    let live = true; setEntries(undefined);
-    if (root) void workbench.entries(root).then(files => { if (live) setEntries(files); }).catch(workbench.report);
+    let live = true;
+    if (root) void workbench.entries(root).then(files => { if (live) setListing({ root, entries: files }); }).catch(error => { if (live) setListing({ root, entries: [] }); workbench.report(error); });
     return () => { live = false; };
   }, [root, revision]);
   const selected = active?.startsWith('file:') ? Uri.parse(active).fsPath : undefined;
+  const entries = listing.root === root ? listing.entries : undefined;
   if (!root) return <p className="muted explorer-empty">{t('explorer.empty')}</p>;
-  return <><div className="workspace-name" title={root}>{root.split(/[\\/]/).at(-1)}</div>{entries ? <ul role="tree" aria-label={t('explorer.title')}>{entries.map(entry => <ExplorerRow key={`${revision}:${entry.path}`} entry={entry} depth={0} selected={selected} />)}</ul> : <p className="muted">{t('explorer.loading')}</p>}</>;
+  return <><div className="workspace-name" title={root}>{root.split(/[\\/]/).at(-1)}</div>{entries ? <ul role="tree" aria-label={t('explorer.title')}>{entries.map(entry => <ExplorerRow key={entry.path} entry={entry} depth={0} selected={selected} revision={revision} />)}</ul> : <p className="muted">{t('explorer.loading')}</p>}</>;
 }
 
 function SettingsDialog({ settings, close }: { settings: Settings; close: () => void }) {
@@ -57,7 +62,7 @@ function SettingsDialog({ settings, close }: { settings: Settings; close: () => 
   return <Modal label={t('settings.title')} onCancel={close}>
     <h2>{t('settings.title')}</h2>
     <div className="settings-fields">
-      <label>{t('settings.theme')}<select value={settings.theme} onChange={event => update({ theme: event.target.value === 'light' ? 'light' : 'dark' })}><option value="dark">{t('settings.dark')}</option><option value="light">{t('settings.light')}</option></select></label>
+      <label>{t('settings.theme')}<select aria-label={t('settings.theme')} value={settings.theme} onChange={event => update({ theme: event.target.value === 'light' ? 'light' : 'dark' })}><option value="dark">{t('settings.dark')}</option><option value="light">{t('settings.light')}</option></select></label>
       <label>{t('settings.fontFamily')}<input value={settings.fontFamily} onChange={event => update({ fontFamily: event.target.value })} /></label>
       <label>{t('settings.fontSize')}<input type="number" min="8" max="48" value={settings.fontSize} onChange={event => { const value = Number(event.target.value); if (value >= 8 && value <= 48) update({ fontSize: value }); }} /></label>
       <label>{t('settings.tabSize')}<input type="number" min="1" max="8" value={settings.tabSize} onChange={event => { const value = Number(event.target.value); if (value >= 1 && value <= 8) update({ tabSize: value }); }} /></label>
@@ -73,6 +78,7 @@ function App() {
   const [problemsOpen, setProblemsOpen] = useState(false);
   const [treeRevision, setTreeRevision] = useState(0);
   const active = Boolean(state.active);
+  const external = state.tabs.find(tab => tab.uri === state.active)?.external;
   const connected = state.status === t('status.connected');
   const nativeReady = desktop && state.ready;
   useEffect(() => {
@@ -125,6 +131,7 @@ function App() {
           <MenuItem label="command.close" shortcut="Ctrl+W" disabled={!active} action={() => run(() => workbench.close(state.active!))} />
           <MenuItem label="command.reopen" shortcut="Ctrl+Shift+T" disabled={!nativeReady} action={() => run(() => workbench.reopen())} />
           <MenuItem label="command.reload" disabled={!active} action={() => run(() => workbench.reload())} />
+          <hr /><MenuItem label="command.quit" disabled={!nativeReady} action={() => run(() => workbench.quit())} />
         </Menu>
         <Menu label="menu.edit">
           {([['command.undo', 'undo', 'Ctrl+Z'], ['command.redo', 'redo', 'Ctrl+Y'], ['command.find', 'actions.find', 'Ctrl+F'], ['command.replace', 'editor.action.startFindReplaceAction', 'Ctrl+H']] as const).map(([label, action, shortcut]) => <MenuItem key={action} label={label} shortcut={shortcut} disabled={!active} action={() => run(() => workbench.action(action))} />)}
@@ -139,12 +146,13 @@ function App() {
     </header>
     {state.error && <div className="error-banner" role="alert"><span>{state.error}</span><button type="button" onClick={workbench.dismissError} aria-label={t('command.dismiss')}>×</button></div>}
     <div className="workspace-body">
-      <aside className="explorer"><div className="panel-heading"><span>{t('explorer.title')}</span><button type="button" disabled={!state.root} onClick={() => setTreeRevision(value => value + 1)} title={t('command.refresh')} aria-label={t('command.refresh')}>↻</button></div><Explorer root={state.root} active={state.active} revision={treeRevision} /></aside>
+      <aside className="explorer"><div className="panel-heading"><span>{t('explorer.title')}</span><button type="button" disabled={!state.root} onClick={() => setTreeRevision(value => value + 1)} title={t('command.refresh')} aria-label={t('command.refresh')}>↻</button></div><Explorer root={state.root} active={state.active} revision={treeRevision + state.treeVersion} /></aside>
       <section className="editor-column">
         <div className="tabs" role="tablist" aria-label={t('editor.tabs')}>{state.tabs.map(tab => <div className={`tab ${tab.uri === state.active ? 'active' : ''}`} key={tab.uri}>
           <button type="button" role="tab" aria-selected={tab.uri === state.active} onClick={() => workbench.activate(tab.uri)}><span className="file-icon" aria-hidden="true">#</span>{tab.name}</button>
           <button type="button" className={tab.dirty ? 'dirty close-tab' : 'close-tab'} onClick={() => run(() => workbench.close(tab.uri))} aria-label={t('editor.closeTab', { name: tab.name })} title={tab.dirty ? t('editor.dirty') : t('command.close')}>{tab.dirty ? '●' : '×'}</button>
         </div>)}</div>
+        {external && <div className="external-notice" role="status"><span>{t(external === 'changed' ? 'editor.externalChanged' : 'editor.externalDeleted')}</span>{external === 'changed' && <button type="button" onClick={() => run(() => workbench.reload())}>{t('command.reload')}</button>}<button type="button" onClick={() => run(() => workbench.save(undefined, true))}>{t('command.saveAs')}</button></div>}
         <div className="editor-area"><div className="monaco-container" ref={container} />
           {!active && <div className="empty-editor"><h1>{t('app.name')}</h1><p>{t('editor.welcome')}</p><p className="muted">{state.ready ? desktop ? t('editor.empty') : t('editor.desktopRequired') : t('editor.loading')}</p>
             <div className="welcome-actions"><button type="button" disabled={!nativeReady} onClick={() => run(() => workbench.openFile())}>{t('command.openFile')}<kbd>Ctrl+O</kbd></button><button type="button" disabled={!nativeReady} onClick={() => run(() => workbench.chooseFolder())}>{t('command.openFolder')}<kbd>Ctrl+K Ctrl+O</kbd></button></div>

@@ -85,7 +85,7 @@ pub fn write_document(
     bom: bool,
     expected: Option<&str>,
 ) -> io::Result<FileSnapshot> {
-    if text.len() as u64 > MAX_FILE_BYTES {
+    if text.len() as u64 + if bom { 3 } else { 0 } > MAX_FILE_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::FileTooLarge,
             "file exceeds 8 MiB",
@@ -135,7 +135,14 @@ pub fn write_document(
             .persist_noclobber(&target)
             .map_err(|error| error.error)?;
     }
-    read_document(&target)
+    let saved = read_document(&target)?;
+    if saved.text != text || saved.bom != bom {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "file changed immediately after saving",
+        ));
+    }
+    Ok(saved)
 }
 
 #[derive(Debug)]

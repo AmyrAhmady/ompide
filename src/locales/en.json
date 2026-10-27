@@ -28,6 +28,7 @@
   "command.refresh": "Refresh Explorer",
   "command.reload": "Reload from Disk",
   "command.dismiss": "Dismiss",
+  "command.quit": "Exit",
   "explorer.title": "Explorer",
   "explorer.empty": "Open a folder to explore your project.",
   "explorer.loading": "Loading files…",
@@ -36,6 +37,8 @@
   "editor.closeTab": "Close {name}",
   "editor.untitled": "Untitled-{count}",
   "editor.dirty": "Unsaved changes",
+  "editor.externalChanged": "This file changed on disk. Your unsaved buffer has been kept. Reload it or save a copy.",
+  "editor.externalDeleted": "This file was moved or deleted. Its buffer has been kept. Use Save As to restore it or save a copy.",
   "editor.empty": "Open a Pawn file or folder to start editing.",
   "editor.welcome": "Pawn development for open.mp and SA-MP",
   "editor.loading": "Starting editor…",
@@ -77,5 +80,6 @@
   "error.missingTool": "A required Pawn tool is missing. Prepare the pinned tools or configure an external executable.",
   "error.lspStopped": "The language server stopped. Use Restart Language Server to reconnect.",
   "error.operationFailed": "The operation failed.",
+  "error.watchFailed": "File watching failed. Use Refresh Explorer or Reload from Disk to check for external changes.",
   "error.themeInvalid": "Invalid theme file: {reason}"
 }

@@ -2,29 +2,32 @@
 // Start Vite, then set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222
 // only for the application process. This does not mock Tauri commands or PawnKit.
 import { chromium, expect } from '@playwright/test';
-import { cp, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, writeFile, rm, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+const page = browser.contexts().flatMap(context => context.pages()).find(page => page.url().includes('1420'));
+if (!page) { await browser.close(); throw new Error('The debug desktop application is not connected to Vite'); }
 const workspace = await mkdtemp(path.join(tmpdir(), 'pawn desktop '));
 const preferences = path.join(process.env.APPDATA, 'mp.open.editor/preferences.json');
 let previous;
-try { previous = await readFile(preferences); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-await mkdir(path.dirname(preferences), { recursive: true });
-await cp(path.join(root, 'fixtures/minimal'), workspace, { recursive: true, filter: file => !file.includes(`${path.sep}output`) });
-await writeFile(preferences, JSON.stringify({ recentWorkspaces: [workspace], settings: { theme: 'dark' } }));
-const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
-const page = browser.contexts().flatMap(context => context.pages()).find(page => page.url().includes('1420'));
-if (!page) throw new Error('The debug desktop application is not connected to Vite');
+let seeded = false;
 page.setDefaultTimeout(15_000);
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
-page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); if (message.type() === 'warning') console.error('SERVER/WARNING:', message.text()); if (message.type() === 'debug' && message.text().startsWith('LSP lifecycle')) console.log(message.text()); });
+page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); if (message.type() === 'warning') console.error('SERVER/WARNING:', message.text()); });
 try {
+  try { previous = await readFile(preferences); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  await mkdir(path.dirname(preferences), { recursive: true });
+  await cp(path.join(root, 'fixtures/minimal'), workspace, { recursive: true, filter: file => !file.includes(`${path.sep}output`) });
+  seeded = true;
+  await writeFile(preferences, JSON.stringify({ recentWorkspaces: [workspace], settings: { theme: 'dark' } }));
   await page.reload();
   await page.getByRole('button', { name: workspace, exact: true }).click();
+  await expect(page.locator('.window-title')).toHaveText(path.basename(workspace));
   await expect(page.getByText('Pawn language server connected', { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'main.pwn', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'main.pwn', exact: true })).toBeVisible();
@@ -74,6 +77,28 @@ try {
   await page.keyboard.press('Control+Shift+t');
   await expect(page.getByRole('tab', { name: 'main.pwn', exact: true })).toBeVisible();
   expect(await readFile(path.join(workspace, 'main.pwn'), 'utf8')).toContain('// desktop smoke 🦀');
+  // External disk changes must reload clean buffers and preserve dirty buffers.
+  const mainPath = path.join(workspace, 'main.pwn');
+  await writeFile(mainPath, (await readFile(mainPath, 'utf8')) + '\n// external clean change');
+  await expect.poll(async () => (await page.locator('.monaco-editor .view-lines').innerText()).replaceAll('\u00a0', ' ')).toContain('external clean change');
+  await expect(page.locator('.tab.active .dirty')).toHaveCount(0);
+  await page.locator('.monaco-editor').click({ position: { x: 200, y: 100 } });
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n// keep this dirty edit');
+  await writeFile(mainPath, (await readFile(mainPath, 'utf8')) + '\n// external conflicting change');
+  await expect(page.locator('.external-notice')).toContainText('changed on disk');
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('keep this dirty edit');
+  await expect(page.locator('.monaco-editor .view-lines')).not.toContainText('external conflicting change');
+  await page.getByRole('button', { name: 'Reload from Disk', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('external conflicting change');
+  await expect(page.locator('.monaco-editor .view-lines')).not.toContainText('keep this dirty edit');
+  await rename(mainPath, path.join(workspace, 'moved.pwn'));
+  await expect(page.locator('.external-notice')).toContainText('moved or deleted');
+  await expect(page.getByRole('button', { name: 'moved.pwn', exact: true })).toBeVisible();
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('external conflicting change');
+  await rename(path.join(workspace, 'moved.pwn'), mainPath);
+  await expect(page.locator('.external-notice')).toHaveCount(0);
   // Invalid argument count must reach Monaco's Problems UI via the client's diagnostic feature.
   await page.evaluate(async () => {
     const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
@@ -99,12 +124,31 @@ try {
   await page.getByRole('button', { name: 'Close Untitled-1', exact: true }).click();
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveCount(0);
-  console.log('Real desktop: Tauri channel, completion UI, F12 cross-file navigation, typing/save/undo, dirty close prompts, reopen, Problems diagnostics, and persisted Light/Dark switching passed');
+  if (process.argv.includes('--close')) {
+    await page.evaluate(async () => {
+      const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
+      const { workbench } = await import(moduleUrl);
+      for (const document of Reflect.get(workbench, 'documents').values()) document.model.setValue(document.model.getValue() + '\n// unsaved close test');
+    });
+    const exit = async () => { await page.locator('.menu summary').getByText('File', { exact: true }).click(); await page.getByRole('menuitem', { name: 'Exit', exact: true }).click(); };
+    await exit();
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('tab')).toHaveCount(2);
+    await expect(page.locator('.tab .dirty')).toHaveCount(2);
+    await exit();
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    const closed = page.waitForEvent('close');
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    await closed;
+    console.log('Native Exit: cancel preserves all tabs and edits; discard closes the real window');
+  }
+  console.log('Real desktop: Tauri channel, completion UI, F12 navigation, new/edit/save/undo, dirty close prompts, reopen, external clean/dirty changes and rename, Problems diagnostics, and persisted Light/Dark switching passed');
   if (errors.length) throw new Error(errors.join('\n'));
 } catch (error) {
   console.error('Desktop verification failed:', error);
   console.error('Captured browser errors:', errors);
-  console.error('Runtime diagnostic evidence:', await page.evaluate(async () => {
+  if (!page.isClosed()) console.error('Runtime diagnostic evidence:', await page.evaluate(async () => {
     const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
     const { workbench } = await import(moduleUrl);
     const state = workbench.getSnapshot();
@@ -112,18 +156,21 @@ try {
     const session = Reflect.get(workbench, 'language');
     const collection = [];
     session?.client.diagnostics?.forEach((uri, diagnostics) => collection.push({ uri: uri.toString(), diagnostics }));
-    return { status: state.status, problems: state.problems, active: state.active, text: document?.model.getValue(), modelUri: document?.model.uri.toString(), collection, raw: session?.client.isRunning() ? await session.client.sendRequest('textDocument/diagnostic', { textDocument: { uri: session.client.code2ProtocolConverter.asUri(document.model.uri) } }) : undefined };
+    const textDocument = document && { uri: session?.client.code2ProtocolConverter.asUri(document.model.uri) };
+    return { status: state.status, problems: state.problems, active: state.active, text: document?.model.getValue(), modelUri: document?.model.uri.toString(), collection, raw: session?.client.isRunning() ? await session.client.sendRequest('textDocument/diagnostic', { textDocument }) : undefined, formatting: session?.client.isRunning() ? await session.client.sendRequest('textDocument/formatting', { textDocument, options: { tabSize: 4, insertSpaces: true } }) : undefined };
   }));
   throw error;
 } finally {
-  await page.evaluate(async () => {
+  try { if (!page.isClosed()) await page.evaluate(async () => {
     const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
     const { workbench } = await import(moduleUrl);
     await Reflect.get(workbench, 'stopLanguage').call(workbench);
+    await Reflect.get(workbench, 'stopWatching').call(workbench);
   });
-  await page.reload();
-  if (previous) await writeFile(preferences, previous);
-  else await rm(preferences, { force: true });
-  await browser.close();
-  await rm(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(error => console.error('Temporary workspace cleanup failed:', error.message));
+  if (!page.isClosed()) await page.reload();
+  } finally {
+    if (seeded) { if (previous) await writeFile(preferences, previous); else await rm(preferences, { force: true }); }
+    await browser.close();
+    await rm(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(error => console.error('Temporary workspace cleanup failed:', error.message));
+  }
 }

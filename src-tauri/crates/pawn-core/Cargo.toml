@@ -10,6 +10,7 @@ dunce = "1"
 sha2 = "0.10"
 tempfile = "3"
 url = "2"
+notify = "=8.2.1"
 
 [[bin]]
 name = "pawn-lsp-bridge"

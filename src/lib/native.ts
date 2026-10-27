@@ -1,9 +1,10 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import type { Settings } from '../settings/settings';
 
 export interface FileSnapshot { path: string; uri: string; text: string; bom: boolean; revision: string }
 export interface Entry { name: string; path: string; directory: boolean; symlink: boolean }
 export interface Preferences { recentWorkspaces: string[]; settings: unknown }
+export interface WatchEvent { paths: string[]; rescan: boolean; error: string | null }
 export const desktop = isTauri();
 export const native = {
   preferences: () => invoke<Preferences>('load_preferences'),
@@ -16,4 +17,6 @@ export const native = {
   save: (path: string, text: string, bom: boolean, revision: string) => invoke<FileSnapshot>('save_document', { path, text, bom, revision }),
   saveAs: (text: string, bom: boolean, protectedPaths: string[]) => invoke<FileSnapshot | null>('save_document_as', { text, bom, protectedPaths }),
   entries: (path: string) => invoke<Entry[]>('list_directory', { path }),
+  watch: (paths: string[], receive: (event: WatchEvent) => void) => invoke<void>('watch_start', { paths, onEvent: new Channel<WatchEvent>(receive) }),
+  stopWatch: () => invoke<void>('watch_stop'),
 };
