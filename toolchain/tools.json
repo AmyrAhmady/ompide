@@ -4,11 +4,11 @@
   "tools": [
     {
       "name": "pawnlsp",
-      "version": "0.34.47",
-      "url": "https://github.com/pawnkit/pawnlsp/releases/download/v0.34.47/pawnlsp_0.34.47_windows_amd64.zip",
-      "sha256": "117c18935333b41648d1e0d5d38dbe41a44e23fa138e32265d247df70e5df55f",
+      "version": "0.33.75",
+      "url": "https://github.com/pawnkit/pawnlsp/releases/download/v0.33.75/pawnlsp_0.33.75_windows_amd64.zip",
+      "sha256": "eb8e4ce7c0b8fbb57f0108b77b776a50516fac3d34f1d1fabd1d659cf3b37848",
       "executable": "pawnlsp.exe",
-      "executableSha256": "d2475f0aa0e83bfc9cc2e2f48eaf61ed4bfe41646254e8a47d31d1bbd776393c",
+      "executableSha256": "6aed1911ab340d8e71c471e2fdf3552e93cdc2f9dc52875bf23bc8ae5e3256db",
       "destination": "pawnlsp-x86_64-pc-windows-msvc.exe",
       "license": "MIT"
     },

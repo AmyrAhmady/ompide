@@ -12,7 +12,9 @@ const tool = name => path.join(binaries, `${name}-x86_64-pc-windows-msvc.exe`);
 const compiler = path.join(binaries, 'compiler/pawnc-3.10.11-windows/bin/pawncc.exe');
 const bridgePath = path.join(root, 'src-tauri/target/debug/pawn-lsp-bridge.exe');
 const workspace = await mkdtemp(path.join(tmpdir(), 'pawn ide '));
-const evidence = { pawnlsp: '0.34.47', pawn: '1.34.38', compiler: '3.10.11', checks: [] };
+const pins = JSON.parse(await readFile(path.join(root, 'toolchain/tools.json'), 'utf8'));
+const versions = Object.fromEntries(pins.tools.map(tool => [tool.name, tool.version]));
+const evidence = { pawnlsp: versions.pawnlsp, pawn: versions.pawn, compiler: versions.pawncc, checks: [] };
 
 function run(args, expected = 0) {
   const result = spawnSync(tool('pawn'), args, { encoding: 'utf8', windowsHide: true, timeout: 30_000 });
@@ -127,6 +129,8 @@ async function verifyLsp(workspace) {
 }
 
 try {
+  assert.equal(spawnSync(tool('pawnlsp'), ['--version'], { encoding: 'utf8', windowsHide: true }).stdout.trim(), versions.pawnlsp);
+  assert.equal(spawnSync(tool('pawn'), ['version'], { encoding: 'utf8', windowsHide: true }).stdout.trim(), `pawn ${versions.pawn}`);
   await cp(path.join(root, 'fixtures/minimal'), workspace, { recursive: true, filter: file => !file.includes(`${path.sep}output`) });
   const project = run(['project', '--project', workspace, '--output', 'json']);
   assert.equal(project.schemaVersion, 1);
@@ -140,6 +144,7 @@ try {
   assert.equal(valid.schemaVersion, 2);
   assert.equal(valid.status, 'passed');
   assert.equal(valid.process.exitCode, 0);
+  assert.ok(valid.process.stdout.includes(`Pawn compiler ${versions.pawncc}`));
   assert.ok((await stat(valid.artifacts[0].path)).size > 0);
   evidence.checks.push('Real PawnKit project/doctor schema 1; build schema 2 with explicit offline compiler; valid fixture emits AMX');
   const lspWorkspace = path.join(workspace, 'LSP 🦀 #');

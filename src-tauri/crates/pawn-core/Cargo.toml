@@ -6,6 +6,10 @@ edition = "2024"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+dunce = "1"
+sha2 = "0.10"
+tempfile = "3"
+url = "2"
 
 [[bin]]
 name = "pawn-lsp-bridge"

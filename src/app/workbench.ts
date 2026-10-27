@@ -1,0 +1,240 @@
+import { editor, Uri, type IDisposable } from 'monaco-editor';
+import { createModelReference, type IReference, type ITextFileEditorModel } from '@codingame/monaco-vscode-api/monaco';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { native, desktop, type FileSnapshot, type Entry } from '../lib/native';
+import { t, describeError } from '../lib/i18n';
+import { applyEditorSettings, files, initializeEditor } from '../editor/services';
+import { defaults, parseSettings, type Settings } from '../settings/settings';
+import { startLanguageSession, type LanguageSession } from '../language/client';
+import { BufferVersion } from './documents';
+import { protocolUri } from '../lib/uri';
+
+interface OpenDocument {
+  uri: string; name: string; snapshot?: FileSnapshot; model: editor.ITextModel;
+  versions: BufferVersion; reference?: IReference<ITextFileEditorModel>;
+  file?: IDisposable; listener: IDisposable; view?: editor.ICodeEditorViewState | null;
+}
+export interface Tab { uri: string; name: string; dirty: boolean }
+type Choice = 'save' | 'discard' | 'cancel';
+export interface WorkbenchState {
+  ready: boolean; root?: string; recent: string[]; tabs: Tab[]; active?: string;
+  settings: Settings; status: string; error?: string; problems: editor.IMarker[];
+  prompt?: { name: string }; position: { line: number; column: number };
+}
+
+export class Workbench {
+  private state: WorkbenchState = { ready: false, recent: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 } };
+  private subscribers = new Set<() => void>();
+  private documents = new Map<string, OpenDocument>();
+  private opening = new Map<string, Promise<void>>();
+  private codeEditor?: editor.IStandaloneCodeEditor;
+  private language?: LanguageSession;
+  private languageRoot?: string;
+  private languageQueue: Promise<void> = Promise.resolve();
+  private sessionDocuments = new Set<string>();
+  private untitled = 0;
+  private closed: string[] = [];
+  private answer?: (choice: Choice) => void;
+  private closeListener?: () => void;
+  private saving = new Map<string, Promise<boolean>>();
+  getSnapshot = (): WorkbenchState => this.state;
+  subscribe = (listener: () => void): (() => void) => { this.subscribers.add(listener); return () => this.subscribers.delete(listener); };
+  private update(patch: Partial<WorkbenchState> = {}): void {
+    this.state = { ...this.state, ...patch, tabs: [...this.documents.values()].map(document => ({ uri: document.uri, name: document.name, dirty: document.versions.dirty })) };
+    for (const subscriber of this.subscribers) subscriber();
+  }
+  report = (error: unknown): void => { console.error(error); this.update({ error: describeError(error) }); };
+  dismissError = (): void => { this.update({ error: undefined }); };
+
+  async mount(container: HTMLElement): Promise<() => void> {
+    let settings = defaults;
+    if (desktop) {
+      try { const preferences = await native.preferences(); settings = parseSettings(preferences.settings); this.update({ settings, recent: preferences.recentWorkspaces }); }
+      catch (error) { this.report(error); }
+    }
+    await initializeEditor(settings, async (uri, line, column) => { await this.openUri(uri, line, column); });
+    this.codeEditor = editor.create(container, { model: null, automaticLayout: true, ariaLabel: t('app.name'), fontSize: settings.fontSize, fontFamily: settings.fontFamily, minimap: { enabled: settings.minimap }, scrollBeyondLastLine: false });
+    const cursor = this.codeEditor.onDidChangeCursorPosition(event => this.update({ position: { line: event.position.lineNumber, column: event.position.column } }));
+    const markers = editor.onDidChangeMarkers(() => this.update({ problems: editor.getModelMarkers({}).filter(marker => this.documents.has(marker.resource.toString())) }));
+    if (desktop) this.closeListener = await getCurrentWindow().onCloseRequested(async event => {
+      event.preventDefault();
+      if (this.state.prompt) return;
+      if (await this.closeAll()) { await this.stopLanguage(); await getCurrentWindow().destroy(); }
+    });
+    this.update({ ready: true, status: desktop ? t('status.ready') : t('editor.desktopRequired') });
+    return () => { cursor.dispose(); markers.dispose(); this.closeListener?.(); this.codeEditor?.dispose(); this.codeEditor = undefined; };
+  }
+
+  async openFile(): Promise<void> { const snapshot = await native.chooseDocument(); if (snapshot) await this.openSnapshot(snapshot); }
+  async openPath(path: string): Promise<void> { await this.openSnapshot(await native.read(path)); }
+  async openUri(uri: string, line?: number, column?: number): Promise<void> {
+    uri = Uri.parse(uri).toString();
+    if (!this.documents.has(uri)) await this.openPath(Uri.parse(uri).fsPath);
+    this.activate(uri);
+    if (line) { this.codeEditor?.setPosition({ lineNumber: line, column: column ?? 1 }); this.codeEditor?.revealLineInCenter(line); }
+    this.codeEditor?.focus();
+  }
+  private async openSnapshot(snapshot: FileSnapshot): Promise<void> {
+    snapshot = { ...snapshot, uri: Uri.parse(snapshot.uri).toString() };
+    if (this.documents.has(snapshot.uri)) { this.activate(snapshot.uri); return; }
+    const existing = this.opening.get(snapshot.uri);
+    if (existing) return existing;
+    // pawnlsp retains query versions after didClose; stop before exposing a new version-1 model
+    // to its old providers. A fresh session reopens every remaining buffer without losing edits.
+    if (this.language && this.sessionDocuments.has(snapshot.uri)) await this.stopLanguage();
+    const opening = this.addDocument(snapshot.uri, snapshot.path.split(/[\\/]/).at(-1) ?? snapshot.path, snapshot.text, snapshot);
+    this.opening.set(snapshot.uri, opening);
+    try { await opening; } finally { this.opening.delete(snapshot.uri); }
+    await this.ensureLanguage();
+    this.sessionDocuments.add(snapshot.uri);
+  }
+  async newFile(): Promise<void> {
+    const name = t('editor.untitled', { count: ++this.untitled });
+    await this.addDocument(`untitled:${name}.pwn`, name, '');
+  }
+  private async addDocument(uri: string, name: string, text: string, snapshot?: FileSnapshot): Promise<void> {
+    const resource = Uri.parse(uri);
+    const file = resource.scheme === 'file' ? files.register(resource, text) : undefined;
+    let reference: IReference<ITextFileEditorModel> | undefined;
+    try { if (resource.scheme === 'file') reference = await createModelReference(resource); }
+    catch (error) { file?.dispose(); throw error; }
+    const model = reference?.object.textEditorModel ?? editor.createModel(text, 'pawn', resource);
+    editor.setModelLanguage(model, /\.(pwn|inc)$/i.test(snapshot?.path ?? uri) ? 'pawn' : 'plaintext');
+    const versions = new BufferVersion(model.getAlternativeVersionId());
+    const listener = model.onDidChangeContent(() => { versions.changed(model.getAlternativeVersionId()); this.update(); });
+    this.documents.set(uri, { uri, name, snapshot, model, versions, reference, file, listener });
+    this.activate(uri);
+  }
+  activate(uri: string): void {
+    const document = this.documents.get(uri);
+    if (!document || !this.codeEditor) return;
+    const previous = this.state.active ? this.documents.get(this.state.active) : undefined;
+    if (previous) previous.view = this.codeEditor.saveViewState();
+    this.codeEditor.setModel(document.model);
+    if (document.view) this.codeEditor.restoreViewState(document.view);
+    this.update({ active: uri });
+  }
+  async chooseFolder(recent?: string): Promise<void> {
+    const selected = recent ?? await native.chooseWorkspace();
+    if (!selected || !(await this.closeAll())) return;
+    await this.stopLanguage();
+    const root = recent ? await native.recentWorkspace(selected) : await native.activateWorkspace(selected);
+    const preferences = await native.preferences();
+    this.update({ root, recent: preferences.recentWorkspaces });
+    await this.ensureLanguage();
+  }
+  entries = (path: string): Promise<Entry[]> => native.entries(path);
+
+  save(uri = this.state.active, saveAs = false): Promise<boolean> {
+    if (!uri) return Promise.resolve(true);
+    const saving = this.saving.get(uri);
+    if (saving) return saving;
+    const pending = this.saveDocument(uri, saveAs);
+    this.saving.set(uri, pending);
+    void pending.finally(() => this.saving.delete(uri)).catch(() => undefined);
+    return pending;
+  }
+  private async saveDocument(uri: string, saveAs: boolean): Promise<boolean> {
+    const document = this.documents.get(uri);
+    if (!document) return true;
+    if (this.state.settings.formatOnSave && this.state.active === uri && this.language?.client.initializeResult?.capabilities.documentFormattingProvider) await this.action('editor.action.formatDocument');
+    const text = document.model.getValue();
+    const version = document.model.getAlternativeVersionId();
+    const result = !document.snapshot || saveAs
+      ? await native.saveAs(text, document.snapshot?.bom ?? false, [...this.documents.values()].filter(other => other !== document && other.snapshot).map(other => other.snapshot!.path))
+      : await native.save(document.snapshot.path, text, document.snapshot.bom, document.snapshot.revision);
+    if (!result) return false;
+    const snapshot = { ...result, uri: Uri.parse(result.uri).toString() };
+    if (snapshot.uri !== uri) {
+      // Preserve edits made while the native Save dialog or disk write was in flight.
+      const current = document.model.getValue();
+      await this.removeDocument(uri);
+      await this.openSnapshot(snapshot);
+      const renamed = this.documents.get(snapshot.uri);
+      if (renamed && current !== text) renamed.model.setValue(current);
+    } else {
+      document.snapshot = snapshot;
+      files.update(document.model.uri, text);
+      if (document.model.getAlternativeVersionId() === version) await document.reference?.object.revert({ soft: true });
+      document.versions.savedAt(version);
+      if (this.language?.client.isRunning()) await this.language.client.sendNotification('textDocument/didSave', { textDocument: { uri: protocolUri(document.model.uri) }, text });
+      this.update();
+    }
+    return true;
+  }
+  async saveAll(): Promise<void> { for (const document of [...this.documents.values()]) if (document.versions.dirty || !document.snapshot) { if (!(await this.save(document.uri))) break; } }
+  private async confirmClose(document: OpenDocument): Promise<OpenDocument | undefined> {
+    let current = document;
+    while (current.versions.dirty) {
+      const choice = await new Promise<Choice>(resolve => { this.answer = resolve; this.update({ prompt: { name: current.name } }); });
+      if (choice === 'cancel') return undefined;
+      if (choice === 'discard') return current;
+      if (!(await this.save(current.uri))) return undefined;
+      current = this.documents.get(current.uri) ?? this.documents.get(this.state.active ?? '') ?? current;
+    }
+    return current;
+  }
+  answerPrompt(choice: Choice): void { const answer = this.answer; this.answer = undefined; this.update({ prompt: undefined }); answer?.(choice); }
+  async close(uri: string): Promise<boolean> {
+    const document = this.documents.get(uri);
+    if (!document) return false;
+    const confirmed = await this.confirmClose(document);
+    if (!confirmed) return false;
+    if (confirmed.snapshot) { this.closed.push(confirmed.snapshot.path); this.closed = this.closed.slice(-20); }
+    await this.removeDocument(confirmed.uri);
+    return true;
+  }
+  private async removeDocument(uri: string): Promise<void> {
+    const document = this.documents.get(uri);
+    if (!document) return;
+    await document.reference?.object.revert({ soft: true });
+    if (this.state.active === uri) this.codeEditor?.setModel(null);
+    this.documents.delete(uri);
+    document.listener.dispose();
+    if (document.reference) document.reference.dispose(); else document.model.dispose();
+    document.file?.dispose();
+    const next = [...this.documents.keys()].at(-1);
+    if (this.state.active === uri && next) this.activate(next);
+    else this.update({ active: this.state.active === uri ? undefined : this.state.active });
+  }
+  async closeAll(): Promise<boolean> { for (const document of [...this.documents.values()]) if (!(await this.close(document.uri))) return false; return true; }
+  async reopen(): Promise<void> { const path = this.closed.pop(); if (path) await this.openPath(path); }
+  async reload(): Promise<void> {
+    const document = this.state.active ? this.documents.get(this.state.active) : undefined;
+    if (!document?.snapshot || !(await this.confirmClose(document))) return;
+    const snapshot = await native.read(document.snapshot.path);
+    document.model.setValue(snapshot.text); document.snapshot = snapshot;
+    document.versions.savedAt(document.model.getAlternativeVersionId()); this.update();
+  }
+  async action(id: string): Promise<void> {
+    if (id === 'undo' || id === 'redo') this.codeEditor?.trigger('menu', id, null);
+    else await this.codeEditor?.getAction(id)?.run();
+    this.codeEditor?.focus();
+  }
+  async settings(settings: Settings): Promise<void> {
+    await applyEditorSettings(settings);
+    this.codeEditor?.updateOptions({ fontSize: settings.fontSize, fontFamily: settings.fontFamily, wordWrap: settings.wordWrap ? 'on' : 'off', minimap: { enabled: settings.minimap } });
+    for (const document of this.documents.values()) document.model.updateOptions({ tabSize: settings.tabSize, insertSpaces: settings.insertSpaces });
+    if (desktop) await native.storeSettings(settings);
+    this.update({ settings });
+  }
+  private ensureLanguage(): Promise<void> {
+    this.languageQueue = this.languageQueue.catch(() => undefined).then(async () => {
+      const document = this.state.active ? this.documents.get(this.state.active)?.snapshot : undefined;
+      const root = this.state.root ?? (document ? document.path.slice(0, document.path.lastIndexOf(document.path.includes('\\') ? '\\' : '/')) : undefined);
+      if (!desktop || !root || this.languageRoot === root) return;
+      await this.stopLanguage();
+      this.update({ status: t('status.starting') });
+      try {
+        this.language = await startLanguageSession(root, document?.path, () => { this.languageRoot = undefined; this.update({ status: t('status.stopped') }); });
+        this.sessionDocuments = new Set([...this.documents.keys()]);
+        this.languageRoot = root; this.update({ status: t('status.connected') });
+      } catch (error) { this.update({ status: t('status.stopped') }); this.report(error); }
+    });
+    return this.languageQueue;
+  }
+  private async stopLanguage(): Promise<void> { const session = this.language; this.language = undefined; this.languageRoot = undefined; await session?.stop(); }
+  async restartLanguage(): Promise<void> { await this.stopLanguage(); await this.ensureLanguage(); }
+}
+
+export const workbench = new Workbench();

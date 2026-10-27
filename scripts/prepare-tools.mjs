@@ -22,6 +22,8 @@ for (const tool of manifest.tools) {
   let bytes;
   try { bytes = await readFile(archive); } catch (error) {
     if (error.code !== 'ENOENT') throw error;
+  }
+  if (!bytes) {
     if (!download) throw new Error(`Missing ${archive}. Place the pinned archive there manually, or run pnpm tools:prepare --download. Source: ${tool.url}`);
     console.log(`Downloading ${tool.name} ${tool.version}: ${tool.url}`);
     const response = await fetch(tool.url);
@@ -34,7 +36,7 @@ for (const tool of manifest.tools) {
   const staging = await mkdtemp(path.join(tmpdir(), 'pawn-tools-'));
   try {
     const entries = execFileSync('tar', ['-tf', archive], { encoding: 'utf8' }).trim().split(/\r?\n/);
-    if (entries.some(entry => /(^[\/\\]|^[A-Za-z]:|(^|[\/\\])\.\.([\/\\]|$))/.test(entry))) {
+    if (entries.some(entry => { const normalized = entry.replaceAll('\\', '/'); return path.posix.isAbsolute(normalized) || /^[A-Za-z]:/.test(normalized) || normalized.split('/').includes('..'); })) {
       throw new Error(`Unsafe archive path: ${tool.name}`);
     }
     execFileSync('tar', ['-xf', archive, '-C', staging]);
