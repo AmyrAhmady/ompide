@@ -25,3 +25,10 @@ dist-ssr
 
 /AGENTS.md
 /docs/
+
+# Prepared tools and local integration artifacts (see toolchain/tools.json)
+/src-tauri/binaries/
+/.tools-cache/
+/test-results/
+*.amx
+**/target/

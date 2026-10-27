@@ -1,0 +1,14 @@
+{
+  "entry": "main.pwn",
+  "preset": "openmp",
+  "experimental": {
+    "build_file": false
+  },
+  "pawnkit": {
+    "schemaVersion": 1,
+    "profile": "openmp",
+    "includePaths": [
+      "."
+    ]
+  }
+}

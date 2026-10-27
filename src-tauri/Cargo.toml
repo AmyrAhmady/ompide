@@ -5,6 +5,10 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
 
+[workspace]
+members = ["crates/pawn-core"]
+resolver = "2"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "target": "x86_64-pc-windows-msvc",
+  "tools": [
+    {
+      "name": "pawnlsp",
+      "version": "0.34.47",
+      "url": "https://github.com/pawnkit/pawnlsp/releases/download/v0.34.47/pawnlsp_0.34.47_windows_amd64.zip",
+      "sha256": "117c18935333b41648d1e0d5d38dbe41a44e23fa138e32265d247df70e5df55f",
+      "executable": "pawnlsp.exe",
+      "executableSha256": "d2475f0aa0e83bfc9cc2e2f48eaf61ed4bfe41646254e8a47d31d1bbd776393c",
+      "destination": "pawnlsp-x86_64-pc-windows-msvc.exe",
+      "license": "MIT"
+    },
+    {
+      "name": "pawn",
+      "version": "1.34.38",
+      "url": "https://github.com/pawnkit/pawnkit-cli/releases/download/v1.34.38/pawn-windows-amd64.tar.gz",
+      "sha256": "4b7e8c5bc346812eb8746ecd2b68b6f121e75b3acf30e71773b4989daf0cf910",
+      "executable": "pawn.exe",
+      "executableSha256": "fd8801932f4defa086ca7a1e37b98b82f4b1387e5a20d17e6da268b4b54f0c09",
+      "destination": "pawn-x86_64-pc-windows-msvc.exe",
+      "license": "MIT"
+    },
+    {
+      "name": "pawncc",
+      "version": "3.10.11",
+      "url": "https://github.com/openmultiplayer/compiler/releases/download/v3.10.11/pawnc-3.10.11-windows.zip",
+      "sha256": "883fba1b2d0de5eef1ea4c4f9e6f50f6250e77159ab378e0658b8f4a3899d5fe",
+      "executable": "pawnc-3.10.11-windows/bin/pawncc.exe",
+      "executableSha256": "0a33aa5d97b29565fe8517dd9df8e07ffceb02ecc2b395566d998a6d2032211d",
+      "destination": "compiler/pawnc-3.10.11-windows/bin/pawncc.exe",
+      "license": "Zlib; see toolchain/licenses/compiler.txt"
+    }
+  ],
+  "provenance": {
+    "pawnkitChecksums": "GitHub release asset SHA-256 digests, cross-checked against release checksums.txt",
+    "compilerIndex": "https://pawnkit.dev/compiler-indexes/pawn-3.10.8-3.10.10-openmp-3.10.11.json",
+    "compilerIndexSha256": "13fb27bdb2c3eb58c884b129a114743fc68c44ee23e8f82bb6ae716aeb39e008"
+  }
+}
