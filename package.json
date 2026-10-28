@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "tools:prepare": "node scripts/prepare-tools.mjs",
-    "test:tools": "cargo build --manifest-path src-tauri/Cargo.toml -p pawn-core --bin pawn-lsp-bridge && node scripts/verify-tools.mjs"
+    "test:tools": "cargo build --manifest-path src-tauri/Cargo.toml -p pawn-core --bin pawn-lsp-bridge && node scripts/verify-tools.mjs",
+    "tools:build-lsp": "node scripts/build-pawnlsp.mjs"
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "37.6.0",

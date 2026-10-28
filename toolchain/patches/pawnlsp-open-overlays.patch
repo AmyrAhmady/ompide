@@ -1,0 +1,312 @@
+diff --git a/go.mod b/go.mod
+index aec6433..f64caa9 100644
+--- a/go.mod
++++ b/go.mod
+@@ -26,3 +26,7 @@ require (
+ )
+ 
+ tool golang.org/x/vuln/cmd/govulncheck
++
++replace golang.org/x/mod => github.com/golang/mod v0.38.0
++
++replace golang.org/x/sync => github.com/golang/sync v0.22.0
+diff --git a/go.sum b/go.sum
+index f9fbf7a..add7427 100644
+--- a/go.sum
++++ b/go.sum
+@@ -4,6 +4,10 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
+ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+ github.com/editorconfig/editorconfig-core-go/v2 v2.6.4 h1:CHwUbBVVyKWRX9kt5A/OtwhYUJB32DrFp9xzmjR6cac=
+ github.com/editorconfig/editorconfig-core-go/v2 v2.6.4/go.mod h1:JWRVKHdVW+dkv6F8p+xGCa6a+TyMrqsFbFkSs/aQkrQ=
++github.com/golang/mod v0.38.0 h1:EFiIA9P7aDdsRmayT6iUmCWuFGmyLm76XMmtvwdMBDE=
++github.com/golang/mod v0.38.0/go.mod h1:V6Xz0pq8TQ3dGqVQ1FVHuelZpAL0uNhSkk9ogYP3c40=
++github.com/golang/sync v0.22.0 h1:YaiU0SYUMzJf8o70POw0+IQS5u98tc4yVjTePVNym0c=
++github.com/golang/sync v0.22.0/go.mod h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0=
+ github.com/google/go-cmdtest v0.4.1-0.20220921163831-55ab3332a786 h1:rcv+Ippz6RAtvaGgKxc+8FQIpxHgsF+HBzPyYL2cyVU=
+ github.com/google/go-cmdtest v0.4.1-0.20220921163831-55ab3332a786/go.mod h1:apVn/GCasLZUVpAJ6oWAuyP7Ne7CEsQbTnc0plM3m+o=
+ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+diff --git a/lsp/open_overlays.go b/lsp/open_overlays.go
+new file mode 100644
+index 0000000..4a9911c
+--- /dev/null
++++ b/lsp/open_overlays.go
+@@ -0,0 +1,69 @@
++package lsp
++
++import (
++	"github.com/pawnkit/pawn-analysis/preprocess"
++	coresource "github.com/pawnkit/pawnkit-core/source"
++)
++
++// Capture immutable buffers for this analysis, rather than resolving includes only from disk.
++func (s *server) openIncludes(doc *document) preprocess.IncludeResolver {
++	open := make(map[string][]byte)
++	s.mu.Lock()
++	for _, current := range s.documents {
++		if current.Root == doc.Root {
++			open[workspacePathKey(current.Path)] = append([]byte(nil), current.text()...)
++		}
++	}
++	s.mu.Unlock()
++	return workspaceOverlayResolver{base: doc.Includes, open: open}
++}
++
++// Replace dependent document analyses without changing client-owned text or versions.
++// Use the preprocessor's dependency graph; no source-text heuristics are needed.
++func (s *server) refreshOpenDependents(changed *document) {
++	if changed == nil || changed.Root == "" {
++		return
++	}
++	s.mu.Lock()
++	s.projectRevision++
++	var pending []*document
++	for _, doc := range s.documents {
++		if doc.URI == changed.URI || doc.Root != changed.Root || !openDocumentDependsOn(doc, changed.Path) {
++			continue
++		}
++		if doc.cancel != nil {
++			doc.cancel()
++		}
++		next := &document{
++			URI: doc.URI, Path: doc.Path, Root: doc.Root, Entry: doc.Entry, Text: doc.Text, Buffer: doc.Buffer, Index: doc.Index,
++			Version: doc.Version, Includes: doc.Includes, Candidates: doc.Candidates, Names: doc.Names,
++			Revision: s.projectRevision, ready: make(chan struct{}), analysisReady: make(chan struct{}),
++		}
++		s.documents[doc.URI] = next
++		pending = append(pending, next)
++	}
++	s.mu.Unlock()
++	for _, doc := range pending {
++		s.schedulePublishAfter(doc, s.snapshot, documentPublishDebounce)
++	}
++}
++
++func openDocumentDependsOn(doc *document, path string) bool {
++	if doc.analysisReady != nil {
++		select {
++		case <-doc.analysisReady:
++		default:
++			return true // Initial analysis has not established the dependencies yet.
++		}
++	}
++	if doc.Analysis == nil || doc.Analysis.Preprocess == nil {
++		return true
++	}
++	for _, file := range doc.Analysis.Preprocess.Files {
++		filename, err := coresource.URI(file.URI).Filename()
++		if err == nil && workspacePathKey(filename) == workspacePathKey(path) {
++			return true
++		}
++	}
++	return false
++}
+diff --git a/lsp/open_overlays_test.go b/lsp/open_overlays_test.go
+new file mode 100644
+index 0000000..232e9f5
+--- /dev/null
++++ b/lsp/open_overlays_test.go
+@@ -0,0 +1,98 @@
++package lsp
++
++import (
++	"bufio"
++	"bytes"
++	"encoding/json"
++	"io"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	coresource "github.com/pawnkit/pawnkit-core/source"
++)
++
++func TestUnsavedIncludeRefreshesOpenParent(t *testing.T) {
++	root := t.TempDir()
++	mainPath := filepath.Join(root, "main.pwn")
++	includePath := filepath.Join(root, "config.inc")
++	mainText := "#include \"config.inc\"\nmain() { return LIMIT; }\n"
++	diskText := "#define LIMIT 10\nstock IncludedHelper() {}\n"
++	for name, text := range map[string]string{
++		"pawn.json":  `{"entry":"main.pwn"}`,
++		"main.pwn":   mainText,
++		"config.inc": diskText,
++	} {
++		if err := os.WriteFile(filepath.Join(root, name), []byte(text), 0o600); err != nil {
++			t.Fatal(err)
++		}
++	}
++	mainURI, includeURI := coresource.FileURI(mainPath).String(), coresource.FileURI(includePath).String()
++	var input bytes.Buffer
++	send := func(id int, method string, params any) {
++		message := map[string]any{"jsonrpc": "2.0", "method": method, "params": params}
++		if id != 0 {
++			message["id"] = id
++		}
++		frame(t, &input, message)
++	}
++	hover := func(id int) {
++		send(id, "textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": mainURI}, "position": map[string]any{"line": 1, "character": 18}})
++	}
++	open := func(uri, text string) {
++		send(0, "textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "pawn", "version": 1, "text": text}})
++	}
++	send(1, "initialize", map[string]any{})
++	open(mainURI, mainText)
++	hover(2)
++	open(includeURI, strings.Replace(diskText, "10", "20", 1))
++	hover(3)
++	for version := 2; version <= 12; version++ {
++		send(0, "textDocument/didChange", map[string]any{
++			"textDocument":   map[string]any{"uri": includeURI, "version": version},
++			"contentChanges": []any{map[string]any{"text": strings.Replace(diskText, "10", "30", 1)}},
++		})
++	}
++	hover(4)
++	send(6, "workspace/symbol", map[string]any{"query": "IncludedHelper"})
++	send(0, "textDocument/didClose", map[string]any{"textDocument": map[string]any{"uri": includeURI}})
++	hover(5)
++	send(0, "exit", nil)
++	var output bytes.Buffer
++	if err := Run(&input, &output); err != nil {
++		t.Fatal(err)
++	}
++	reader := bufio.NewReader(&output)
++	responses := map[int]string{}
++	for {
++		body, err := readFrame(reader)
++		if err == io.EOF {
++			break
++		}
++		if err != nil {
++			t.Fatal(err)
++		}
++		var message struct {
++			ID     int    `json:"id"`
++			Method string `json:"method"`
++		}
++		if err := json.Unmarshal(body, &message); err != nil {
++			t.Fatal(err)
++		}
++		if message.ID != 0 && message.Method == "" {
++			responses[message.ID] = string(body)
++		}
++	}
++	for id, value := range map[int]string{2: "#define LIMIT 10", 3: "#define LIMIT 20", 4: "#define LIMIT 30", 5: "#define LIMIT 10"} {
++		if !strings.Contains(responses[id], value) {
++			t.Fatalf("hover %d = %s; want %q", id, responses[id], value)
++		}
++	}
++	if !strings.Contains(responses[6], includeURI) || !strings.Contains(responses[6], "IncludedHelper") {
++		t.Fatalf("included workspace symbol missing: %s", responses[6])
++	}
++	if actual, err := os.ReadFile(includePath); err != nil || string(actual) != diskText {
++		t.Fatalf("unsaved buffer changed disk: %q, %v", actual, err)
++	}
++}
+diff --git a/lsp/server.go b/lsp/server.go
+index 91bf675..fcd9909 100644
+--- a/lsp/server.go
++++ b/lsp/server.go
+@@ -663,6 +663,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
+ 	s.mu.Unlock()
+ 	s.refreshWorkspaceIndex(doc)
+ 	s.schedulePublish(doc, s.snapshot)
++	s.refreshOpenDependents(doc)
+ 	return nil
+ }
+ 
+@@ -779,6 +780,7 @@ func (s *server) didChange(raw json.RawMessage) error {
+ 		s.restartWorkspaceIndex(next)
+ 	}
+ 	s.schedulePublishAfter(next, s.snapshot, documentPublishDebounce)
++	s.refreshOpenDependents(next)
+ 	return nil
+ }
+ 
+@@ -818,6 +820,7 @@ func (s *server) didClose(raw json.RawMessage) error {
+ 		return nil
+ 	}
+ 	s.restartWorkspaceIndex(doc)
++	s.refreshOpenDependents(doc)
+ 	return nil
+ }
+ 
+@@ -973,7 +976,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
+ 	}
+ 	if shared == nil && analysisErr == nil {
+ 		shared, analysisErr = snapshot.Analyze(ctx, coresource.URI(doc.URI), analysis.Options{
+-			URI: coresource.URI(doc.URI), Includes: doc.Includes, Names: doc.Names, RetainExpanded: true,
++			URI: coresource.URI(doc.URI), Includes: s.openIncludes(doc), Names: doc.Names, RetainExpanded: true,
+ 			MaxOutputTokens:          analysisOutputTokenLimit,
+ 			Revision:                 fmt.Sprintf("%s:%T:%T:%d", doc.Path, doc.Includes, doc.Names, doc.Revision),
+ 			TokenCache:               s.tokenCache,
+diff --git a/lsp/workspace.go b/lsp/workspace.go
+index f834c01..0021e91 100644
+--- a/lsp/workspace.go
++++ b/lsp/workspace.go
+@@ -309,35 +309,41 @@ func (s *server) workspaceSymbols(id, raw json.RawMessage) error {
+ 	queryText := strings.ToLower(params.Query)
+ 	items := make([]map[string]any, 0)
+ 	seen := make(map[string]bool)
+-	for uri, result := range s.workspaceResults() {
++	for _, result := range s.workspaceResults() {
+ 		if result == nil || result.Symbols == nil {
+ 			continue
+ 		}
+-		for _, item := range result.Symbols.Symbols {
+-			scope, ok := result.Symbols.Scope(item.Scope)
+-			if !ok || scope.Kind != symbol.ScopeFile || queryText != "" && !strings.Contains(strings.ToLower(item.Name), queryText) {
+-				continue
+-			}
+-			key := fmt.Sprintf("%s:%d:%s", uri, item.Span.Start, item.Name)
+-			if seen[key] {
+-				continue
+-			}
+-			seen[key] = true
+-			container := uri.String()
+-			if path, err := uri.Filename(); err == nil {
+-				for _, index := range indexes {
+-					if relative, err := filepath.Rel(index.root, path); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+-						container = filepath.ToSlash(relative)
+-						break
++		for _, table := range navigationTables(result) {
++			for _, item := range table.Symbols {
++				scope, ok := table.Scope(item.Scope)
++				if !ok || scope.Kind != symbol.ScopeFile || queryText != "" && !strings.Contains(strings.ToLower(item.Name), queryText) {
++					continue
++				}
++				uri, text, ok := analysisSourceAt(result, item.Span.File)
++				if !ok {
++					continue
++				}
++				key := fmt.Sprintf("%s:%d:%s", uri, item.Span.Start, item.Name)
++				if seen[key] {
++					continue
++				}
++				seen[key] = true
++				container := uri.String()
++				if path, err := uri.Filename(); err == nil {
++					for _, index := range indexes {
++						if relative, err := filepath.Rel(index.root, path); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
++							container = filepath.ToSlash(relative)
++							break
++						}
+ 					}
+ 				}
++				items = append(items, map[string]any{
++					"name": item.Name, "kind": symbolKind(item.Kind), "containerName": container,
++					"location": map[string]any{
++						"uri": uri.String(), "range": offsetRange(text, int(item.Span.Start), int(item.Span.End)),
++					},
++				})
+ 			}
+-			items = append(items, map[string]any{
+-				"name": item.Name, "kind": symbolKind(item.Kind), "containerName": container,
+-				"location": map[string]any{
+-					"uri": uri.String(), "range": offsetRange(result.Preprocess.Source, int(item.Span.Start), int(item.Span.End)),
+-				},
+-			})
+ 		}
+ 	}
+ 	sort.Slice(items, func(i, j int) bool {

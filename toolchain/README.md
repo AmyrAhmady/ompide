@@ -1,6 +1,7 @@
 # Verified toolchain
 
-`tools.json` pins the Windows x64 release archives and executable hashes. Binaries
+`tools.json` pins Windows x64 executable hashes, release archives for the CLI/compiler,
+and the source build for the patched language server. Binaries
 and archive caches are ignored by Git. Preparation is an explicit development or
 release operation, never an application startup or workspace-open hook:
 
@@ -8,8 +9,7 @@ release operation, never an application startup or workspace-open hook:
 node scripts/prepare-tools.mjs --download
 ```
 
-The command prints each GitHub release source and verifies SHA-256 before
-extraction. Without `--download`, it uses only the cached archives in
+The command verifies SHA-256 before extracting release assets or building pinned source. Without `--download`, it uses only the cached archives in
 `.tools-cache/` and fails with manual-placement guidance when they are missing.
 Windows `tar` must be installed. Other targets are not yet verified.
 
@@ -23,6 +23,46 @@ The compiler archive and executable checksums match the pinned PawnKit compiler
 index identified in `tools.json`. PawnKit archive hashes were also checked against
 each release's `checksums.txt`. Only `pawncc.exe` and its required `pawnc.dll` are
 prepared from the compiler archive. The license texts must accompany packaging.
+
+## Patched language server
+
+The bundled server is `0.33.75-pawnide.1`, based on the upstream v0.33.75 commit
+listed above. It remains the real PawnKit executable over standard LSP. The patch
+in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
+buffers, invalidates affected open parents on include open/change/close, and
+includes declarations from included files in workspace-symbol results. It never
+writes unsaved buffers to disk. The regression fails on the original server and
+passes with the patch; the full upstream Go suite also passes.
+
+`pawnlsp-build.json` pins source/patch checksums and development compiler provenance.
+`scripts/build-pawnlsp.mjs` extracts a fresh verified source archive, applies the
+patch, runs the upstream tests and builds with Go 1.26.5, CGO disabled, trimmed
+paths and an empty build identifier. The final executable must match the hash in
+`tools.json` before it replaces the prepared sidecar. Fresh source builds reproduce
+the pinned hash. The original prototype differed only in Go's action build IDs;
+those are omitted from the distributed build.
+
+A cached matching executable requires no Go installation. Rebuilding requires
+Windows x64 Go 1.26.5, Git and tar. Set `PAWN_IDE_GO` to an explicitly selected
+`go.exe`, or extract the checksum-pinned GitHub Actions Go distribution identified
+in `pawnlsp-build.json` into `.tools-cache/go1.26.5/`. The cached compiler executable
+is checked before use. Go is a development prerequisite and is never bundled with
+the application or downloaded by the preparation script.
+
+`--download` explicitly permits downloading the pinned source and Go module
+dependencies; the default is offline. The two `golang.org/x` dependencies use their
+official GitHub mirrors because the vanity/source host was unavailable here. Their
+complete source trees must match the original canonical module checksums, in
+addition to Go's normal module verification. Versions and sources remain pinned.
+
+```powershell
+$env:PAWN_IDE_GO = 'C:\Go\bin\go.exe'
+npm.cmd run tools:build-lsp -- --download
+# Reproduce from cached source/dependencies, including the full upstream tests:
+npm.cmd run tools:build-lsp -- --rebuild
+```
+
+The shipped notices include PawnKit's MIT license and the Go BSD license.
 
 ## Protocol and compiler verification
 

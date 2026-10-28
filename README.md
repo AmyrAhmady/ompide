@@ -40,9 +40,10 @@ Windows PowerShell examples that forward flags use `npm.cmd` so the installed
 `npm.ps1` shim preserves the argument separator. Editor dependencies are explicit and kept aligned by `package.json` overrides.
 
 Prepare the pinned PawnKit tools and open.mp compiler explicitly before starting
-the native application. This downloads the GitHub release assets listed in
-`toolchain/tools.json`, verifies their SHA-256 checksums and prepares ignored
-sidecar files. See [the toolchain notes](toolchain/README.md) for sources, licenses,
+the native application. This verifies the pinned GitHub release assets and the
+patched language-server source build, then prepares ignored sidecars. Rebuilding
+the server requires Go 1.26.5; see the toolchain notes for explicit setup and
+checksum-pinned manual/offline paths. See [the toolchain notes](toolchain/README.md) for sources, licenses,
 offline/manual preparation and compatibility workarounds.
 
 ```powershell

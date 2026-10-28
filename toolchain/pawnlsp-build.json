@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "version": "0.33.75-pawnide.1",
+  "goVersion": "go1.26.5",
+  "source": {
+    "commit": "bffabaa538c3b290fe22ccfbb61c3a4558af2a33",
+    "url": "https://codeload.github.com/pawnkit/pawnlsp/zip/bffabaa538c3b290fe22ccfbb61c3a4558af2a33",
+    "archive": "pawnlsp-bffabaa538c3b290fe22ccfbb61c3a4558af2a33.zip",
+    "sha256": "c3e8b5ad5a125fd84b8d63bb5503a258074955aff79633ff61d8b16cd4e365b8"
+  },
+  "patch": {
+    "path": "patches/pawnlsp-open-overlays.patch",
+    "sha256": "dec55efa1cd7f9ab99dc8e73fc582ae797dd3563b41d133043f8ab454e9e5227"
+  },
+  "developmentGoDistribution": {
+    "url": "https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-win32-x64.zip",
+    "sha256": "221a6eeae6e3fb7a7bbbc3ae3f5d60f565bbf44114088786591043ca982e835b",
+    "executableSha256": "d6a71e6dc9806cb3f1fcb817d562175c5a7b1505fc3f6638299648e0b9f0f74f"
+  },
+  "dependencyMirrors": [
+    {
+      "module": "golang.org/x/mod",
+      "mirror": "github.com/golang/mod",
+      "version": "v0.38.0",
+      "canonicalChecksum": "h1:MECBjubtXD7yj4HrhIUcywNaGeNVUdfVnxmPajOk4yk="
+    },
+    {
+      "module": "golang.org/x/sync",
+      "mirror": "github.com/golang/sync",
+      "version": "v0.22.0",
+      "canonicalChecksum": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek="
+    }
+  ]
+}

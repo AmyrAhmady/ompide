@@ -18,6 +18,10 @@ await mkdir(cache, { recursive: true });
 await mkdir(binaries, { recursive: true });
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 for (const tool of manifest.tools) {
+  if (tool.sourceBuild) {
+    execFileSync(process.execPath, [path.join(root, 'scripts/build-pawnlsp.mjs'), ...(download ? ['--download'] : [])], { cwd: root, stdio: 'inherit', windowsHide: true });
+    continue;
+  }
   const archive = path.join(cache, path.basename(new URL(tool.url).pathname));
   let bytes;
   try { bytes = await readFile(archive); } catch (error) {
