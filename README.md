@@ -18,6 +18,10 @@ application's Build UI is not implemented yet. Full file
 management/search/replace, custom-theme loading,
 and installed packaging remain unfinished. Debugging is outside the project scope.
 
+Deferred additions after the core IDE is stable: an integrated terminal, an
+opt-in local MCP server for external AI agents, and an integrated title bar
+replacing native window decorations. These are roadmap items, not current features.
+
 ## Development
 
 Windows x64 prerequisites: Node.js 22.14 or newer in the supported Node 22 line,
