@@ -1,5 +1,6 @@
 use pawn_core::{
     lsp::{LspEvent, LspSession},
+    tools::{self, ToolError},
     watch::{FileWatch, WatchEvent},
     workspace::{self, Entry, FileSnapshot, Workspace},
 };
@@ -31,6 +32,7 @@ pub struct NativeState {
 pub struct AppError {
     code: &'static str,
     detail: String,
+    parameters: serde_json::Value,
 }
 impl From<io::Error> for AppError {
     fn from(error: io::Error) -> Self {
@@ -44,6 +46,7 @@ impl From<io::Error> for AppError {
                 _ => "operationFailed",
             },
             detail: error.to_string(),
+            parameters: serde_json::Value::Null,
         }
     }
 }
@@ -52,6 +55,7 @@ fn error(code: &'static str, detail: impl Into<String>) -> AppError {
     AppError {
         code,
         detail: detail.into(),
+        parameters: serde_json::Value::Null,
     }
 }
 fn lock<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>> {
@@ -336,12 +340,109 @@ fn bundled_lsp() -> Result<PathBuf> {
     }
     Err(error("missingTool", "pawnlsp"))
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolPin {
+    name: String,
+    version: String,
+    executable_sha256: String,
+}
+#[derive(Deserialize)]
+struct ToolPins {
+    tools: Vec<ToolPin>,
+}
+#[derive(Serialize)]
+pub struct ToolInfo {
+    path: PathBuf,
+    version: String,
+    source: &'static str,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageStart {
+    session_id: u64,
+    tool: ToolInfo,
+}
+
+fn verified_lsp(app: &AppHandle) -> Result<ToolInfo> {
+    let pins: ToolPins = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../toolchain/tools.json"
+    )))
+    .map_err(|failure| error("operationFailed", failure.to_string()))?;
+    let pin = pins
+        .tools
+        .into_iter()
+        .find(|pin| pin.name == "pawnlsp")
+        .ok_or_else(|| error("missingTool", "missing pawnlsp pin"))?;
+    let preferences = load_preferences(app.clone())?;
+    let configured = preferences
+        .settings
+        .get("languageServerPath")
+        .and_then(|value| value.as_str())
+        .filter(|path| !path.is_empty());
+    let (path, source) = match configured {
+        Some(path) => (workspace::canonical(Path::new(path))?, "external"),
+        None => (bundled_lsp()?, "bundled"),
+    };
+    tools::verify(
+        &path,
+        &["--version"],
+        &pin.version,
+        (source == "bundled").then_some(pin.executable_sha256.as_str()),
+    )
+    .map_err(|failure| {
+        let mut failure = match failure {
+            ToolError::Io(failure) => AppError::from(failure),
+            ToolError::Checksum => error("toolChecksum", "bundled pawnlsp checksum mismatch"),
+            ToolError::Timeout => error("toolTimeout", "version probe timed out"),
+            ToolError::OutputLimit => {
+                error("toolOutputLimit", "version probe exceeded output limit")
+            }
+            ToolError::Failed(output) => error("toolProbe", output),
+            ToolError::Version { expected, actual } => {
+                let mut failure = error("toolVersion", "unsupported language-server version");
+                failure.parameters = serde_json::json!({ "expected": expected, "actual": actual });
+                failure
+            }
+        };
+        if failure.parameters.is_null() {
+            failure.parameters = serde_json::json!({ "path": path });
+        }
+        failure
+    })?;
+    Ok(ToolInfo {
+        path,
+        version: pin.version,
+        source,
+    })
+}
+
+#[tauri::command]
+pub async fn choose_language_server(app: AppHandle) -> Result<Option<PathBuf>> {
+    let selected = tauri::async_runtime::spawn_blocking(move || {
+        let picker = app.dialog().file();
+        #[cfg(windows)]
+        let picker = picker.add_filter("pawnlsp", &["exe"]);
+        picker.blocking_pick_file()
+    })
+    .await
+    .map_err(|failure| error("operationFailed", failure.to_string()))?;
+    selected
+        .map(|file| {
+            file.into_path()
+                .map_err(|failure| error("operationFailed", failure.to_string()))
+        })
+        .transpose()
+}
+
 #[tauri::command]
 pub async fn lsp_start(
+    app: AppHandle,
     state: State<'_, NativeState>,
     document: Option<PathBuf>,
     on_event: Channel<LspEvent>,
-) -> Result<u64> {
+) -> Result<LanguageStart> {
     let root = if let Some(workspace) = lock(&state.workspace)?.as_ref() {
         workspace.root().to_path_buf()
     } else {
@@ -354,14 +455,20 @@ pub async fn lsp_start(
             .ok_or_else(|| error("noWorkspace", "no document directory"))?
             .to_path_buf()
     };
+    let tool = tauri::async_runtime::spawn_blocking(move || verified_lsp(&app))
+        .await
+        .map_err(|failure| error("operationFailed", failure.to_string()))??;
     let mut owned = lock(&state.lsp)?;
     owned.take();
-    let session = LspSession::start(&bundled_lsp()?, &root, move |event| {
+    let session = LspSession::start(&tool.path, &root, move |event| {
         let _ = on_event.send(event);
     })?;
     let id = state.next.fetch_add(1, Ordering::Relaxed) + 1;
     *owned = Some((id, session));
-    Ok(id)
+    Ok(LanguageStart {
+        session_id: id,
+        tool,
+    })
 }
 #[tauri::command]
 pub async fn lsp_send(state: State<'_, NativeState>, session_id: u64, body: String) -> Result<()> {

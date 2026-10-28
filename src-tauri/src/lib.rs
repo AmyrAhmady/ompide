@@ -19,6 +19,7 @@ pub fn run() {
             commands::load_preferences,
             commands::store_preferences,
             commands::lsp_start,
+            commands::choose_language_server,
             commands::lsp_send,
             commands::lsp_stop,
             commands::watch_start,

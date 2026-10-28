@@ -1,13 +1,17 @@
 import { editor, Uri, type IDisposable } from 'monaco-editor';
 import { createModelReference, type IReference, type ITextFileEditorModel } from '@codingame/monaco-vscode-api/monaco';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { native, desktop, type FileSnapshot, type Entry, type WatchEvent } from '../lib/native';
+import { native, desktop, type FileSnapshot, type Entry, type WatchEvent, type ToolInfo } from '../lib/native';
 import { t, describeError } from '../lib/i18n';
 import { applyEditorSettings, files, initializeEditor } from '../editor/services';
 import { defaults, parseSettings, type Settings } from '../settings/settings';
 import { startLanguageSession, type LanguageSession } from '../language/client';
 import { BufferVersion } from './documents';
 import { protocolUri } from '../lib/uri';
+import { languageFeatures, type LanguageFeatures } from '../language/features';
+import { RecoveryPolicy } from '../language/recovery';
+import { commands } from 'vscode';
+import { CancellationTokenSource, type TextEdit, type SymbolInformation, type WorkspaceSymbol, type DocumentSymbol } from 'vscode-languageclient/browser';
 
 interface OpenDocument {
   uri: string; name: string; snapshot?: FileSnapshot; model: editor.ITextModel;
@@ -16,16 +20,19 @@ interface OpenDocument {
   external?: 'changed' | 'deleted';
 }
 export interface Tab { uri: string; name: string; dirty: boolean; external?: 'changed' | 'deleted' }
+export interface SymbolResult { name: string; container?: string; uri: string; line: number; column: number }
 type Choice = 'save' | 'discard' | 'cancel';
 export interface WorkbenchState {
   ready: boolean; root?: string; recent: string[]; recentFiles: string[]; tabs: Tab[]; active?: string;
   settings: Settings; status: string; error?: string; problems: editor.IMarker[];
   prompt?: { name: string }; position: { line: number; column: number };
   treeVersion: number;
+  languagePhase: 'stopped' | 'starting' | 'ready' | 'recovering';
+  languageFeatures?: LanguageFeatures; languageTool?: ToolInfo; languageProgress?: string;
 }
 
 export class Workbench {
-  private state: WorkbenchState = { ready: false, recent: [], recentFiles: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0 };
+  private state: WorkbenchState = { ready: false, recent: [], recentFiles: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0, languagePhase: 'stopped' };
   private subscribers = new Set<() => void>();
   private documents = new Map<string, OpenDocument>();
   private opening = new Map<string, Promise<void>>();
@@ -40,6 +47,10 @@ export class Workbench {
   private closeListener?: () => void;
   private saving = new Map<string, Promise<boolean>>();
   private settingsQueue: Promise<void> = Promise.resolve();
+  private languageGeneration = 0;
+  private recovery = new RecoveryPolicy();
+  private recoveryTimer?: ReturnType<typeof setTimeout>;
+  private symbolRequest?: CancellationTokenSource;
   private watchQueue: Promise<void> = Promise.resolve();
   private diskQueue: Promise<void> = Promise.resolve();
   private watchGeneration = 0;
@@ -61,7 +72,7 @@ export class Workbench {
       try { const preferences = await native.preferences(); settings = parseSettings(preferences.settings); this.update({ settings, recent: preferences.recentWorkspaces, recentFiles: preferences.recentFiles }); }
       catch (error) { this.report(error); }
     }
-    await initializeEditor(settings, async (uri, line, column) => { await this.openUri(uri, line, column); });
+    await initializeEditor(settings, async (uri, line, column) => { await this.openUri(uri, line, column); }, uris => this.prepareWorkspaceEdits(uris), this.report);
     this.codeEditor = editor.create(container, { model: null, automaticLayout: true, ariaLabel: t('app.name'), fontSize: settings.fontSize, fontFamily: settings.fontFamily, minimap: { enabled: settings.minimap }, scrollBeyondLastLine: false });
     const cursor = this.codeEditor.onDidChangeCursorPosition(event => this.update({ position: { line: event.position.lineNumber, column: event.position.column } }));
     const markers = editor.onDidChangeMarkers(() => this.update({ problems: editor.getModelMarkers({}).filter(marker => this.documents.has(marker.resource.toString())) }));
@@ -164,7 +175,7 @@ export class Workbench {
   private async saveDocument(uri: string, saveAs: boolean): Promise<boolean> {
     const document = this.documents.get(uri);
     if (!document) return true;
-    if (this.state.settings.formatOnSave && this.state.active === uri && this.language?.client.initializeResult?.capabilities.documentFormattingProvider) await this.action('editor.action.formatDocument');
+    if (this.state.settings.formatOnSave && this.state.languageFeatures?.formatting) await this.format(uri);
     const text = document.model.getValue();
     const version = document.model.getAlternativeVersionId();
     const result = !document.snapshot || saveAs
@@ -259,9 +270,73 @@ export class Workbench {
     document.versions.savedAt(reloadedVersion); this.update();
   }
   async action(id: string): Promise<void> {
-    if (id === 'undo' || id === 'redo') this.codeEditor?.trigger('menu', id, null);
-    else await this.codeEditor?.getAction(id)?.run();
     this.codeEditor?.focus();
+    if (id === 'editor.action.formatDocument') { if (this.state.active) await this.format(this.state.active); }
+    else if (id === 'undo' || id === 'redo') this.codeEditor?.trigger('menu', id, null);
+    else {
+      const action = this.codeEditor?.getAction(id);
+      if (action) await action.run(); else await commands.executeCommand(id);
+    }
+    this.codeEditor?.focus();
+  }
+  private async prepareWorkspaceEdits(uris: string[]): Promise<void> {
+    const original = this.state.active;
+    const versions = new Map([...this.documents.values()].map(document => [document.uri, document.model.getVersionId()]));
+    try {
+      for (const uri of uris) {
+        if (!this.documents.has(Uri.parse(uri).toString())) await this.openUri(uri);
+      }
+      for (const [uri, version] of versions) if (this.documents.get(uri)?.model.getVersionId() !== version) throw { code: 'conflict' };
+    } catch (error) { this.report(error); throw error; }
+    finally { if (original) this.activate(original); }
+  }
+  async format(uri: string): Promise<void> {
+    const document = this.documents.get(uri);
+    const client = this.language?.client;
+    if (!document?.snapshot || !client?.isRunning() || !this.state.languageFeatures?.formatting) return;
+    const version = document.model.getVersionId();
+    const edits = await client.sendRequest<TextEdit[] | null>('textDocument/formatting', { textDocument: { uri: protocolUri(document.model.uri) }, options: { tabSize: this.state.settings.tabSize, insertSpaces: this.state.settings.insertSpaces } });
+    if (document.model.isDisposed() || version !== document.model.getVersionId()) throw { code: 'conflict' };
+    if (!edits?.length) return;
+    const changes = edits.map(edit => {
+      const range = { startLineNumber: edit.range.start.line + 1, startColumn: edit.range.start.character + 1, endLineNumber: edit.range.end.line + 1, endColumn: edit.range.end.character + 1 };
+      const valid = document.model.validateRange(range);
+      if (valid.startLineNumber !== range.startLineNumber || valid.startColumn !== range.startColumn || valid.endLineNumber !== range.endLineNumber || valid.endColumn !== range.endColumn) throw { code: 'invalidLanguageEdit' };
+      return { range, text: edit.newText };
+    });
+    document.model.pushStackElement(); document.model.pushEditOperations([], changes, () => null); document.model.pushStackElement();
+  }
+  cancelSymbols(): void { this.symbolRequest?.cancel(); this.symbolRequest?.dispose(); this.symbolRequest = undefined; }
+  async documentSymbols(query: string): Promise<SymbolResult[]> {
+    this.cancelSymbols();
+    const session = this.language;
+    const document = this.state.active ? this.documents.get(this.state.active) : undefined;
+    if (!document?.snapshot || !session?.client.isRunning() || !this.state.languageFeatures?.symbols) return [];
+    const cancellation = new CancellationTokenSource(); this.symbolRequest = cancellation;
+    try {
+      const symbols = await session.client.sendRequest<(DocumentSymbol | SymbolInformation)[] | null>('textDocument/documentSymbol', { textDocument: { uri: protocolUri(document.model.uri) } }, cancellation.token);
+      if (cancellation.token.isCancellationRequested || session !== this.language) return [];
+      const results: SymbolResult[] = [];
+      const pending: { symbol: DocumentSymbol | SymbolInformation; container?: string }[] = (symbols ?? []).map(symbol => ({ symbol })).reverse();
+      while (pending.length) {
+        const { symbol, container } = pending.pop()!;
+        const location = 'location' in symbol ? symbol.location : { uri: document.uri, range: symbol.selectionRange };
+        if (symbol.name.toLowerCase().includes(query.toLowerCase()) && results.length < 500) results.push({ name: symbol.name, container, uri: location.uri, line: location.range.start.line + 1, column: location.range.start.character + 1 });
+        if ('children' in symbol) for (const child of [...symbol.children ?? []].reverse()) pending.push({ symbol: child, container: symbol.name });
+      }
+      return results;
+    } catch (error) { if (cancellation.token.isCancellationRequested) return []; throw error; }
+  }
+  async workspaceSymbols(query: string): Promise<SymbolResult[]> {
+    this.cancelSymbols();
+    const session = this.language;
+    if (!session?.client.isRunning() || !this.state.languageFeatures?.workspaceSymbols) return [];
+    const cancellation = new CancellationTokenSource(); this.symbolRequest = cancellation;
+    try {
+      const symbols = await session.client.sendRequest<(SymbolInformation | WorkspaceSymbol)[] | null>('workspace/symbol', { query }, cancellation.token);
+      if (cancellation.token.isCancellationRequested || session !== this.language) return [];
+      return (symbols ?? []).slice(0, 500).map(symbol => ({ name: symbol.name, container: symbol.containerName, uri: symbol.location.uri, line: ('range' in symbol.location ? symbol.location.range.start.line : 0) + 1, column: ('range' in symbol.location ? symbol.location.range.start.character : 0) + 1 }));
+    } catch (error) { if (cancellation.token.isCancellationRequested) return []; throw error; }
   }
   settings(patch: Partial<Settings>): Promise<void> {
     const settings = { ...this.state.settings, ...patch };
@@ -281,17 +356,40 @@ export class Workbench {
       const root = this.state.root ?? (document ? document.path.slice(0, document.path.lastIndexOf(document.path.includes('\\') ? '\\' : '/')) : undefined);
       if (!desktop || !root || this.languageRoot === root) return;
       await this.stopLanguage();
-      this.update({ status: t('status.starting') });
+      const generation = this.languageGeneration;
+      this.update({ status: t('status.starting'), languagePhase: 'starting', error: undefined });
       try {
-        this.language = await startLanguageSession(root, document?.path, () => { this.languageRoot = undefined; this.update({ status: t('status.stopped') }); });
+        const session = await startLanguageSession(root, document?.path, () => this.languageClosed(generation), message => { if (generation === this.languageGeneration) this.update({ languageProgress: message }); });
+        if (generation !== this.languageGeneration || this.closingWindow) { await session.stop(); return; }
+        this.language = session;
         this.sessionDocuments = new Set([...this.documents.keys()]);
-        this.languageRoot = root; this.update({ status: t('status.connected') });
-      } catch (error) { this.update({ status: t('status.stopped') }); this.report(error); }
+        this.languageRoot = root; this.update({ status: t('status.connected'), languagePhase: 'ready', languageTool: session.tool, languageFeatures: languageFeatures(session.client.initializeResult?.capabilities ?? {}) });
+      } catch (error) { if (generation === this.languageGeneration) { this.update({ status: t('status.stopped'), languagePhase: 'stopped', languageFeatures: undefined }); this.report(error); } }
     });
     return this.languageQueue;
   }
-  private async stopLanguage(): Promise<void> { const session = this.language; this.language = undefined; this.languageRoot = undefined; await session?.stop(); }
-  async restartLanguage(): Promise<void> { await this.stopLanguage(); await this.ensureLanguage(); }
+  private async stopLanguage(): Promise<void> {
+    ++this.languageGeneration;
+    clearTimeout(this.recoveryTimer); this.recoveryTimer = undefined;
+    this.cancelSymbols();
+    const session = this.language; this.language = undefined; this.languageRoot = undefined;
+    this.update({ status: t('status.ready'), languagePhase: 'stopped', languageFeatures: undefined, languageProgress: undefined });
+    await session?.stop();
+  }
+  private languageClosed(generation: number): void {
+    if (generation !== this.languageGeneration || this.closingWindow) return;
+    this.languageRoot = undefined;
+    const delay = this.recovery.next();
+    this.update({ status: t(delay === undefined ? 'status.crashLoop' : 'status.recovering'), languagePhase: delay === undefined ? 'stopped' : 'recovering', languageFeatures: undefined, languageProgress: undefined });
+    if (delay !== undefined) this.recoveryTimer = setTimeout(() => { if (generation === this.languageGeneration) void this.ensureLanguage().catch(this.report); }, delay);
+  }
+  async restartLanguage(): Promise<void> { this.recovery.reset(); await this.stopLanguage(); await this.ensureLanguage(); }
+  async configureLanguageServer(bundled = false): Promise<void> {
+    const path = bundled ? '' : await native.chooseLanguageServer();
+    if (path === null) return;
+    await this.settings({ languageServerPath: path });
+    await this.restartLanguage();
+  }
   async quit(): Promise<void> { await getCurrentWindow().close(); }
 
   private pathKey(path: string): string {

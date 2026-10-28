@@ -5,11 +5,13 @@ PawnKit provides language intelligence and compiler orchestration. Development i
 in progress; the application is not yet ready for an installed release.
 
 Verified on Windows x64: a compact editor with top tabs, folder explorer, reusable
-Monaco models, real Pawn completion and diagnostics, F12 navigation into includes,
-editing/save/save-all/undo, unsaved Cancel/Discard prompts, reopen, recent-file
-history, external-file change
-reconciliation, safe window closing, and Light/Dark theme
-switching with persisted settings. English UI resources are in
+Monaco models, real Pawn completion/diagnostics/hover/signature help, definition
+and reference navigation, cross-file rename, document/workspace symbols, folding,
+formatting and supported code actions. Server recovery preserves unsaved buffers;
+unsaved include changes update dependent analysis. Editing/save/save-all/undo,
+unsaved Cancel/Discard prompts, reopen, recent-file history, external-file change
+reconciliation, safe window closing, and Light/Dark switching with persisted
+settings are also verified. English UI resources are in
 `src/locales/en.json`; application colors and syntax themes are JSON data under
 `src/settings/themes/`.
 
@@ -98,6 +100,14 @@ edits, then discarding closes the real application. The script also verifies
 external clean reloads, conflicting dirty edits, and entry-file rename/restore.
 Do not enable the inspection port for ordinary use or distributed builds.
 
+Run `node scripts/language-smoke.mjs` against a freshly launched debug application
+with the same inspection setup for the advanced language workflows. It verifies
+real hover/signature/reference UI, rename into unopened files, symbols, formatting,
+code actions, crash recovery, executable selection, and unsaved include macros
+against the pinned [open.mp fixture](fixtures/openmp/README.md). Prepare that
+fixture explicitly before running. The script restores preferences, uses disposable
+project copies, closes the test application, and records evidence in `test-results/`.
+
 Native Windows Open File, Save As and Open Folder were additionally exercised
 through their actual OS dialogs using disposable fixtures. Save As preserved
 the exact source text; folder selection populated the explorer and recent history.
@@ -120,6 +130,7 @@ uses the debug profile; a release-optimized installer remains unverified.
 | Close / Reopen Editor | Ctrl+W / Ctrl+Shift+T |
 | Find / Replace | Ctrl+F / Ctrl+H |
 | Go to Definition / References / Rename | F12 / Shift+F12 / F2 |
+| Symbols in Editor / Workspace | Ctrl+Shift+O / Ctrl+T |
 | Format Document | Shift+Alt+F |
 | Problems / Settings | Ctrl+J / Ctrl+, |
 

@@ -5,6 +5,7 @@ export interface FileSnapshot { path: string; uri: string; text: string; bom: bo
 export interface Entry { name: string; path: string; directory: boolean; symlink: boolean }
 export interface Preferences { recentWorkspaces: string[]; recentFiles: string[]; settings: unknown }
 export interface WatchEvent { paths: string[]; rescan: boolean; error: string | null }
+export interface ToolInfo { path: string; version: string; source: 'bundled' | 'external' }
 export const desktop = isTauri();
 export const native = {
   preferences: () => invoke<Preferences>('load_preferences'),
@@ -15,6 +16,7 @@ export const native = {
   chooseDocument: () => invoke<FileSnapshot | null>('choose_document'),
   rememberDocument: (path: string) => invoke<string[]>('remember_document', { path }),
   recentDocument: (path: string) => invoke<FileSnapshot>('recent_document', { path }),
+  chooseLanguageServer: () => invoke<string | null>('choose_language_server'),
   read: (path: string) => invoke<FileSnapshot>('read_document', { path }),
   save: (path: string, text: string, bom: boolean, revision: string) => invoke<FileSnapshot>('save_document', { path, text, bom, revision }),
   saveAs: (text: string, bom: boolean, protectedPaths: string[]) => invoke<FileSnapshot | null>('save_document_as', { text, bom, protectedPaths }),

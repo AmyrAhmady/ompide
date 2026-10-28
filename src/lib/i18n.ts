@@ -23,7 +23,13 @@ export const t = createTranslator();
 export function describeError(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
     const key = `error.${error.code}`;
-    if (Object.prototype.hasOwnProperty.call(english, key)) return t(key as TranslationKey);
+    if (Object.prototype.hasOwnProperty.call(english, key)) {
+      const parameters: Parameters = {};
+      if ('parameters' in error && typeof error.parameters === 'object' && error.parameters !== null) {
+        for (const [name, value] of Object.entries(error.parameters)) if (typeof value === 'string' || typeof value === 'number') parameters[name] = value;
+      }
+      return t(key as TranslationKey, parameters);
+    }
   }
   return t('error.operationFailed');
 }

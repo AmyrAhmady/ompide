@@ -82,4 +82,13 @@ dialog footer button.primary { background: var(--button-background); color: var(
 .settings-fields label { display: flex; justify-content: space-between; align-items: center; gap: 35px; }
 .settings-fields input:not([type="checkbox"]), .settings-fields select { background: var(--input-background); color: var(--input-foreground); border: 1px solid var(--input-border); padding: 5px; width: 230px; }
 .settings-fields label.checkbox { justify-content: flex-start; gap: 8px; }
+.settings-fields fieldset { border: 1px solid var(--panel-border); margin: 0; padding: 10px; max-width: 570px; }
+.tool-path { overflow-wrap: anywhere; color: var(--descriptionForeground); }
+.settings-tool-actions { display: flex; gap: 8px; }
+.settings-tool-actions button { padding: 5px 9px; border: 1px solid var(--input-border); background: var(--input-background); color: var(--input-foreground); }
+.symbol-query { width: 100%; padding: 8px; background: var(--input-background); color: var(--input-foreground); border: 1px solid var(--input-border); }
+.symbol-results { max-height: 45vh; min-height: 80px; overflow: auto; margin-top: 10px; }
+.symbol-results button { display: flex; justify-content: space-between; gap: 24px; padding: 7px; width: 100%; border: 0; background: none; text-align: left; }
+.symbol-results button:hover, .symbol-results button[aria-selected="true"] { background: var(--list-activeSelectionBackground); }
+.symbol-results small { color: var(--descriptionForeground); }
 @media (max-width: 900px) { .window-title { padding-right: 15px; } .explorer { width: 190px; } }

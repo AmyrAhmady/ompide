@@ -13,6 +13,7 @@ import 'monaco-editor/esm/vs/editor/edcore.main';
 import type { ITextEditorOptions } from '@codingame/monaco-vscode-api/vscode/vs/platform/editor/common/editor';
 import { NativeReadProvider } from './native-files';
 import { OpenFileProvider } from './open-files';
+import { installWorkspaceEdits } from './workspace-edits';
 
 export const files = new OpenFileProvider();
 registerFileSystemOverlay(1, files);
@@ -31,7 +32,7 @@ function configuration(settings: Settings) {
   };
 }
 
-export function initializeEditor(settings: Settings, openEditor: (uri: string, line?: number, column?: number) => Promise<void>): Promise<void> {
+export function initializeEditor(settings: Settings, openEditor: (uri: string, line?: number, column?: number) => Promise<void>, prepareEdits: (uris: string[]) => Promise<void>, report: (error: unknown) => void): Promise<void> {
   return started ??= (async () => {
     const themeFiles = new Map<string, string | URL>();
     for (const [id, theme] of Object.entries(defaultThemes)) themeFiles.set(`/${id}.json`, JSON.stringify({ name: theme.name, colors: theme.colors, tokenColors: theme.tokenColors }));
@@ -67,6 +68,7 @@ export function initializeEditor(settings: Settings, openEditor: (uri: string, l
       ],
     });
     await wrapper.start();
+    await installWorkspaceEdits(prepareEdits, report);
   })();
 }
 

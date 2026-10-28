@@ -14,4 +14,5 @@ it('selects plural forms and maps backend codes to English resources', () => {
   expect(translate('status.problems', { count: 2 })).toBe('2 problems');
   expect(describeError({ code: 'conflict' })).toBe(english['error.conflict']);
   expect(describeError({ code: 'unknown' })).toBe(english['error.operationFailed']);
+  expect(describeError({ code: 'toolVersion', parameters: { expected: '0.33.75', actual: 'pawn 1.34.38' } })).toContain('Expected pawnlsp 0.33.75, but the executable reports pawn 1.34.38');
 });

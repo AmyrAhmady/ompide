@@ -9,6 +9,7 @@ export type LspEvent =
 
 /** Standard MessageTransports over complete Tauri channel messages. Rust handles stdio framing. */
 export class IpcMessageReader extends AbstractMessageReader {
+  constructor(private readonly observe?: (message: Message) => void) { super(); }
   private callback?: DataCallback;
   private queue: Message[] = [];
   private closed = false;
@@ -21,6 +22,7 @@ export class IpcMessageReader extends AbstractMessageReader {
         if (typeof message !== 'object' || message === null || !('jsonrpc' in message) || message.jsonrpc !== '2.0') {
           throw new Error('Invalid JSON-RPC message');
         }
+        this.observe?.(message as Message);
         if (this.callback) this.callback(message as Message);
         else this.queue.push(message as Message);
       } catch (error) {

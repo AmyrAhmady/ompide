@@ -123,6 +123,19 @@ try {
   });
   await page.keyboard.press('Control+j');
   await expect.poll(async () => page.locator('.problems-panel li').count(), { timeout: 15_000 }).toBeGreaterThan(0);
+  const diagnostic = await page.evaluate(() => {
+    const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
+    return import(moduleUrl).then(({ workbench }) => {
+      const problem = workbench.getSnapshot().problems[0];
+      Reflect.get(workbench, 'codeEditor').setPosition({ lineNumber: 1, column: 1 });
+      return { line: problem.startLineNumber, column: problem.startColumn };
+    });
+  });
+  await page.locator('.problems-panel li button').first().click();
+  await expect.poll(() => page.evaluate(() => {
+    const moduleUrl = performance.getEntriesByType('resource').map(entry => entry.name).find(url => /\/src\/app\/workbench\.ts(?:\?|$)/.test(url));
+    return import(moduleUrl).then(({ workbench }) => workbench.getSnapshot().position);
+  })).toEqual(diagnostic);
   await page.keyboard.press('Control+s');
   await page.keyboard.press('Control+,');
   await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
