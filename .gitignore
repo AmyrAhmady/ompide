@@ -32,3 +32,4 @@ dist-ssr
 *.amx
 **/target/
 *.tsbuildinfo
+/fixtures/openmp/.vendor/
