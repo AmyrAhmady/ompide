@@ -72,6 +72,11 @@ requires the prepared binaries, and fails if they are missing. Run focused check
 for routine changes; a full native build is needed only when native integration
 or packaging needs verification.
 
+Run `node scripts/menu-smoke.mjs` for the menu interaction regression. It uses
+the installed Windows Edge browser in headless mode and a test-owned Vite server
+on an ephemeral loopback port. It checks switching, dismissal, keyboard navigation,
+and both themes at a scaled viewport; it does not exercise native services.
+
 For the real desktop smoke test, start `npm run dev`, then launch the debug executable
 from a separate PowerShell process with a temporary loopback CDP port:
 

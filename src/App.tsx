@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type
 import { Uri } from 'monaco-editor';
 import { workbench } from './app/workbench';
 import { desktop, type Entry } from './lib/native';
-import { t, type TranslationKey } from './lib/i18n';
+import { t } from './lib/i18n';
+import { Menubar, Menu, MenuItem } from './components/Menubar';
 import { defaultThemes, themeVariables } from './settings/theme';
 import type { Settings } from './settings/settings';
 import './App.css';
@@ -13,15 +14,6 @@ function Modal({ children, label, onCancel }: { children: ReactNode; label: stri
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
   return <dialog ref={ref} aria-label={label} onCancel={event => { event.preventDefault(); onCancel(); }}>{children}</dialog>;
-}
-
-function MenuItem({ label, shortcut, action, disabled = false }: { label: TranslationKey; shortcut?: string; action: () => void; disabled?: boolean }) {
-  return <button type="button" role="menuitem" disabled={disabled} onClick={event => {
-    event.currentTarget.closest('details')?.removeAttribute('open'); action();
-  }}><span>{t(label)}</span><kbd>{shortcut}</kbd></button>;
-}
-function Menu({ label, children }: { label: TranslationKey; children: ReactNode }) {
-  return <details className="menu"><summary>{t(label)}</summary><div role="menu" aria-label={t(label)}>{children}</div></details>;
 }
 
 function ExplorerRow({ entry, depth, selected, revision }: { entry: Entry; depth: number; selected?: string; revision: number }) {
@@ -118,7 +110,7 @@ function App() {
 
   return <main className="workbench" style={themeVariables(defaultThemes[state.settings.theme]) as CSSProperties}>
     <header className="ide-menubar"><span className="app-mark" aria-label={t('app.name')}>♟</span>
-      <nav aria-label={t('app.name')}>
+      <Menubar label={t('app.name')}>
         <Menu label="menu.file">
           <MenuItem label="command.newFile" shortcut="Ctrl+N" disabled={!nativeReady} action={() => run(() => workbench.newFile())} />
           <MenuItem label="command.openFile" shortcut="Ctrl+O" disabled={!nativeReady} action={() => run(() => workbench.openFile())} />
@@ -143,7 +135,7 @@ function App() {
           {([['command.definition', 'editor.action.revealDefinition', 'F12'], ['command.references', 'editor.action.goToReferences', 'Shift+F12'], ['command.rename', 'editor.action.rename', 'F2'], ['command.symbols', 'editor.action.quickOutline', 'Ctrl+Shift+O']] as const).map(([label, action, shortcut]) => <MenuItem key={action} label={label} shortcut={shortcut} disabled={!active || !connected} action={() => run(() => workbench.action(action))} />)}
           <MenuItem label="command.restartLanguage" disabled={!nativeReady} action={() => run(() => workbench.restartLanguage())} />
         </Menu>
-      </nav><span className="window-title">{state.root?.split(/[\\/]/).at(-1) ?? t('app.name')}</span>
+      </Menubar><span className="window-title">{state.root?.split(/[\\/]/).at(-1) ?? t('app.name')}</span>
     </header>
     {state.error && <div className="error-banner" role="alert"><span>{state.error}</span><button type="button" onClick={workbench.dismissError} aria-label={t('command.dismiss')}>×</button></div>}
     <div className="workspace-body">
