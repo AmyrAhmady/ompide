@@ -2245,12 +2245,14 @@ name = "pawn-core"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "libc",
  "notify",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
