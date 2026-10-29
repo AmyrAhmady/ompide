@@ -28,7 +28,9 @@ function configuration(settings: Settings) {
     'editor.tabSize': settings.tabSize, 'editor.insertSpaces': settings.insertSpaces,
     'editor.wordWrap': settings.wordWrap ? 'on' : 'off',
     'editor.minimap.enabled': settings.minimap, 'editor.wordBasedSuggestions': 'off',
-    'editor.experimental.asyncTokenization': true,
+    // The pinned TextMate worker can apply stale state deltas after a large edit/theme
+    // change. Use its standard, time-sliced tokenizer until the worker race is fixed.
+    'editor.experimental.asyncTokenization': false,
   };
 }
 

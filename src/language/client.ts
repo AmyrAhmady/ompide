@@ -93,7 +93,13 @@ export async function startLanguageSession(root: string, document: string | unde
       stopping = true;
       lifecycle.dispose();
       try { if (client.isRunning()) await client.stop(3000); }
-      finally { await invoke('lsp_stop', { sessionId }); reader.dispose(); writer.dispose(); }
+      // A busy/crashed server may miss graceful shutdown. Once Rust has killed and
+      // waited for it, that timeout must not abort a confirmed close/workspace change.
+      catch (failure) { console.warn(failure); }
+      finally {
+        try { await invoke('lsp_stop', { sessionId }); }
+        finally { reader.dispose(); writer.dispose(); }
+      }
     },
   };
 }
