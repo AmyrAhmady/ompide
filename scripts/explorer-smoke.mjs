@@ -1,5 +1,6 @@
 // Real Windows desktop Explorer workflows. Uses disposable files and restores
 // only its own Recycle Bin items through the core integration-test helper.
+/* global document */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
