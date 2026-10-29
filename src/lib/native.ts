@@ -1,5 +1,6 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import type { Settings } from '../settings/settings';
+import type { Discovery, ProjectInfo, BuildTools, BuildEvent, BuildSelection, BuildResult } from '../build/types';
 
 export interface FileSnapshot { path: string; uri: string; text: string; bom: boolean; revision: string }
 export interface Entry { name: string; path: string; directory: boolean; symlink: boolean }
@@ -23,4 +24,12 @@ export const native = {
   entries: (path: string) => invoke<Entry[]>('list_directory', { path }),
   watch: (paths: string[], receive: (event: WatchEvent) => void) => invoke<void>('watch_start', { paths, onEvent: new Channel<WatchEvent>(receive) }),
   stopWatch: () => invoke<void>('watch_stop'),
+  discoverProjects: () => invoke<Discovery>('discover_projects'),
+  inspectProject: (path: string) => invoke<ProjectInfo>('inspect_project', { path }),
+  buildTools: () => invoke<BuildTools>('build_tools'),
+  chooseBuildTool: (compiler: boolean) => invoke<string | null>('choose_build_tool', { compiler }),
+  previewProject: (entry: string, profile: string, includes: string[]) => invoke<string>('preview_project', { entry, profile, includes }),
+  createProject: (text: string) => invoke<FileSnapshot>('create_project', { text }),
+  buildProject: (selection: BuildSelection, receive: (event: BuildEvent) => void) => invoke<BuildResult>('build_project', { selection, onEvent: new Channel<BuildEvent>(receive) }),
+  cancelBuild: (id: number) => invoke<void>('cancel_build', { id }),
 };

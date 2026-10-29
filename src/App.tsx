@@ -1,21 +1,19 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { Uri } from 'monaco-editor';
 import { workbench, type SymbolResult } from './app/workbench';
 import { desktop, type Entry } from './lib/native';
 import { t } from './lib/i18n';
 import { Menubar, Menu, MenuItem } from './components/Menubar';
+import { Modal } from './components/Modal';
+import { ProjectDialog } from './build/ProjectDialog';
+import { BuildPanel } from './build/BuildPanel';
+import { building } from './build/types';
 import { defaultThemes, themeVariables } from './settings/theme';
 import type { Settings } from './settings/settings';
 import toolPins from '../toolchain/tools.json';
 import './App.css';
 
 const run = (operation: () => Promise<unknown>) => { void operation().catch(workbench.report); };
-
-function Modal({ children, label, onCancel }: { children: ReactNode; label: string; onCancel: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
-  return <dialog ref={ref} aria-label={label} onCancel={event => { event.preventDefault(); onCancel(); }}>{children}</dialog>;
-}
 
 function ExplorerRow({ entry, depth, selected, revision }: { entry: Entry; depth: number; selected?: string; revision: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -94,11 +92,15 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [symbolsOpen, setSymbolsOpen] = useState<'document' | 'workspace' | undefined>();
   const [problemsOpen, setProblemsOpen] = useState(false);
+  const [buildOpen, setBuildOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [treeRevision, setTreeRevision] = useState(0);
   const active = Boolean(state.active);
   const external = state.tabs.find(tab => tab.uri === state.active)?.external;
   const connected = state.languagePhase === 'ready';
   const nativeReady = desktop && state.ready;
+  const buildBusy = building(state.build);
+  const startBuild = () => { if (!state.project) { setProjectOpen(true); return; } setBuildOpen(true); setProblemsOpen(false); run(() => workbench.buildProject()); };
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => void) | undefined;
@@ -108,12 +110,13 @@ function App() {
   useEffect(() => {
     let chordUntil = 0;
     const handle = (event: KeyboardEvent) => {
-      if (state.prompt || settingsOpen || symbolsOpen) return;
+      if (state.prompt || settingsOpen || symbolsOpen || projectOpen) return;
       const modifier = event.ctrlKey || event.metaKey;
       let operation: (() => Promise<unknown>) | undefined;
       const key = event.key.toLowerCase();
       if (modifier && key === 'k') { chordUntil = Date.now() + 1500; event.preventDefault(); event.stopImmediatePropagation(); return; }
       if (Date.now() < chordUntil && key === 'o') operation = () => workbench.chooseFolder();
+      else if (modifier && event.shiftKey && key === 'b') { event.preventDefault(); event.stopImmediatePropagation(); if (nativeReady && state.root && !buildBusy) startBuild(); return; }
       else if (modifier && event.shiftKey && key === 'o') { event.preventDefault(); event.stopImmediatePropagation(); if (state.languageFeatures?.symbols) setSymbolsOpen('document'); return; }
       else if (modifier && key === 'o') operation = () => workbench.openFile();
       else if (modifier && key === 'n') operation = () => workbench.newFile();
@@ -127,14 +130,16 @@ function App() {
     };
     window.addEventListener('keydown', handle, true);
     return () => window.removeEventListener('keydown', handle, true);
-  }, [state.active, state.prompt, state.languageFeatures, nativeReady, settingsOpen, symbolsOpen]);
+  }, [state.active, state.prompt, state.languageFeatures, state.root, state.project, buildBusy, nativeReady, settingsOpen, symbolsOpen, projectOpen]);
   useEffect(() => {
     const preventLoss = (event: BeforeUnloadEvent) => {
-      if (state.tabs.some(tab => tab.dirty)) { event.preventDefault(); event.returnValue = ''; }
+      // Native close can clear buffers before React commits its next render.
+      // Consult the current document state so an old closure cannot veto a confirmed exit.
+      if (workbench.getSnapshot().tabs.some(tab => tab.dirty)) { event.preventDefault(); event.returnValue = ''; }
     };
     window.addEventListener('beforeunload', preventLoss);
     return () => window.removeEventListener('beforeunload', preventLoss);
-  }, [state.tabs]);
+  }, []);
 
   return <main className="workbench" style={themeVariables(defaultThemes[state.settings.theme]) as CSSProperties}>
     <header className="ide-menubar"><span className="app-mark" aria-label={t('app.name')}>♟</span>
@@ -166,6 +171,12 @@ function App() {
           <MenuItem label="command.workspaceSymbols" shortcut="Ctrl+T" disabled={!state.languageFeatures?.workspaceSymbols} action={() => setSymbolsOpen('workspace')} />
           <MenuItem label="command.restartLanguage" disabled={!nativeReady} action={() => run(() => workbench.restartLanguage())} />
         </Menu>
+        <Menu label="menu.build">
+          <MenuItem label="build.command" shortcut="Ctrl+Shift+B" disabled={!nativeReady || !state.root || buildBusy} action={startBuild} />
+          <MenuItem label="build.cancel" disabled={!buildBusy} action={() => run(() => workbench.cancelBuild())} />
+          <MenuItem label="project.title" disabled={!nativeReady || !state.root || buildBusy} action={() => setProjectOpen(true)} />
+          <MenuItem label="build.output" action={() => { setBuildOpen(true); setProblemsOpen(false); }} />
+        </Menu>
       </Menubar><span className="window-title">{state.root?.split(/[\\/]/).at(-1) ?? t('app.name')}</span>
     </header>
     {state.error && <div className="error-banner" role="alert"><span>{state.error}</span><button type="button" onClick={workbench.dismissError} aria-label={t('command.dismiss')}>×</button></div>}
@@ -187,12 +198,14 @@ function App() {
         {problemsOpen && <section className="problems-panel"><div className="panel-heading"><span>{t('command.problems')} ({state.problems.length})</span><button type="button" onClick={() => setProblemsOpen(false)} aria-label={t('command.close')}>×</button></div>
           {state.problems.length ? <ul>{state.problems.map((problem, index) => <li key={index}><button type="button" onClick={() => run(() => workbench.openUri(problem.resource.toString(), problem.startLineNumber, problem.startColumn))}><span className={problem.severity === 8 ? 'problem-error' : 'problem-warning'} aria-hidden="true">●</span><span>{problem.message}</span><small>{t('problems.location', { file: problem.resource.path.split('/').at(-1) ?? '', line: problem.startLineNumber, column: problem.startColumn })}</small></button></li>)}</ul> : <p className="muted">{t('problems.empty')}</p>}
         </section>}
+        {buildOpen && !problemsOpen && <BuildPanel state={state.build} close={() => setBuildOpen(false)} configure={() => setProjectOpen(true)} />}
       </section>
     </div>
     <footer className="statusbar"><span title={state.languageTool?.path}>{state.languageProgress || state.status}</span>{!connected && nativeReady && state.languagePhase !== 'starting' && <button type="button" onClick={() => run(() => workbench.restartLanguage())}>{t('command.restartLanguage')}</button>}<button type="button" onClick={() => setProblemsOpen(value => !value)}>{t('status.problems', { count: state.problems.length })}</button><span className="status-spacer" />{active && <><span>{t('status.position', state.position)}</span><span>UTF-8</span></>}</footer>
     {state.prompt && <Modal label={t('prompt.unsaved', { name: state.prompt.name })} onCancel={() => workbench.answerPrompt('cancel')}><h2>{t('prompt.unsaved', { name: state.prompt.name })}</h2><p>{t('prompt.unsavedDetail')}</p><footer><button type="button" className="primary" onClick={() => workbench.answerPrompt('save')}>{t('prompt.save')}</button><button type="button" onClick={() => workbench.answerPrompt('discard')}>{t('prompt.discard')}</button><button type="button" onClick={() => workbench.answerPrompt('cancel')}>{t('prompt.cancel')}</button></footer></Modal>}
     {settingsOpen && <SettingsDialog settings={state.settings} tool={state.languageTool} close={() => setSettingsOpen(false)} />}
     {symbolsOpen && <SymbolsDialog mode={symbolsOpen} close={() => setSymbolsOpen(undefined)} />}
+    {projectOpen && <ProjectDialog state={state} close={() => setProjectOpen(false)} build={startBuild} />}
   </main>;
 }
 

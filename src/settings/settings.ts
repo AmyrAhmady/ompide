@@ -8,11 +8,14 @@ export interface Settings {
   minimap: boolean;
   formatOnSave: boolean;
   languageServerPath: string;
+  compilerPath: string;
+  pawnPath: string;
 }
 export const defaults: Settings = {
   theme: 'dark', fontSize: 14, fontFamily: 'Consolas, "Cascadia Code", monospace',
   tabSize: 4, insertSpaces: true, wordWrap: false, minimap: false, formatOnSave: false,
   languageServerPath: '',
+  compilerPath: '', pawnPath: '',
 };
 export function parseSettings(value: unknown): Settings {
   const settings = { ...defaults };
@@ -26,6 +29,7 @@ export function parseSettings(value: unknown): Settings {
   }
   if (typeof source.fontFamily === 'string' && source.fontFamily.length <= 256) settings.fontFamily = source.fontFamily;
   if (typeof source.languageServerPath === 'string' && source.languageServerPath.length <= 32768) settings.languageServerPath = source.languageServerPath;
+  for (const key of ['compilerPath', 'pawnPath'] as const) if (typeof source[key] === 'string' && source[key].length <= 32768) settings[key] = source[key];
   for (const key of ['insertSpaces', 'wordWrap', 'minimap', 'formatOnSave'] as const) if (typeof source[key] === 'boolean') settings[key] = source[key];
   return settings;
 }

@@ -12,6 +12,8 @@ import { languageFeatures, type LanguageFeatures } from '../language/features';
 import { RecoveryPolicy } from '../language/recovery';
 import { commands } from 'vscode';
 import { CancellationTokenSource, type TextEdit, type SymbolInformation, type WorkspaceSymbol, type DocumentSymbol } from 'vscode-languageclient/browser';
+import { building, type BuildState, type ProjectInfo, type Discovery, type BuildTools } from '../build/types';
+import { buildConfiguration } from '../build/configuration';
 
 interface OpenDocument {
   uri: string; name: string; snapshot?: FileSnapshot; model: editor.ITextModel;
@@ -29,10 +31,11 @@ export interface WorkbenchState {
   treeVersion: number;
   languagePhase: 'stopped' | 'starting' | 'ready' | 'recovering';
   languageFeatures?: LanguageFeatures; languageTool?: ToolInfo; languageProgress?: string;
+  project?: ProjectInfo; selectedBuild: string; build: BuildState;
 }
 
 export class Workbench {
-  private state: WorkbenchState = { ready: false, recent: [], recentFiles: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0, languagePhase: 'stopped' };
+  private state: WorkbenchState = { ready: false, recent: [], recentFiles: [], tabs: [], settings: defaults, status: t('status.ready'), problems: [], position: { line: 1, column: 1 }, treeVersion: 0, languagePhase: 'stopped', selectedBuild: '', build: { phase: 'idle' } };
   private subscribers = new Set<() => void>();
   private documents = new Map<string, OpenDocument>();
   private opening = new Map<string, Promise<void>>();
@@ -57,6 +60,9 @@ export class Workbench {
   private watchSignature = '';
   private pendingDisk = new Set<string>();
   private closingWindow = false;
+  private projectGeneration = 0;
+  private buildPending?: Promise<void>;
+  private buildCancelRequested = false;
   getSnapshot = (): WorkbenchState => this.state;
   subscribe = (listener: () => void): (() => void) => { this.subscribers.add(listener); return () => this.subscribers.delete(listener); };
   private update(patch: Partial<WorkbenchState> = {}): void {
@@ -80,7 +86,7 @@ export class Workbench {
       event.preventDefault();
       if (this.state.prompt || this.closingWindow) return;
       this.closingWindow = true;
-      try { if (await this.closeAll()) { await this.stopLanguage(); await this.stopWatching(); await getCurrentWindow().destroy(); } }
+      try { if (await this.closeAll()) { await this.cancelBuild(); await this.buildPending; await this.stopLanguage(); await this.stopWatching(); await getCurrentWindow().destroy(); } }
       catch (error) { this.report(error); }
       finally { this.closingWindow = false; }
     });
@@ -144,12 +150,14 @@ export class Workbench {
     this.update({ active: uri });
   }
   async chooseFolder(recent?: string): Promise<void> {
+    if (building(this.state.build)) throw { code: 'buildBusy' };
     const selected = recent ?? await native.chooseWorkspace();
     if (!selected || !(await this.closeAll())) return;
     await this.stopLanguage();
     const root = recent ? await native.recentWorkspace(selected) : await native.activateWorkspace(selected);
     const preferences = await native.preferences();
-    this.update({ root, recent: preferences.recentWorkspaces });
+    ++this.projectGeneration;
+    this.update({ root, recent: preferences.recentWorkspaces, project: undefined, selectedBuild: '', build: { phase: 'idle' } });
     this.watchSignature = '';
     await this.startWatching();
     await this.ensureLanguage();
@@ -196,12 +204,61 @@ export class Workbench {
       files.update(document.model.uri, text);
       if (document.model.getAlternativeVersionId() === version) await document.reference?.object.revert({ soft: true });
       document.versions.savedAt(version);
-      if (this.language?.client.isRunning()) await this.language.client.sendNotification('textDocument/didSave', { textDocument: { uri: protocolUri(document.model.uri) }, text });
+      if (document.model.getLanguageId() === 'pawn' && this.language?.client.isRunning()) await this.language.client.sendNotification('textDocument/didSave', { textDocument: { uri: protocolUri(document.model.uri) }, text });
       this.update();
     }
     return true;
   }
-  async saveAll(): Promise<void> { for (const document of [...this.documents.values()]) if (document.versions.dirty || !document.snapshot) { if (!(await this.save(document.uri))) break; } }
+  async saveAll(): Promise<boolean> { for (const document of [...this.documents.values()]) if (document.versions.dirty || !document.snapshot) { if (!(await this.save(document.uri))) return false; } return ![...this.documents.values()].some(document => document.versions.dirty); }
+  discoverProjects = (): Promise<Discovery> => native.discoverProjects();
+  buildTools = (): Promise<BuildTools> => native.buildTools();
+  async selectProject(path: string): Promise<void> {
+    if (building(this.state.build)) throw { code: 'buildBusy' };
+    const generation = ++this.projectGeneration;
+    const project = await native.inspectProject(path);
+    if (generation === this.projectGeneration) this.update({ project, selectedBuild: '' });
+  }
+  selectBuild(selectedBuild: string): void { if (!building(this.state.build)) this.update({ selectedBuild }); }
+  async configureBuildTool(compiler: boolean, bundled = false): Promise<void> {
+    if (building(this.state.build)) throw { code: 'buildBusy' };
+    const path = bundled ? '' : await native.chooseBuildTool(compiler);
+    if (path === null) return;
+    await this.settings({ [compiler ? 'compilerPath' : 'pawnPath']: path });
+  }
+  previewProject = (entry: string, profile: string, includes: string[]): Promise<string> => native.previewProject(entry, profile, includes);
+  async createProject(text: string): Promise<void> {
+    await native.createProject(text);
+    if (this.state.root) await this.selectProject(this.state.root);
+    this.update({ treeVersion: this.state.treeVersion + 1 });
+    await this.restartLanguage();
+  }
+  async buildProject(): Promise<void> {
+    if (this.buildPending) return this.buildPending;
+    if (!this.state.project) throw { code: 'projectRequired' };
+    this.buildCancelRequested = false;
+    this.buildPending = this.performBuild();
+    try { await this.buildPending; } finally { this.buildPending = undefined; }
+  }
+  private async performBuild(): Promise<void> {
+    const project = this.state.project!;
+    const selectedBuild = this.state.selectedBuild;
+    const configuration = buildConfiguration(project, selectedBuild);
+    const started = Date.now();
+    this.update({ build: { phase: 'saving', entry: configuration.entry, output: configuration.output, started } });
+    try {
+      if (!(await this.saveAll()) || this.buildCancelRequested) { this.update({ build: { ...this.state.build, phase: 'cancelled' } }); return; }
+      const result = await native.buildProject({ root: project.project.root, entry: configuration.entry, revision: project.manifest.revision, build: selectedBuild, profile: project.project.profile }, event => {
+        this.update({ build: { ...this.state.build, id: event.id, phase: event.stage } });
+        if (this.buildCancelRequested) void native.cancelBuild(event.id).catch(this.report);
+      });
+      const phase = result.outcome === 'cancelled' || result.report?.status === 'cancelled' ? 'cancelled' : result.outcome === 'completed' && result.report?.status === 'passed' ? 'passed' : 'failed';
+      this.update({ build: { ...this.state.build, phase, result, elapsed: Date.now() - started }, treeVersion: this.state.treeVersion + 1 });
+    } catch (error) {
+      this.update({ build: { ...this.state.build, phase: 'failed', error: describeError(error), elapsed: Date.now() - started } });
+      throw error;
+    }
+  }
+  async cancelBuild(): Promise<void> { this.buildCancelRequested = true; if (this.state.build.id) await native.cancelBuild(this.state.build.id); }
   private async confirmClose(document: OpenDocument): Promise<OpenDocument | undefined> {
     let current = document;
     while (current.versions.dirty) {

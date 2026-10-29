@@ -15,8 +15,10 @@ settings are also verified. English UI resources are in
 `src/locales/en.json`; application colors and syntax themes are JSON data under
 `src/settings/themes/`.
 
-The real compiler workflow is verified through an integration harness, but the
-application's Build UI is not implemented yet. Full file
+The Build menu selects a project and named build, verifies the bundled open.mp
+compiler or an explicitly chosen compatible executable, saves open files and
+compiles through PawnKit. Build output includes compiler logs, clickable
+diagnostics, cancellation, exit status and the verified AMX location. Full file
 management/search/replace, custom-theme loading,
 and installed packaging remain unfinished. Debugging is outside the project scope.
 
@@ -60,6 +62,31 @@ selected workspace and files explicitly selected in native dialogs. UTF-8 files,
 optional UTF-8 BOMs and existing LF/CRLF endings are supported; other encodings
 and files over 8 MiB are rejected with guidance.
 
+## Building a Pawn project
+
+Open a folder, then choose **Build → Configure Project…**. Review the manifest,
+entry point, target profile, declared include folders and output path. Workspaces
+containing several projects require an explicit selection. Named builds can
+select a different entry point; the displayed entry follows that selection.
+
+Folders without a manifest offer entry-point and include-folder selection, a
+PawnKit-generated preview, and an explicit **Create pawn.json** action. Previewing
+does not write files. Existing manifests can be opened with **Edit Manifest**;
+save changes and use **Refresh Configuration** before building.
+
+Press **Ctrl+Shift+B** or use **Build Project**. Builds save open files first;
+cancelling a Save As dialog prevents compilation. The bundled compiler is
+[openmultiplayer/compiler 3.10.11](https://github.com/openmultiplayer/compiler/releases/tag/v3.10.11).
+The artifact is `output/<entry-name>.amx` under the selected project. Compiler
+output is returned at completion by PawnKit; the running state is indeterminate
+and **Cancel Build** terminates the CLI and compiler. Editing remains available.
+
+No project scripts, servers or automatic downloads run when opening or building
+a project. Choose compatible external executables in Configure Project when
+using manual/offline installations. The current Windows compiler workflow requires
+ASCII project/compiler paths. For the pinned PawnKit YAML extension limitation,
+see [the toolchain notes](toolchain/README.md).
+
 ## Verification
 
 ```powershell
@@ -100,6 +127,12 @@ edits, then discarding closes the real application. The script also verifies
 external clean reloads, conflicting dirty edits, and entry-file rename/restore.
 Do not enable the inspection port for ordinary use or distributed builds.
 
+Run `node scripts/build-smoke.mjs` with the same native inspection setup for
+compilation, diagnostic navigation, manifest setup, named builds, YAML, official
+open.mp includes, cancellation and compatible external tool selection. Prepare
+the [open.mp fixture](fixtures/openmp/README.md) first. This test uses disposable
+projects, restores preferences and closes the test application.
+
 Run `node scripts/language-smoke.mjs` against a freshly launched debug application
 with the same inspection setup for the advanced language workflows. It verifies
 real hover/signature/reference UI, rename into unopened files, symbols, formatting,
@@ -132,6 +165,7 @@ uses the debug profile; a release-optimized installer remains unverified.
 | Go to Definition / References / Rename | F12 / Shift+F12 / F2 |
 | Symbols in Editor / Workspace | Ctrl+Shift+O / Ctrl+T |
 | Format Document | Shift+Alt+F |
+| Build Project | Ctrl+Shift+B |
 | Problems / Settings | Ctrl+J / Ctrl+, |
 
 Source/tool provenance and upstream integration limitations are documented in

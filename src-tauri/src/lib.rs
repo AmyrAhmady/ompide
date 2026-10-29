@@ -24,12 +24,26 @@ pub fn run() {
             commands::lsp_stop,
             commands::watch_start,
             commands::watch_stop,
+            commands::discover_projects,
+            commands::inspect_project,
+            commands::build_tools,
+            commands::choose_build_tool,
+            commands::preview_project,
+            commands::create_project,
+            commands::build_project,
+            commands::cancel_build,
         ])
         .build(tauri::generate_context!())
         .expect("could not initialize Pawn IDE")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
+                if let Ok(build) = app.state::<commands::NativeState>().build.lock()
+                    && let Some(task) = build.as_ref()
+                {
+                    task.cancel
+                        .store(true, std::sync::atomic::Ordering::Release);
+                }
                 if let Ok(mut session) = app.state::<commands::NativeState>().lsp.lock() {
                     session.take();
                 }

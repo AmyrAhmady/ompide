@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { font: 13px "Segoe UI", system-ui, sans-serif; }
-button, input, select, summary { font: inherit; }
+button, input, select, summary, textarea { font: inherit; }
 button { color: inherit; cursor: pointer; }
 button:disabled { cursor: default; opacity: .45; }
 button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 1px solid var(--focusBorder); outline-offset: -1px; }
@@ -92,3 +92,24 @@ dialog footer button.primary { background: var(--button-background); color: var(
 .symbol-results button:hover, .symbol-results button[aria-selected="true"] { background: var(--list-activeSelectionBackground); }
 .symbol-results small { color: var(--descriptionForeground); }
 @media (max-width: 900px) { .window-title { padding-right: 15px; } .explorer { width: 190px; } }
+.project-dialog { width: min(640px, 82vw); max-height: 80vh; overflow: auto; padding-right: 4px; }
+.project-dialog label { display: flex; flex-direction: column; gap: 5px; margin: 12px 0; }
+.project-dialog select, .project-dialog textarea { width: 100%; padding: 6px; color: var(--input-foreground); background: var(--input-background); border: 1px solid var(--input-border); }
+.project-dialog fieldset { border: 1px solid var(--panel-border); margin-top: 18px; }
+.project-dialog h3 { font-size: 13px; margin-top: 20px; }
+.project-dialog dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; }
+.project-dialog dt { color: var(--descriptionForeground); }
+.project-dialog dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.project-dialog button:not(footer button) { padding: 5px 9px; border: 1px solid var(--input-border); color: var(--input-foreground); background: var(--input-background); }
+.project-dialog summary { cursor: pointer; padding: 8px 0; }
+.manifest-preview { max-height: 200px; overflow: auto; padding: 10px; background: var(--editor-background); font-size: 12px; }
+.project-tool { margin: 12px 0; }
+.build-panel { height: 280px; min-height: 140px; max-height: 48vh; overflow: auto; border-top: 1px solid var(--panel-border); background: var(--panel-background); }
+.build-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 14px; overflow-wrap: anywhere; }
+.build-summary p { flex-basis: 100%; margin: 0; }
+.build-summary span:not(:first-child) { color: var(--descriptionForeground); }
+.build-log { margin: 0; padding: 12px 14px; font: 12px Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.build-diagnostics { list-style: none; margin: 0; padding: 0; }
+.build-diagnostics button { width: 100%; display: flex; gap: 12px; text-align: left; background: none; border: 0; padding: 6px 14px; }
+.build-diagnostics button:hover { background: var(--list-hoverBackground); }
+.build-diagnostics small { margin-left: auto; white-space: nowrap; color: var(--descriptionForeground); }

@@ -17,6 +17,10 @@ use std::{
 use tauri::{AppHandle, Manager, State, ipc::Channel};
 use tauri_plugin_dialog::DialogExt;
 
+#[path = "build_commands.rs"]
+mod builds;
+pub use builds::*;
+
 #[derive(Default)]
 pub struct NativeState {
     workspace: Mutex<Option<Workspace>>,
@@ -26,6 +30,7 @@ pub struct NativeState {
     chosen_workspace: Mutex<Option<PathBuf>>,
     pub watch: Mutex<Option<FileWatch>>,
     preferences_lock: Mutex<()>,
+    pub build: Mutex<Option<BuildTask>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -116,6 +121,12 @@ fn write_preferences(app: &AppHandle, preferences: &Preferences) -> Result<()> {
     Ok(())
 }
 fn select_workspace(app: &AppHandle, state: &NativeState, path: &Path) -> Result<PathBuf> {
+    if lock(&state.build)?.is_some() {
+        return Err(error(
+            "buildBusy",
+            "cancel the build before changing workspace",
+        ));
+    }
     let workspace = Workspace::open(path)?;
     let root = workspace.root().to_path_buf();
     {

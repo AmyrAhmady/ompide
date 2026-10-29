@@ -106,6 +106,27 @@ when an entry path contains emoji (observed as `??` in its error output). LSP
 handles these paths correctly. Building such projects needs an explicit
 actionable error or a verified path workaround before claiming full support.
 
+The native build workflow always supplies the checksum-verified bundled
+openmultiplayer/compiler 3.10.11 (or an explicitly chosen compatible executable),
+an explicit artifact path under the selected project's `output/` folder, and
+the selected profile/named build. It never selects a custom backend, runs a
+runtime server, or invokes automatic compiler acquisition. Windows Job Object
+ownership terminates compiler descendants on cancellation and application exit.
+Compiler output is buffered by the pinned CLI and displayed when it returns.
+
+The pinned CLI's YAML loader validates `pawnkit.schemaVersion` as a JSON
+floating-point value although YAML decodes `1` as an integer. Consequently YAML
+manifests using this extension are rejected upstream. Basic YAML manifests with
+`preset`/`include_path` and build selections work; use `pawn.json` for PawnKit
+extension settings. The IDE reports this limitation explicitly and never rewrites
+a user's manifest automatically. Source: pawn-project v0.34.2,
+`manifest/load.go` and `manifest/validate.go` (`checkPawnKit`).
+
+`node scripts/build-smoke.mjs` exercises the actual native Build UI. Use the same
+temporary CDP/Vite setup as the desktop smoke test, and prepare the official
+open.mp fixture first. It uses disposable projects, restores preferences and
+closes its test application; evidence is saved under `test-results/`.
+
 Browser integration is based on TypeFox monaco-languageclient 11.0.3 and its
 current upstream compatibility table: Codingame API/editor 37.6.0 (Monaco 0.57.0),
 VS Code language client 10.1.2. Use the standard MessageTransports reader/writer
@@ -117,6 +138,15 @@ configuration come from vscode-pawn commit
 `4a03c390a29a86fdf503be05eabf2fd345caa339`, with its MIT license included.
 
 ## Compatibility workarounds
+
+- Disable experimental asynchronous TextMate tokenization in the pinned editor
+  packages. A large document edit followed by a theme change can apply undefined
+  worker state deltas (`Cannot set null/undefined state`). The standard tokenizer
+  retains syntax highlighting and passes real typing/theme stress checks.
+- A busy language server may exceed the client's graceful shutdown timeout.
+  Continue closing only after Rust's explicit stop has killed and waited for the
+  owned process. Native cleanup failures still propagate; a handled graceful
+  timeout cannot veto a confirmed discard/exit or workspace switch.
 
 - Production CSP needs `data:` in `connect-src`: the editor API registers our
   bundled grammar and theme contents as data URLs and fetches them as resources.
