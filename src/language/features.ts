@@ -1,4 +1,4 @@
-import type { ServerCapabilities } from 'vscode-languageclient/browser';
+import type { ServerCapabilities } from "vscode-languageclient/browser";
 
 export function languageFeatures(capabilities: ServerCapabilities) {
   return {
@@ -15,4 +15,5 @@ export function languageFeatures(capabilities: ServerCapabilities) {
     codeActions: Boolean(capabilities.codeActionProvider),
   };
 }
+
 export type LanguageFeatures = ReturnType<typeof languageFeatures>;

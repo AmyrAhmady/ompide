@@ -20,10 +20,16 @@
   "search.hint": "Search literal text in the workspace, including unsaved buffers. Ignore files are respected; dependencies, build output, binary files and symlinks are skipped.",
   "search.results": "Matches: {count} · Files: {files}",
   "search.truncated": "Results reached a search limit. Narrow the query or file path filter to see all matches.",
-  "search.skipped": { "one": "{count} unreadable or unsupported file skipped.", "other": "{count} unreadable or unsupported files skipped." },
+  "search.skipped": {
+    "one": "{count} unreadable or unsupported file skipped.",
+    "other": "{count} unreadable or unsupported files skipped."
+  },
   "search.unsaved": "unsaved",
   "search.replaceTitle": "Preview Workspace Replacement",
-  "search.replaceConfirm": { "one": "Apply this replacement in one file?", "other": "Apply {count} replacements? Files affected: {files}." },
+  "search.replaceConfirm": {
+    "one": "Apply this replacement in one file?",
+    "other": "Apply {count} replacements? Files affected: {files}."
+  },
   "search.bufferHint": "Changes will be applied to editor buffers with Undo support. Save or Save All writes them to disk.",
   "search.previewIncomplete": "This preview is incomplete or cancelled. Narrow the query or path filter before applying replacements.",
   "search.previewFile": "File to review",

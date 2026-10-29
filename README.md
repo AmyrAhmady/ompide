@@ -100,7 +100,14 @@ preview sizes are bounded, with incomplete previews prevented from applying.
 
 ## Verification
 
+Use `npm run format` to format all supported files under `src` with the project
+Prettier configuration and ESLint blank-line rules. Keep functions and class
+members visually separated and write readable blocks rather than dense chains
+of statements. `npm run format:check` checks formatting and spacing without
+changing files.
+
 ```powershell
+npm run format:check
 npm run lint
 npm run typecheck
 npm test

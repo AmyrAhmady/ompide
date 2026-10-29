@@ -1,134 +1,745 @@
-* { box-sizing: border-box; }
-html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-body { font: 13px "Segoe UI", system-ui, sans-serif; }
-button, input, select, summary, textarea { font: inherit; }
-button { color: inherit; cursor: pointer; }
-button:disabled { cursor: default; opacity: .45; }
-button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 1px solid var(--focusBorder); outline-offset: -1px; }
-.workbench { height: 100%; display: flex; flex-direction: column; color: var(--editor-foreground); background: var(--editor-background); }
-.ide-menubar { height: 34px; flex-shrink: 0; display: flex; align-items: center; background: var(--titleBar-activeBackground); user-select: none; position: relative; z-index: 10; overflow: visible; }
-.app-mark { padding: 0 12px; color: var(--focusBorder); font-size: 22px; }
-.ide-menubar nav { display: flex; height: 100%; }
-.window-title { margin: 0 auto; padding-right: 200px; font-size: 12px; color: var(--descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu { position: relative; }
-.menu summary { cursor: pointer; padding: 8px 10px; list-style: none; }
-.menu summary::-webkit-details-marker { display: none; }
-.menu[open] summary, .menu summary:hover { background: var(--list-hoverBackground); }
-.menu [role="menu"] { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 290px; max-height: calc(100dvh - 42px); overflow-y: auto; padding: 5px; background: var(--editorWidget-background); border: 1px solid var(--editorWidget-border); }
-.menu button { display: flex; justify-content: space-between; gap: 30px; background: transparent; border: 0; width: 100%; padding: 6px 12px; text-align: left; }
-.menu button:hover:enabled, .menu button:focus-visible { background: var(--list-activeSelectionBackground); }
-.menu-heading { display: block; padding: 6px 12px; color: var(--descriptionForeground); font-size: 11px; }
-kbd { font: 11px "Segoe UI", system-ui, sans-serif; color: var(--descriptionForeground); white-space: nowrap; }
-hr { border: 0; border-top: 1px solid var(--panel-border); margin: 5px 8px; }
-.workspace-body { flex: 1; display: flex; min-height: 0; }
-.explorer { width: 235px; min-width: 170px; max-width: 40%; flex-shrink: 0; overflow: auto; resize: horizontal; background: var(--sideBar-background); color: var(--sideBar-foreground); border-right: 1px solid var(--panel-border); }
-.panel-heading { display: flex; justify-content: space-between; align-items: center; height: 35px; padding: 0 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; user-select: none; }
-.panel-heading button { padding: 2px 5px; background: none; border: 0; font-size: 17px; }
-.panel-heading button:hover { background: var(--list-hoverBackground); }
-.workspace-name { padding: 5px 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.explorer ul { margin: 0; padding: 0; list-style: none; }
-.tree-row { height: 25px; display: flex; align-items: center; gap: 6px; width: 100%; background: transparent; border: 0; text-align: left; white-space: nowrap; }
-.tree-row span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.tree-row:hover:enabled { background: var(--list-hoverBackground); }
-.tree-row.selected { background: var(--list-activeSelectionBackground); }
-.tree-chevron { width: 9px; flex-shrink: 0; }
-.file-icon { color: var(--focusBorder); padding-right: 3px; }
-.explorer-empty { padding: 0 14px; line-height: 1.6; }
-.editor-column { display: flex; flex: 1; flex-direction: column; min-width: 0; }
-.tabs { display: flex; overflow-x: auto; min-height: 35px; background: var(--tab-inactiveBackground); user-select: none; }
-.tab { display: flex; align-items: center; height: 35px; border-right: 1px solid var(--panel-border); background: var(--tab-inactiveBackground); flex-shrink: 0; border-top: 1px solid transparent; }
-.tab.active { background: var(--tab-activeBackground); border-top-color: var(--focusBorder); }
-.tab button { background: transparent; border: 0; }
-.tab [role="tab"] { padding: 8px 10px; display: flex; align-items: center; gap: 7px; }
-.close-tab { margin-right: 5px; width: 22px; height: 24px; font-size: 16px; }
-.close-tab.dirty { font-size: 10px; }
-.close-tab:hover { background: var(--list-hoverBackground); }
-.editor-area { position: relative; flex: 1; min-height: 0; }
-.monaco-container { width: 100%; height: 100%; }
-.empty-editor { position: absolute; inset: 0; background: var(--editor-background); padding: 9vh 9%; overflow: auto; }
-.empty-editor h1 { font-weight: 400; font-size: 28px; margin: 0 0 8px; }
-.empty-editor h2 { font-size: 13px; font-weight: 500; margin-top: 28px; }
-.muted { color: var(--descriptionForeground); }
-.welcome-actions { display: flex; flex-direction: column; align-items: flex-start; margin-top: 25px; gap: 10px; }
-.welcome-actions button, .recent-list button { border: 0; background: none; padding: 3px 0; text-align: left; color: var(--focusBorder); }
-.welcome-actions kbd { margin-left: 20px; }
-.recent-list { list-style: none; padding: 0; }
-.recent-list button { color: var(--editor-foreground); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recent-list button:hover { text-decoration: underline; }
-.problems-panel { height: 200px; min-height: 100px; max-height: 45vh; overflow: auto; border-top: 1px solid var(--panel-border); background: var(--panel-background); }
-.problems-panel ul { list-style: none; padding: 0; margin: 0; }
-.problems-panel li button { display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 5px 14px; }
-.problems-panel li button:hover { background: var(--list-hoverBackground); }
-.problems-panel small { margin-left: auto; color: var(--descriptionForeground); white-space: nowrap; }
-.problems-panel p { padding: 0 14px; }
-.problem-error { color: var(--editorError-foreground); }
-.problem-warning { color: var(--editorWarning-foreground); }
-.statusbar { display: flex; align-items: center; flex-shrink: 0; gap: 20px; min-height: 23px; padding: 0 12px; font-size: 11px; background: var(--statusBar-background); color: var(--statusBar-foreground); }
-.statusbar button { font-size: 11px; border: 0; background: transparent; padding: 3px; }
-.statusbar button:hover { background: var(--list-hoverBackground); }
-.status-spacer { flex: 1; }
-.error-banner { display: flex; align-items: center; justify-content: space-between; padding: 7px 14px; border-bottom: 1px solid var(--editorError-foreground); background: var(--editorWidget-background); }
-.error-banner button { border: 0; background: none; font-size: 18px; }
-.external-notice { display: flex; gap: 12px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--editorWarning-foreground); background: var(--editorWidget-background); }
-.external-notice span { flex: 1; }
-.external-notice button { background: var(--button-background); color: var(--button-foreground); border: 0; padding: 4px 8px; white-space: nowrap; }
-dialog { color: var(--editor-foreground); background: var(--editorWidget-background); border: 1px solid var(--editorWidget-border); min-width: 400px; max-width: 90vw; padding: 22px; }
-dialog::backdrop { background: var(--editor-background); opacity: .65; }
-dialog h2 { font-size: 16px; font-weight: 500; margin: 0 0 14px; }
-dialog footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
-dialog footer button { border: 1px solid var(--input-border); padding: 6px 15px; background: var(--input-background); color: var(--input-foreground); }
-dialog footer button.primary { background: var(--button-background); color: var(--button-foreground); border-color: var(--button-background); }
-.settings-fields { display: flex; flex-direction: column; gap: 15px; min-width: 400px; }
-.settings-fields label { display: flex; justify-content: space-between; align-items: center; gap: 35px; }
-.settings-fields input:not([type="checkbox"]), .settings-fields select { background: var(--input-background); color: var(--input-foreground); border: 1px solid var(--input-border); padding: 5px; width: 230px; }
-.settings-fields label.checkbox { justify-content: flex-start; gap: 8px; }
-.settings-fields fieldset { border: 1px solid var(--panel-border); margin: 0; padding: 10px; max-width: 570px; }
-.tool-path { overflow-wrap: anywhere; color: var(--descriptionForeground); }
-.settings-tool-actions { display: flex; gap: 8px; }
-.settings-tool-actions button { padding: 5px 9px; border: 1px solid var(--input-border); background: var(--input-background); color: var(--input-foreground); }
-.symbol-query { width: 100%; padding: 8px; background: var(--input-background); color: var(--input-foreground); border: 1px solid var(--input-border); }
-.symbol-results { max-height: 45vh; min-height: 80px; overflow: auto; margin-top: 10px; }
-.symbol-results button { display: flex; justify-content: space-between; gap: 24px; padding: 7px; width: 100%; border: 0; background: none; text-align: left; }
-.symbol-results button:hover, .symbol-results button[aria-selected="true"] { background: var(--list-activeSelectionBackground); }
-.symbol-results small { color: var(--descriptionForeground); }
-@media (max-width: 900px) { .window-title { padding-right: 15px; } .explorer { width: 190px; } }
-.project-dialog { width: min(640px, 82vw); max-height: 80vh; overflow: auto; padding-right: 4px; }
-.project-dialog label { display: flex; flex-direction: column; gap: 5px; margin: 12px 0; }
-.project-dialog select, .project-dialog textarea { width: 100%; padding: 6px; color: var(--input-foreground); background: var(--input-background); border: 1px solid var(--input-border); }
-.project-dialog fieldset { border: 1px solid var(--panel-border); margin-top: 18px; }
-.project-dialog h3 { font-size: 13px; margin-top: 20px; }
-.project-dialog dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; }
-.project-dialog dt { color: var(--descriptionForeground); }
-.project-dialog dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.project-dialog button:not(footer button) { padding: 5px 9px; border: 1px solid var(--input-border); color: var(--input-foreground); background: var(--input-background); }
-.project-dialog summary { cursor: pointer; padding: 8px 0; }
-.manifest-preview { max-height: 200px; overflow: auto; padding: 10px; background: var(--editor-background); font-size: 12px; }
-.project-tool { margin: 12px 0; }
-.build-panel { height: 280px; min-height: 140px; max-height: 48vh; overflow: auto; border-top: 1px solid var(--panel-border); background: var(--panel-background); }
-.build-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 14px; overflow-wrap: anywhere; }
-.build-summary p { flex-basis: 100%; margin: 0; }
-.build-summary span:not(:first-child) { color: var(--descriptionForeground); }
-.build-log { margin: 0; padding: 12px 14px; font: 12px Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-.build-diagnostics { list-style: none; margin: 0; padding: 0; }
-.build-diagnostics button { width: 100%; display: flex; gap: 12px; text-align: left; background: none; border: 0; padding: 6px 14px; }
-.build-diagnostics button:hover { background: var(--list-hoverBackground); }
-.build-diagnostics small { margin-left: auto; white-space: nowrap; color: var(--descriptionForeground); }
-.workspace-search { min-width: 0; }
-.search-fields { padding: 0 10px; display: flex; flex-direction: column; gap: 8px; }
-.search-fields input { width: 100%; min-width: 0; padding: 6px; color: var(--input-foreground); background: var(--input-background); border: 1px solid var(--input-border); }
-.search-query-row { display: flex; gap: 4px; }
-.search-fields button { padding: 5px 7px; border: 1px solid var(--input-border); background: var(--input-background); color: var(--input-foreground); }
-.search-fields button[aria-pressed="true"] { border-color: var(--focusBorder); }
-.search-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
-.search-status { padding: 8px 10px; line-height: 1.5; font-size: 12px; }
-.search-results ul { padding-left: 0; }
-.search-file { padding: 8px 10px 4px; overflow-wrap: anywhere; font-weight: 600; }
-.search-file small { margin-left: 7px; font-weight: normal; color: var(--descriptionForeground); }
-.search-results button { display: flex; gap: 8px; width: 100%; padding: 4px 10px; border: 0; background: none; font-size: 12px; text-align: left; }
-.search-results button:hover { background: var(--list-hoverBackground); }
-.search-results button span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.search-line { flex-shrink: 0; color: var(--descriptionForeground); min-width: 15px; text-align: right; }
-.replacement-preview { width: min(850px, 83vw); }
-.replacement-preview select { width: 100%; margin-bottom: 10px; padding: 7px; color: var(--input-foreground); background: var(--input-background); border: 1px solid var(--input-border); }
-.replacement-diff { height: 45vh; min-height: 150px; border: 1px solid var(--panel-border); }
-.quick-open-results { min-width: min(500px, 70vw); }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  font:
+    13px "Segoe UI",
+    system-ui,
+    sans-serif;
+}
+button,
+input,
+select,
+summary,
+textarea {
+  font: inherit;
+}
+button {
+  color: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--focusBorder);
+  outline-offset: -1px;
+}
+.workbench {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--editor-foreground);
+  background: var(--editor-background);
+}
+.ide-menubar {
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  background: var(--titleBar-activeBackground);
+  user-select: none;
+  position: relative;
+  z-index: 10;
+  overflow: visible;
+}
+.app-mark {
+  padding: 0 12px;
+  color: var(--focusBorder);
+  font-size: 22px;
+}
+.ide-menubar nav {
+  display: flex;
+  height: 100%;
+}
+.window-title {
+  margin: 0 auto;
+  padding-right: 200px;
+  font-size: 12px;
+  color: var(--descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu {
+  position: relative;
+}
+.menu summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  list-style: none;
+}
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+.menu[open] summary,
+.menu summary:hover {
+  background: var(--list-hoverBackground);
+}
+.menu [role="menu"] {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 290px;
+  max-height: calc(100dvh - 42px);
+  overflow-y: auto;
+  padding: 5px;
+  background: var(--editorWidget-background);
+  border: 1px solid var(--editorWidget-border);
+}
+.menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+}
+.menu button:hover:enabled,
+.menu button:focus-visible {
+  background: var(--list-activeSelectionBackground);
+}
+.menu-heading {
+  display: block;
+  padding: 6px 12px;
+  color: var(--descriptionForeground);
+  font-size: 11px;
+}
+kbd {
+  font:
+    11px "Segoe UI",
+    system-ui,
+    sans-serif;
+  color: var(--descriptionForeground);
+  white-space: nowrap;
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--panel-border);
+  margin: 5px 8px;
+}
+.workspace-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.explorer {
+  width: 235px;
+  min-width: 170px;
+  max-width: 40%;
+  flex-shrink: 0;
+  overflow: auto;
+  resize: horizontal;
+  background: var(--sideBar-background);
+  color: var(--sideBar-foreground);
+  border-right: 1px solid var(--panel-border);
+}
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 35px;
+  padding: 0 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  user-select: none;
+}
+.panel-heading button {
+  padding: 2px 5px;
+  background: none;
+  border: 0;
+  font-size: 17px;
+}
+.panel-heading button:hover {
+  background: var(--list-hoverBackground);
+}
+.workspace-name {
+  padding: 5px 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.explorer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree-row {
+  height: 25px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+.tree-row span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-row:hover:enabled {
+  background: var(--list-hoverBackground);
+}
+.tree-row.selected {
+  background: var(--list-activeSelectionBackground);
+}
+.tree-chevron {
+  width: 9px;
+  flex-shrink: 0;
+}
+.file-icon {
+  color: var(--focusBorder);
+  padding-right: 3px;
+}
+.explorer-empty {
+  padding: 0 14px;
+  line-height: 1.6;
+}
+.editor-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.tabs {
+  display: flex;
+  overflow-x: auto;
+  min-height: 35px;
+  background: var(--tab-inactiveBackground);
+  user-select: none;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  border-right: 1px solid var(--panel-border);
+  background: var(--tab-inactiveBackground);
+  flex-shrink: 0;
+  border-top: 1px solid transparent;
+}
+.tab.active {
+  background: var(--tab-activeBackground);
+  border-top-color: var(--focusBorder);
+}
+.tab button {
+  background: transparent;
+  border: 0;
+}
+.tab [role="tab"] {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.close-tab {
+  margin-right: 5px;
+  width: 22px;
+  height: 24px;
+  font-size: 16px;
+}
+.close-tab.dirty {
+  font-size: 10px;
+}
+.close-tab:hover {
+  background: var(--list-hoverBackground);
+}
+.editor-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.monaco-container {
+  width: 100%;
+  height: 100%;
+}
+.empty-editor {
+  position: absolute;
+  inset: 0;
+  background: var(--editor-background);
+  padding: 9vh 9%;
+  overflow: auto;
+}
+.empty-editor h1 {
+  font-weight: 400;
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+.empty-editor h2 {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 28px;
+}
+.muted {
+  color: var(--descriptionForeground);
+}
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 25px;
+  gap: 10px;
+}
+.welcome-actions button,
+.recent-list button {
+  border: 0;
+  background: none;
+  padding: 3px 0;
+  text-align: left;
+  color: var(--focusBorder);
+}
+.welcome-actions kbd {
+  margin-left: 20px;
+}
+.recent-list {
+  list-style: none;
+  padding: 0;
+}
+.recent-list button {
+  color: var(--editor-foreground);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-list button:hover {
+  text-decoration: underline;
+}
+.problems-panel {
+  height: 200px;
+  min-height: 100px;
+  max-height: 45vh;
+  overflow: auto;
+  border-top: 1px solid var(--panel-border);
+  background: var(--panel-background);
+}
+.problems-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.problems-panel li button {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 5px 14px;
+}
+.problems-panel li button:hover {
+  background: var(--list-hoverBackground);
+}
+.problems-panel small {
+  margin-left: auto;
+  color: var(--descriptionForeground);
+  white-space: nowrap;
+}
+.problems-panel p {
+  padding: 0 14px;
+}
+.problem-error {
+  color: var(--editorError-foreground);
+}
+.problem-warning {
+  color: var(--editorWarning-foreground);
+}
+.statusbar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 20px;
+  min-height: 23px;
+  padding: 0 12px;
+  font-size: 11px;
+  background: var(--statusBar-background);
+  color: var(--statusBar-foreground);
+}
+.statusbar button {
+  font-size: 11px;
+  border: 0;
+  background: transparent;
+  padding: 3px;
+}
+.statusbar button:hover {
+  background: var(--list-hoverBackground);
+}
+.status-spacer {
+  flex: 1;
+}
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--editorError-foreground);
+  background: var(--editorWidget-background);
+}
+.error-banner button {
+  border: 0;
+  background: none;
+  font-size: 18px;
+}
+.external-notice {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--editorWarning-foreground);
+  background: var(--editorWidget-background);
+}
+.external-notice span {
+  flex: 1;
+}
+.external-notice button {
+  background: var(--button-background);
+  color: var(--button-foreground);
+  border: 0;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+dialog {
+  color: var(--editor-foreground);
+  background: var(--editorWidget-background);
+  border: 1px solid var(--editorWidget-border);
+  min-width: 400px;
+  max-width: 90vw;
+  padding: 22px;
+}
+dialog::backdrop {
+  background: var(--editor-background);
+  opacity: 0.65;
+}
+dialog h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+dialog footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+dialog footer button {
+  border: 1px solid var(--input-border);
+  padding: 6px 15px;
+  background: var(--input-background);
+  color: var(--input-foreground);
+}
+dialog footer button.primary {
+  background: var(--button-background);
+  color: var(--button-foreground);
+  border-color: var(--button-background);
+}
+.settings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  min-width: 400px;
+}
+.settings-fields label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 35px;
+}
+.settings-fields input:not([type="checkbox"]),
+.settings-fields select {
+  background: var(--input-background);
+  color: var(--input-foreground);
+  border: 1px solid var(--input-border);
+  padding: 5px;
+  width: 230px;
+}
+.settings-fields label.checkbox {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.settings-fields fieldset {
+  border: 1px solid var(--panel-border);
+  margin: 0;
+  padding: 10px;
+  max-width: 570px;
+}
+.tool-path {
+  overflow-wrap: anywhere;
+  color: var(--descriptionForeground);
+}
+.settings-tool-actions {
+  display: flex;
+  gap: 8px;
+}
+.settings-tool-actions button {
+  padding: 5px 9px;
+  border: 1px solid var(--input-border);
+  background: var(--input-background);
+  color: var(--input-foreground);
+}
+.symbol-query {
+  width: 100%;
+  padding: 8px;
+  background: var(--input-background);
+  color: var(--input-foreground);
+  border: 1px solid var(--input-border);
+}
+.symbol-results {
+  max-height: 45vh;
+  min-height: 80px;
+  overflow: auto;
+  margin-top: 10px;
+}
+.symbol-results button {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 7px;
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.symbol-results button:hover,
+.symbol-results button[aria-selected="true"] {
+  background: var(--list-activeSelectionBackground);
+}
+.symbol-results small {
+  color: var(--descriptionForeground);
+}
+@media (max-width: 900px) {
+  .window-title {
+    padding-right: 15px;
+  }
+  .explorer {
+    width: 190px;
+  }
+}
+.project-dialog {
+  width: min(640px, 82vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+.project-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 12px 0;
+}
+.project-dialog select,
+.project-dialog textarea {
+  width: 100%;
+  padding: 6px;
+  color: var(--input-foreground);
+  background: var(--input-background);
+  border: 1px solid var(--input-border);
+}
+.project-dialog fieldset {
+  border: 1px solid var(--panel-border);
+  margin-top: 18px;
+}
+.project-dialog h3 {
+  font-size: 13px;
+  margin-top: 20px;
+}
+.project-dialog dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+}
+.project-dialog dt {
+  color: var(--descriptionForeground);
+}
+.project-dialog dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.project-dialog button:not(footer button) {
+  padding: 5px 9px;
+  border: 1px solid var(--input-border);
+  color: var(--input-foreground);
+  background: var(--input-background);
+}
+.project-dialog summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.manifest-preview {
+  max-height: 200px;
+  overflow: auto;
+  padding: 10px;
+  background: var(--editor-background);
+  font-size: 12px;
+}
+.project-tool {
+  margin: 12px 0;
+}
+.build-panel {
+  height: 280px;
+  min-height: 140px;
+  max-height: 48vh;
+  overflow: auto;
+  border-top: 1px solid var(--panel-border);
+  background: var(--panel-background);
+}
+.build-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 14px;
+  overflow-wrap: anywhere;
+}
+.build-summary p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.build-summary span:not(:first-child) {
+  color: var(--descriptionForeground);
+}
+.build-log {
+  margin: 0;
+  padding: 12px 14px;
+  font:
+    12px Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.build-diagnostics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.build-diagnostics button {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 6px 14px;
+}
+.build-diagnostics button:hover {
+  background: var(--list-hoverBackground);
+}
+.build-diagnostics small {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--descriptionForeground);
+}
+.workspace-search {
+  min-width: 0;
+}
+.search-fields {
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search-fields input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  color: var(--input-foreground);
+  background: var(--input-background);
+  border: 1px solid var(--input-border);
+}
+.search-query-row {
+  display: flex;
+  gap: 4px;
+}
+.search-fields button {
+  padding: 5px 7px;
+  border: 1px solid var(--input-border);
+  background: var(--input-background);
+  color: var(--input-foreground);
+}
+.search-fields button[aria-pressed="true"] {
+  border-color: var(--focusBorder);
+}
+.search-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.search-status {
+  padding: 8px 10px;
+  line-height: 1.5;
+  font-size: 12px;
+}
+.search-results ul {
+  padding-left: 0;
+}
+.search-file {
+  padding: 8px 10px 4px;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.search-file small {
+  margin-left: 7px;
+  font-weight: normal;
+  color: var(--descriptionForeground);
+}
+.search-results button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  text-align: left;
+}
+.search-results button:hover {
+  background: var(--list-hoverBackground);
+}
+.search-results button span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.search-line {
+  flex-shrink: 0;
+  color: var(--descriptionForeground);
+  min-width: 15px;
+  text-align: right;
+}
+.replacement-preview {
+  width: min(850px, 83vw);
+}
+.replacement-preview select {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px;
+  color: var(--input-foreground);
+  background: var(--input-background);
+  border: 1px solid var(--input-border);
+}
+.replacement-diff {
+  height: 45vh;
+  min-height: 150px;
+  border: 1px solid var(--panel-border);
+}
+.quick-open-results {
+  min-width: min(500px, 70vw);
+}

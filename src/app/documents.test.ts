@@ -1,7 +1,7 @@
-import { expect, it } from 'vitest';
-import { BufferVersion } from './documents';
+import { expect, it } from "vitest";
+import { BufferVersion } from "./documents";
 
-it('handles undo back to the saved version and edits made while a save is in flight', () => {
+it("handles undo back to the saved version and edits made while a save is in flight", () => {
   const buffer = new BufferVersion(1);
   buffer.changed(2);
   expect(buffer.dirty).toBe(true);
