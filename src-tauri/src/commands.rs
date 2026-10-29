@@ -20,6 +20,9 @@ use tauri_plugin_dialog::DialogExt;
 #[path = "build_commands.rs"]
 mod builds;
 pub use builds::*;
+#[path = "search_commands.rs"]
+mod searches;
+pub use searches::*;
 
 #[derive(Default)]
 pub struct NativeState {
@@ -31,6 +34,7 @@ pub struct NativeState {
     pub watch: Mutex<Option<FileWatch>>,
     preferences_lock: Mutex<()>,
     pub build: Mutex<Option<BuildTask>>,
+    pub search: Mutex<Option<(u64, std::sync::Arc<std::sync::atomic::AtomicBool>)>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,6 +132,9 @@ fn select_workspace(app: &AppHandle, state: &NativeState, path: &Path) -> Result
         ));
     }
     let workspace = Workspace::open(path)?;
+    if let Some((_, cancel)) = lock(&state.search)?.take() {
+        cancel.store(true, Ordering::Release);
+    }
     let root = workspace.root().to_path_buf();
     {
         let _guard = lock(&state.preferences_lock)?;

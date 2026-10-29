@@ -1,6 +1,7 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import type { Settings } from '../settings/settings';
 import type { Discovery, ProjectInfo, BuildTools, BuildEvent, BuildSelection, BuildResult } from '../build/types';
+import type { SearchOptions, SearchOverlay, SearchResult } from '../search/types';
 
 export interface FileSnapshot { path: string; uri: string; text: string; bom: boolean; revision: string }
 export interface Entry { name: string; path: string; directory: boolean; symlink: boolean }
@@ -32,4 +33,6 @@ export const native = {
   createProject: (text: string) => invoke<FileSnapshot>('create_project', { text }),
   buildProject: (selection: BuildSelection, receive: (event: BuildEvent) => void) => invoke<BuildResult>('build_project', { selection, onEvent: new Channel<BuildEvent>(receive) }),
   cancelBuild: (id: number) => invoke<void>('cancel_build', { id }),
+  search: (id: number, options: SearchOptions, overlays: SearchOverlay[], replacement?: string) => invoke<SearchResult>('search_workspace', { id, options, overlays, replacement }),
+  cancelSearch: (id: number) => invoke<void>('cancel_search', { id }),
 };

@@ -14,6 +14,7 @@ import { commands } from 'vscode';
 import { CancellationTokenSource, type TextEdit, type SymbolInformation, type WorkspaceSymbol, type DocumentSymbol } from 'vscode-languageclient/browser';
 import { building, type BuildState, type ProjectInfo, type Discovery, type BuildTools } from '../build/types';
 import { buildConfiguration } from '../build/configuration';
+import type { SearchOptions, SearchResult, SearchOverlay } from '../search/types';
 
 interface OpenDocument {
   uri: string; name: string; snapshot?: FileSnapshot; model: editor.ITextModel;
@@ -63,6 +64,7 @@ export class Workbench {
   private projectGeneration = 0;
   private buildPending?: Promise<void>;
   private buildCancelRequested = false;
+  private searchId = 0;
   getSnapshot = (): WorkbenchState => this.state;
   subscribe = (listener: () => void): (() => void) => { this.subscribers.add(listener); return () => this.subscribers.delete(listener); };
   private update(patch: Partial<WorkbenchState> = {}): void {
@@ -153,6 +155,7 @@ export class Workbench {
     if (building(this.state.build)) throw { code: 'buildBusy' };
     const selected = recent ?? await native.chooseWorkspace();
     if (!selected || !(await this.closeAll())) return;
+    await this.cancelSearch();
     await this.stopLanguage();
     const root = recent ? await native.recentWorkspace(selected) : await native.activateWorkspace(selected);
     const preferences = await native.preferences();
@@ -259,6 +262,40 @@ export class Workbench {
     }
   }
   async cancelBuild(): Promise<void> { this.buildCancelRequested = true; if (this.state.build.id) await native.cancelBuild(this.state.build.id); }
+  async search(options: SearchOptions, replacement?: string): Promise<SearchResult> {
+    const root = this.state.root;
+    if (!root) throw { code: 'noWorkspace' };
+    const prefix = this.pathKey(root).replace(/\/+$/, '') + '/';
+    const overlays: SearchOverlay[] = [];
+    let bytes = 0;
+    for (const document of this.documents.values()) {
+      if (document.snapshot && document.versions.dirty && document.external !== 'deleted' && this.pathKey(document.snapshot.path).startsWith(prefix)) {
+        const text = document.model.getValue(); bytes += text.length * 2;
+        if (bytes > 16 * 1024 * 1024) throw { code: 'searchBuffersLarge' };
+        overlays.push({ path: document.snapshot.path, text, version: document.model.getVersionId() });
+      }
+    }
+    return native.search(++this.searchId, options, overlays, replacement);
+  }
+  async cancelSearch(): Promise<void> { if (this.searchId) await native.cancelSearch(this.searchId); }
+  async applyReplacements(result: SearchResult, root: string): Promise<void> {
+    if (root !== this.state.root || result.truncated || result.cancelled || result.files.some(file => typeof file.before !== 'string' || typeof file.after !== 'string')) throw { code: 'searchChanged' };
+    await this.prepareWorkspaceEdits(result.files.map(file => file.uri));
+    const revisions = await Promise.all(result.files.map(file => native.read(file.path).then(snapshot => snapshot.revision)));
+    if (result.files.some((file, index) => file.revision !== revisions[index])) throw { code: 'searchChanged' };
+    const documents = result.files.map(file => {
+      const document = this.documents.get(Uri.parse(file.uri).toString());
+      if (!document || document.model.isDisposed() || document.model.getValue() !== file.before || (file.bufferVersion !== null && document.model.getVersionId() !== file.bufferVersion)) throw { code: 'searchChanged' };
+      return { document, file };
+    });
+    if (root !== this.state.root) throw { code: 'searchChanged' };
+    for (const { document, file } of documents) {
+      document.model.pushStackElement();
+      document.model.pushEditOperations([], [{ range: document.model.getFullModelRange(), text: file.after! }], () => null);
+      document.model.pushStackElement();
+    }
+    this.update();
+  }
   private async confirmClose(document: OpenDocument): Promise<OpenDocument | undefined> {
     let current = document;
     while (current.versions.dirty) {

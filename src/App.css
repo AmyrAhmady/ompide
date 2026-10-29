@@ -113,3 +113,22 @@ dialog footer button.primary { background: var(--button-background); color: var(
 .build-diagnostics button { width: 100%; display: flex; gap: 12px; text-align: left; background: none; border: 0; padding: 6px 14px; }
 .build-diagnostics button:hover { background: var(--list-hoverBackground); }
 .build-diagnostics small { margin-left: auto; white-space: nowrap; color: var(--descriptionForeground); }
+.workspace-search { min-width: 0; }
+.search-fields { padding: 0 10px; display: flex; flex-direction: column; gap: 8px; }
+.search-fields input { width: 100%; min-width: 0; padding: 6px; color: var(--input-foreground); background: var(--input-background); border: 1px solid var(--input-border); }
+.search-query-row { display: flex; gap: 4px; }
+.search-fields button { padding: 5px 7px; border: 1px solid var(--input-border); background: var(--input-background); color: var(--input-foreground); }
+.search-fields button[aria-pressed="true"] { border-color: var(--focusBorder); }
+.search-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.search-status { padding: 8px 10px; line-height: 1.5; font-size: 12px; }
+.search-results ul { padding-left: 0; }
+.search-file { padding: 8px 10px 4px; overflow-wrap: anywhere; font-weight: 600; }
+.search-file small { margin-left: 7px; font-weight: normal; color: var(--descriptionForeground); }
+.search-results button { display: flex; gap: 8px; width: 100%; padding: 4px 10px; border: 0; background: none; font-size: 12px; text-align: left; }
+.search-results button:hover { background: var(--list-hoverBackground); }
+.search-results button span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.search-line { flex-shrink: 0; color: var(--descriptionForeground); min-width: 15px; text-align: right; }
+.replacement-preview { width: min(850px, 83vw); }
+.replacement-preview select { width: 100%; margin-bottom: 10px; padding: 7px; color: var(--input-foreground); background: var(--input-background); border: 1px solid var(--input-border); }
+.replacement-diff { height: 45vh; min-height: 150px; border: 1px solid var(--panel-border); }
+.quick-open-results { min-width: min(500px, 70vw); }

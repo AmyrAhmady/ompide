@@ -8,6 +8,7 @@ import { Modal } from './components/Modal';
 import { ProjectDialog } from './build/ProjectDialog';
 import { BuildPanel } from './build/BuildPanel';
 import { building } from './build/types';
+import { SearchPanel, QuickOpen, initialSearchFields } from './search/SearchPanel';
 import { defaultThemes, themeVariables } from './settings/theme';
 import type { Settings } from './settings/settings';
 import toolPins from '../toolchain/tools.json';
@@ -94,6 +95,9 @@ function App() {
   const [problemsOpen, setProblemsOpen] = useState(false);
   const [buildOpen, setBuildOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [searchFields, setSearchFields] = useState(initialSearchFields);
   const [treeRevision, setTreeRevision] = useState(0);
   const active = Boolean(state.active);
   const external = state.tabs.find(tab => tab.uri === state.active)?.external;
@@ -110,12 +114,14 @@ function App() {
   useEffect(() => {
     let chordUntil = 0;
     const handle = (event: KeyboardEvent) => {
-      if (state.prompt || settingsOpen || symbolsOpen || projectOpen) return;
+      if (state.prompt || settingsOpen || symbolsOpen || projectOpen || quickOpen || document.querySelector('dialog[open]')) return;
       const modifier = event.ctrlKey || event.metaKey;
       let operation: (() => Promise<unknown>) | undefined;
       const key = event.key.toLowerCase();
       if (modifier && key === 'k') { chordUntil = Date.now() + 1500; event.preventDefault(); event.stopImmediatePropagation(); return; }
       if (Date.now() < chordUntil && key === 'o') operation = () => workbench.chooseFolder();
+      else if (modifier && key === 'p') { event.preventDefault(); event.stopImmediatePropagation(); if (nativeReady && state.root) setQuickOpen(true); return; }
+      else if (modifier && event.shiftKey && key === 'f') { event.preventDefault(); event.stopImmediatePropagation(); setSearchOpen(true); return; }
       else if (modifier && event.shiftKey && key === 'b') { event.preventDefault(); event.stopImmediatePropagation(); if (nativeReady && state.root && !buildBusy) startBuild(); return; }
       else if (modifier && event.shiftKey && key === 'o') { event.preventDefault(); event.stopImmediatePropagation(); if (state.languageFeatures?.symbols) setSymbolsOpen('document'); return; }
       else if (modifier && key === 'o') operation = () => workbench.openFile();
@@ -130,7 +136,7 @@ function App() {
     };
     window.addEventListener('keydown', handle, true);
     return () => window.removeEventListener('keydown', handle, true);
-  }, [state.active, state.prompt, state.languageFeatures, state.root, state.project, buildBusy, nativeReady, settingsOpen, symbolsOpen, projectOpen]);
+  }, [state.active, state.prompt, state.languageFeatures, state.root, state.project, buildBusy, nativeReady, settingsOpen, symbolsOpen, projectOpen, quickOpen]);
   useEffect(() => {
     const preventLoss = (event: BeforeUnloadEvent) => {
       // Native close can clear buffers before React commits its next render.
@@ -164,7 +170,7 @@ function App() {
           <MenuItem label="command.format" shortcut="Shift+Alt+F" disabled={!active || !state.languageFeatures?.formatting} action={() => run(() => workbench.action('editor.action.formatDocument'))} />
           <MenuItem label="command.codeActions" shortcut="Ctrl+." disabled={!active || !state.languageFeatures?.codeActions} action={() => run(() => workbench.action('editor.action.quickFix'))} />
         </Menu>
-        <Menu label="menu.view"><MenuItem label="command.problems" shortcut="Ctrl+J" action={() => setProblemsOpen(value => !value)} /><MenuItem label="command.settings" shortcut="Ctrl+," disabled={!state.ready} action={() => setSettingsOpen(true)} /></Menu>
+        <Menu label="menu.view"><MenuItem label="command.problems" shortcut="Ctrl+J" action={() => setProblemsOpen(value => !value)} /><MenuItem label="command.settings" shortcut="Ctrl+," disabled={!state.ready} action={() => setSettingsOpen(true)} /><MenuItem label="search.title" shortcut="Ctrl+Shift+F" action={() => setSearchOpen(value => !value)} /><MenuItem label="search.files" shortcut="Ctrl+P" disabled={!nativeReady || !state.root} action={() => setQuickOpen(true)} /></Menu>
         <Menu label="menu.go">
           {([['command.definition', 'editor.action.revealDefinition', 'F12', 'definition'], ['command.references', 'editor.action.goToReferences', 'Shift+F12', 'references'], ['command.rename', 'editor.action.rename', 'F2', 'rename']] as const).map(([label, action, shortcut, feature]) => <MenuItem key={action} label={label} shortcut={shortcut} disabled={!active || !state.languageFeatures?.[feature]} action={() => run(() => workbench.action(action))} />)}
           <MenuItem label="command.symbols" shortcut="Ctrl+Shift+O" disabled={!active || !state.languageFeatures?.symbols} action={() => setSymbolsOpen('document')} />
@@ -181,7 +187,7 @@ function App() {
     </header>
     {state.error && <div className="error-banner" role="alert"><span>{state.error}</span><button type="button" onClick={workbench.dismissError} aria-label={t('command.dismiss')}>×</button></div>}
     <div className="workspace-body">
-      <aside className="explorer"><div className="panel-heading"><span>{t('explorer.title')}</span><button type="button" disabled={!state.root} onClick={() => setTreeRevision(value => value + 1)} title={t('command.refresh')} aria-label={t('command.refresh')}>↻</button></div><Explorer root={state.root} active={state.active} revision={treeRevision + state.treeVersion} /></aside>
+      <aside className="explorer">{searchOpen ? <SearchPanel root={state.root} fields={searchFields} change={setSearchFields} close={() => setSearchOpen(false)} /> : <><div className="panel-heading"><span>{t('explorer.title')}</span><button type="button" disabled={!state.root} onClick={() => setTreeRevision(value => value + 1)} title={t('command.refresh')} aria-label={t('command.refresh')}>↻</button></div><Explorer root={state.root} active={state.active} revision={treeRevision + state.treeVersion} /></>}</aside>
       <section className="editor-column">
         <div className="tabs" role="tablist" aria-label={t('editor.tabs')}>{state.tabs.map(tab => <div className={`tab ${tab.uri === state.active ? 'active' : ''}`} key={tab.uri}>
           <button type="button" role="tab" aria-selected={tab.uri === state.active} onClick={() => workbench.activate(tab.uri)}><span className="file-icon" aria-hidden="true">#</span>{tab.name}</button>
@@ -206,6 +212,7 @@ function App() {
     {settingsOpen && <SettingsDialog settings={state.settings} tool={state.languageTool} close={() => setSettingsOpen(false)} />}
     {symbolsOpen && <SymbolsDialog mode={symbolsOpen} close={() => setSymbolsOpen(undefined)} />}
     {projectOpen && <ProjectDialog state={state} close={() => setProjectOpen(false)} build={startBuild} />}
+    {quickOpen && <QuickOpen close={() => setQuickOpen(false)} />}
   </main>;
 }
 

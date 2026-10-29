@@ -63,9 +63,11 @@ try {
     await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Settings Ctrl+,', exact: true })).toBeFocused();
     await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Search Workspace Ctrl+Shift+F', exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Problems Ctrl+J', exact: true })).toBeFocused();
     await page.keyboard.press('End');
-    await expect(page.getByRole('menuitem', { name: 'Settings Ctrl+,', exact: true })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Search Workspace Ctrl+Shift+F', exact: true })).toBeFocused();
     await page.keyboard.press('Home');
     await expect(page.getByRole('menuitem', { name: 'Problems Ctrl+J', exact: true })).toBeFocused();
     await page.keyboard.press('ArrowRight');

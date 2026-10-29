@@ -32,12 +32,19 @@ pub fn run() {
             commands::create_project,
             commands::build_project,
             commands::cancel_build,
+            commands::search_workspace,
+            commands::cancel_search,
         ])
         .build(tauri::generate_context!())
         .expect("could not initialize Pawn IDE")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
+                if let Ok(search) = app.state::<commands::NativeState>().search.lock()
+                    && let Some((_, cancel)) = search.as_ref()
+                {
+                    cancel.store(true, std::sync::atomic::Ordering::Release);
+                }
                 if let Ok(build) = app.state::<commands::NativeState>().build.lock()
                     && let Some(task) = build.as_ref()
                 {

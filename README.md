@@ -18,8 +18,9 @@ settings are also verified. English UI resources are in
 The Build menu selects a project and named build, verifies the bundled open.mp
 compiler or an explicitly chosen compatible executable, saves open files and
 compiles through PawnKit. Build output includes compiler logs, clickable
-diagnostics, cancellation, exit status and the verified AMX location. Full file
-management/search/replace, custom-theme loading,
+diagnostics, cancellation, exit status and the verified AMX location. Workspace
+file/content search and previewed replacements include unsaved buffers and retain
+Undo support. Explorer file management, custom-theme loading,
 and installed packaging remain unfinished. Debugging is outside the project scope.
 
 Deferred additions after the core IDE is stable: an integrated terminal, an
@@ -87,6 +88,16 @@ using manual/offline installations. The current Windows compiler workflow requir
 ASCII project/compiler paths. For the pinned PawnKit YAML extension limitation,
 see [the toolchain notes](toolchain/README.md).
 
+## Workspace search
+
+Use **Ctrl+P** to find workspace files by path and **Ctrl+Shift+F** for literal
+content search. The search panel respects ignore files and offers a path filter,
+case matching and explicit refresh. **Preview Replace All…** shows a diff before
+applying changes to owned editor buffers; **Save All** writes them to disk.
+Changed buffers or files invalidate old previews. Search excludes dependency/build
+directories, symlinks, binary/unsupported files and files over 8 MiB; results and
+preview sizes are bounded, with incomplete previews prevented from applying.
+
 ## Verification
 
 ```powershell
@@ -133,6 +144,11 @@ open.mp includes, cancellation and compatible external tool selection. Prepare
 the [open.mp fixture](fixtures/openmp/README.md) first. This test uses disposable
 projects, restores preferences and closes the test application.
 
+`node scripts/search-smoke.mjs` checks real native search, Unicode navigation,
+unsaved overlays, replacement diff/cancel/apply/Undo/Save All, unopened files,
+BOM/CRLF preservation, stale preview rejection and keyboard file lookup. It also
+uses disposable files, restores preferences and closes the test application.
+
 Run `node scripts/language-smoke.mjs` against a freshly launched debug application
 with the same inspection setup for the advanced language workflows. It verifies
 real hover/signature/reference UI, rename into unopened files, symbols, formatting,
@@ -166,6 +182,7 @@ uses the debug profile; a release-optimized installer remains unverified.
 | Symbols in Editor / Workspace | Ctrl+Shift+O / Ctrl+T |
 | Format Document | Shift+Alt+F |
 | Build Project | Ctrl+Shift+B |
+| Find File / Search Workspace | Ctrl+P / Ctrl+Shift+F |
 | Problems / Settings | Ctrl+J / Ctrl+, |
 
 Source/tool provenance and upstream integration limitations are documented in
