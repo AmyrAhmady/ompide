@@ -112,4 +112,9 @@ export const native = {
       replacement,
     }),
   cancelSearch: (id: number) => invoke<void>("cancel_search", { id }),
+  createEntry: (parent: string, name: string, directory: boolean) =>
+    invoke<string>("create_entry", { parent, name, directory }),
+  renameEntry: (path: string, name: string) =>
+    invoke<string>("rename_entry", { path, name }),
+  trashEntry: (path: string) => invoke<void>("trash_entry", { path }),
 };

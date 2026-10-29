@@ -46,6 +46,13 @@ import type {
   SearchResult,
   SearchOverlay,
 } from "../search/types";
+import {
+  pathKey,
+  withinPath,
+  parentPath,
+  childPath,
+  fileName,
+} from "../lib/paths";
 
 interface OpenDocument {
   uri: string;
@@ -97,6 +104,7 @@ export interface WorkbenchState {
   project?: ProjectInfo;
   selectedBuild: string;
   build: BuildState;
+  mutationBusy: boolean;
 }
 
 export class Workbench {
@@ -113,6 +121,7 @@ export class Workbench {
     languagePhase: "stopped",
     selectedBuild: "",
     build: { phase: "idle" },
+    mutationBusy: false,
   };
 
   private subscribers = new Set<() => void>();
@@ -253,6 +262,10 @@ export class Workbench {
         async (event) => {
           event.preventDefault();
           if (this.state.prompt || this.closingWindow) return;
+          if (this.state.mutationBusy) {
+            this.report({ code: "fileOperationBusy" });
+            return;
+          }
           this.closingWindow = true;
           try {
             if (await this.closeAll()) {
@@ -404,7 +417,12 @@ export class Workbench {
     this.update({ active: uri });
   }
 
+  focusEditor(): void {
+    this.codeEditor?.focus();
+  }
+
   async chooseFolder(recent?: string): Promise<void> {
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
     if (building(this.state.build)) throw { code: "buildBusy" };
     const selected = recent ?? (await native.chooseWorkspace());
     if (!selected || !(await this.closeAll())) return;
@@ -551,6 +569,7 @@ export class Workbench {
   }
 
   async buildProject(): Promise<void> {
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
     if (this.buildPending) return this.buildPending;
     if (!this.state.project) throw { code: "projectRequired" };
     this.buildCancelRequested = false;
@@ -627,6 +646,164 @@ export class Workbench {
   async cancelBuild(): Promise<void> {
     this.buildCancelRequested = true;
     if (this.state.build.id) await native.cancelBuild(this.state.build.id);
+  }
+
+  async createEntry(
+    parent: string,
+    name: string,
+    directory: boolean
+  ): Promise<string> {
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
+    this.update({ mutationBusy: true });
+    try {
+      const path = await native.createEntry(parent, name, directory);
+      this.update({ treeVersion: this.state.treeVersion + 1 });
+      if (!directory) await this.openPath(path);
+      return path;
+    } finally {
+      this.update({ mutationBusy: false });
+    }
+  }
+
+  private affectedDocuments(path: string): OpenDocument[] {
+    return [...this.documents.values()].filter(
+      (document) =>
+        document.snapshot && withinPath(document.snapshot.path, path)
+    );
+  }
+
+  async changeEntry(path: string, name?: string): Promise<boolean> {
+    if (name === fileName(path)) return true;
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
+    if (building(this.state.build)) throw { code: "buildBusy" };
+    this.update({ mutationBusy: true });
+    const active = this.state.active;
+    let nextActive = active;
+    let changed = false;
+    try {
+      await this.stopWatching();
+      await this.diskQueue;
+      await Promise.all(this.saving.values());
+      await this.stopLanguage();
+      const affected = this.affectedDocuments(path);
+      if (name !== undefined) {
+        const target = childPath(parentPath(path), name);
+        if (
+          [...this.documents.values()].some(
+            (document) =>
+              !affected.includes(document) &&
+              document.snapshot &&
+              withinPath(document.snapshot.path, target)
+          )
+        )
+          throw { code: "alreadyOpen" };
+      }
+      const confirmed: {
+        document: OpenDocument;
+        version: number;
+        view?: editor.ICodeEditorViewState | null;
+      }[] = [];
+      for (const document of affected) {
+        const current = await this.confirmClose(document);
+        if (!current) return false;
+        if (current.snapshot && withinPath(current.snapshot.path, path))
+          confirmed.push({
+            document: current,
+            version: current.model.getAlternativeVersionId(),
+            view:
+              current.uri === active
+                ? this.codeEditor?.saveViewState()
+                : current.view,
+          });
+      }
+      if (
+        this.affectedDocuments(path).length !== confirmed.length ||
+        confirmed.some(
+          ({ document, version }) =>
+            document.model.getAlternativeVersionId() !== version
+        )
+      )
+        throw { code: "fileOperationChanged" };
+      const newPath =
+        name === undefined ? undefined : await native.renameEntry(path, name);
+      if (name === undefined) await native.trashEntry(path);
+      changed = true;
+      let retained = false;
+      for (const { document, version, view } of confirmed) {
+        if (document.model.getAlternativeVersionId() !== version) {
+          document.external = "deleted";
+          retained = true;
+          continue;
+        }
+        const target =
+          newPath && document.snapshot
+            ? newPath.replaceAll("\\", "/") +
+              document.snapshot.path
+                .replaceAll("\\", "/")
+                .slice(path.replaceAll("\\", "/").length)
+            : undefined;
+        const snapshot = target ? await native.read(target) : undefined;
+        if (
+          document.model.getAlternativeVersionId() !== version ||
+          !(await this.removeDocument(document.uri))
+        ) {
+          document.external = "deleted";
+          retained = true;
+          continue;
+        }
+        if (snapshot) {
+          const uri = Uri.parse(snapshot.uri).toString();
+          await this.addDocument(uri, fileName(snapshot.path), snapshot.text, {
+            ...snapshot,
+            uri,
+          });
+          const renamed = this.documents.get(uri)!;
+          renamed.view = view;
+          if (view) this.codeEditor?.restoreViewState(view);
+          if (document.uri === active) nextActive = uri;
+          try {
+            this.update({
+              recentFiles: await native.rememberDocument(snapshot.path),
+            });
+          } catch (error) {
+            this.report(error);
+          }
+        }
+      }
+      if (nextActive && this.documents.has(nextActive))
+        this.activate(nextActive);
+      if (retained) this.report({ code: "fileOperationRetained" });
+      return true;
+    } catch (error) {
+      if (changed) {
+        for (const document of this.affectedDocuments(path))
+          document.external = "deleted";
+        this.update();
+      }
+      throw error;
+    } finally {
+      const project = this.state.project;
+      const invalidate =
+        changed &&
+        project &&
+        (withinPath(project.project.root, path) ||
+          withinPath(project.manifest.path, path) ||
+          withinPath(
+            buildConfiguration(project, this.state.selectedBuild).entry,
+            path
+          ));
+      this.update({
+        mutationBusy: false,
+        treeVersion: this.state.treeVersion + 1,
+        ...(invalidate ? { project: undefined, selectedBuild: "" } : {}),
+      });
+      try {
+        await this.startWatching();
+        await this.ensureLanguage();
+      } catch (error) {
+        this.report(error);
+      }
+    }
   }
 
   async search(
@@ -734,6 +911,7 @@ export class Workbench {
   }
 
   async close(uri: string): Promise<boolean> {
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
     const document = this.documents.get(uri);
     if (!document) return false;
     const confirmed = await this.confirmClose(document);
@@ -770,6 +948,7 @@ export class Workbench {
   }
 
   async closeAll(): Promise<boolean> {
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
     const confirmed: { document: OpenDocument; version: number }[] = [];
     for (const document of [...this.documents.values()]) {
       const current = await this.confirmClose(document);
@@ -1004,21 +1183,18 @@ export class Workbench {
         session !== this.language
       )
         return [];
-      return (symbols ?? [])
-        .slice(0, 500)
-        .map((symbol) => ({
-          name: symbol.name,
-          container: symbol.containerName,
-          uri: symbol.location.uri,
-          line:
-            ("range" in symbol.location
-              ? symbol.location.range.start.line
-              : 0) + 1,
-          column:
-            ("range" in symbol.location
-              ? symbol.location.range.start.character
-              : 0) + 1,
-        }));
+      return (symbols ?? []).slice(0, 500).map((symbol) => ({
+        name: symbol.name,
+        container: symbol.containerName,
+        uri: symbol.location.uri,
+        line:
+          ("range" in symbol.location ? symbol.location.range.start.line : 0) +
+          1,
+        column:
+          ("range" in symbol.location
+            ? symbol.location.range.start.character
+            : 0) + 1,
+      }));
     } catch (error) {
       if (cancellation.token.isCancellationRequested) return [];
       throw error;
@@ -1165,13 +1341,11 @@ export class Workbench {
   }
 
   private pathKey(path: string): string {
-    const normalized = path.replaceAll("\\", "/");
-    return /^[A-Za-z]:\//.test(normalized) || normalized.startsWith("//")
-      ? normalized.toLowerCase()
-      : normalized;
+    return pathKey(path);
   }
 
   private startWatching(): Promise<void> {
+    if (this.state.mutationBusy) return Promise.resolve();
     this.watchQueue = this.watchQueue
       .catch(() => undefined)
       .then(async () => {

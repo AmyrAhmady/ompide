@@ -7,7 +7,8 @@ import {
 } from "react";
 import { Uri } from "monaco-editor";
 import { workbench, type SymbolResult } from "./app/workbench";
-import { desktop, type Entry } from "./lib/native";
+import { desktop } from "./lib/native";
+import { Explorer } from "./explorer/Explorer";
 import { t } from "./lib/i18n";
 import { Menubar, Menu, MenuItem } from "./components/Menubar";
 import { Modal } from "./components/Modal";
@@ -27,137 +28,6 @@ import "./App.css";
 const run = (operation: () => Promise<unknown>) => {
   void operation().catch(workbench.report);
 };
-
-function ExplorerRow({
-  entry,
-  depth,
-  selected,
-  revision,
-}: {
-  entry: Entry;
-  depth: number;
-  selected?: string;
-  revision: number;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState<Entry[] | undefined>();
-  useEffect(() => {
-    let live = true;
-    if (expanded)
-      void workbench
-        .entries(entry.path)
-        .then((entries) => {
-          if (live) setChildren(entries);
-        })
-        .catch(workbench.report);
-    return () => {
-      live = false;
-    };
-  }, [entry.path, expanded, revision]);
-
-  const open = async () => {
-    if (!entry.directory) {
-      if (!entry.symlink) await workbench.openPath(entry.path);
-      return;
-    }
-    setExpanded(!expanded);
-  };
-  return (
-    <li
-      role="treeitem"
-      aria-expanded={entry.directory ? expanded : undefined}
-      aria-selected={selected === entry.path}
-    >
-      <button
-        type="button"
-        className={`tree-row ${selected === entry.path ? "selected" : ""}`}
-        style={{ paddingLeft: 10 + depth * 14 }}
-        title={entry.symlink ? t("explorer.symbolicLink") : entry.path}
-        disabled={entry.symlink}
-        onClick={() => run(open)}
-      >
-        <span className="tree-chevron" aria-hidden="true">
-          {entry.directory ? (expanded ? "⌄" : "›") : ""}
-        </span>
-        <span className="file-icon" aria-hidden="true">
-          {entry.directory ? "▱" : entry.name.endsWith(".inc") ? "#" : "⋮"}
-        </span>
-        <span>{entry.name}</span>
-      </button>
-      {expanded && (
-        <ul role="group">
-          {children?.map((child) => (
-            <ExplorerRow
-              key={child.path}
-              entry={child}
-              depth={depth + 1}
-              selected={selected}
-              revision={revision}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-}
-
-function Explorer({
-  root,
-  active,
-  revision,
-}: {
-  root?: string;
-  active?: string;
-  revision: number;
-}) {
-  const [listing, setListing] = useState<{ root?: string; entries: Entry[] }>({
-    entries: [],
-  });
-  useEffect(() => {
-    let live = true;
-    if (root)
-      void workbench
-        .entries(root)
-        .then((files) => {
-          if (live) setListing({ root, entries: files });
-        })
-        .catch((error) => {
-          if (live) setListing({ root, entries: [] });
-          workbench.report(error);
-        });
-    return () => {
-      live = false;
-    };
-  }, [root, revision]);
-  const selected = active?.startsWith("file:")
-    ? Uri.parse(active).fsPath
-    : undefined;
-  const entries = listing.root === root ? listing.entries : undefined;
-  if (!root)
-    return <p className="muted explorer-empty">{t("explorer.empty")}</p>;
-  return (
-    <>
-      <div className="workspace-name" title={root}>
-        {root.split(/[\\/]/).at(-1)}
-      </div>
-      {entries ? (
-        <ul role="tree" aria-label={t("explorer.title")}>
-          {entries.map((entry) => (
-            <ExplorerRow
-              key={entry.path}
-              entry={entry}
-              depth={0}
-              selected={selected}
-              revision={revision}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">{t("explorer.loading")}</p>
-      )}
-    </>
-  );
-}
 
 function SettingsDialog({
   settings,
@@ -421,6 +291,7 @@ function App() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [searchFields, setSearchFields] = useState(initialSearchFields);
   const [treeRevision, setTreeRevision] = useState(0);
+  const [explorerReveal, setExplorerReveal] = useState(0);
   const active = Boolean(state.active);
   const external = state.tabs.find((tab) => tab.uri === state.active)?.external;
   const connected = state.languagePhase === "ready";
@@ -480,6 +351,12 @@ function App() {
         event.preventDefault();
         event.stopImmediatePropagation();
         if (nativeReady && state.root) setQuickOpen(true);
+        return;
+      } else if (modifier && event.shiftKey && key === "e") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setSearchOpen(false);
+        setExplorerReveal((value) => value + 1);
         return;
       } else if (modifier && event.shiftKey && key === "f") {
         event.preventDefault();
@@ -695,6 +572,15 @@ function App() {
           </Menu>
           <Menu label="menu.view">
             <MenuItem
+              label="explorer.title"
+              shortcut="Ctrl+Shift+E"
+              disabled={!nativeReady || !state.root}
+              action={() => {
+                setSearchOpen(false);
+                setExplorerReveal((value) => value + 1);
+              }}
+            />
+            <MenuItem
               label="command.problems"
               shortcut="Ctrl+J"
               action={() => setProblemsOpen((value) => !value)}
@@ -814,22 +700,14 @@ function App() {
             />
           ) : (
             <>
-              <div className="panel-heading">
-                <span>{t("explorer.title")}</span>
-                <button
-                  type="button"
-                  disabled={!state.root}
-                  onClick={() => setTreeRevision((value) => value + 1)}
-                  title={t("command.refresh")}
-                  aria-label={t("command.refresh")}
-                >
-                  ↻
-                </button>
-              </div>
               <Explorer
+                key={state.root ?? "empty"}
                 root={state.root}
                 active={state.active}
                 revision={treeRevision + state.treeVersion}
+                reveal={explorerReveal}
+                busy={state.mutationBusy || buildBusy}
+                refresh={() => setTreeRevision((value) => value + 1)}
               />
             </>
           )}

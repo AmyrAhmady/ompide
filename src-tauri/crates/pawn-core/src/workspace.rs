@@ -570,6 +570,41 @@ mod tests {
         assert_eq!(fs::read_to_string(file).unwrap(), "recoverable fixture");
     }
 
+    // Called explicitly by scripts/explorer-smoke.mjs after the desktop app recycles
+    // its disposable fixtures. Never enumerate/restore unrelated user items.
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "requires the disposable workspace created by explorer-smoke.mjs"]
+    fn restore_explorer_smoke_items() {
+        let root = canonical(Path::new(
+            &std::env::var("PAWN_IDE_EXPLORER_SMOKE_ROOT").expect("smoke workspace required"),
+        ))
+        .unwrap();
+        assert_eq!(
+            root.parent(),
+            Some(canonical(&std::env::temp_dir()).unwrap().as_path())
+        );
+        assert!(
+            root.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("pawn-explorer-smoke-")
+        );
+        let items: Vec<_> = trash::os_limited::list()
+            .unwrap()
+            .into_iter()
+            .filter(|item| {
+                let path = item.original_path();
+                path.parent() == Some(root.as_path())
+                    && matches!(
+                        path.file_name().and_then(|name| name.to_str()),
+                        Some("renamed-scripts" | "temporary.inc")
+                    )
+            })
+            .collect();
+        trash::os_limited::restore_all(items).unwrap();
+    }
+
     #[test]
     fn rejects_non_utf8_and_binary_text() {
         let root = tempfile::tempdir().unwrap();

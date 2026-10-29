@@ -34,6 +34,9 @@ pub fn run() {
             commands::cancel_build,
             commands::search_workspace,
             commands::cancel_search,
+            commands::create_entry,
+            commands::rename_entry,
+            commands::trash_entry,
         ])
         .build(tauri::generate_context!())
         .expect("could not initialize Pawn IDE")

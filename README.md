@@ -20,8 +20,9 @@ compiler or an explicitly chosen compatible executable, saves open files and
 compiles through PawnKit. Build output includes compiler logs, clickable
 diagnostics, cancellation, exit status and the verified AMX location. Workspace
 file/content search and previewed replacements include unsaved buffers and retain
-Undo support. Explorer file management, custom-theme loading,
-and installed packaging remain unfinished. Debugging is outside the project scope.
+Undo support. Explorer creation, rename, recoverable deletion, current-file reveal
+and keyboard/context-menu workflows are also verified on Windows. Custom-theme
+loading and installed packaging remain unfinished. Debugging is outside the project scope.
 
 Deferred additions after the core IDE is stable: an integrated terminal, an
 opt-in local MCP server for external AI agents, and an integrated title bar
@@ -98,6 +99,29 @@ Changed buffers or files invalidate old previews. Search excludes dependency/bui
 directories, symlinks, binary/unsupported files and files over 8 MiB; results and
 preview sizes are bounded, with incomplete previews prevented from applying.
 
+## Explorer
+
+Use the Explorer toolbar or a folder's context menu to create files and folders.
+New files open for editing. **Ctrl+Shift+E** switches from Search to Explorer,
+expands the active file's parents and focuses its row; the reveal toolbar button
+does the same for a file in the current workspace.
+
+Use arrow keys, Home/End and name-prefix typing to navigate. Enter opens a file
+or toggles a folder. **Insert** creates a file, **Shift+Insert** creates a folder,
+**F2** renames, **Delete** opens a deletion confirmation, and **Shift+F10** opens
+the context menu. Escape dismisses the menu and restores row focus.
+
+Renaming or recycling a folder confirms all affected dirty editors before moving
+anything. Cancelling a later prompt preserves earlier Discard choices as unsaved
+buffers. After confirmation, renamed files reopen at their new paths; existing
+destination files and open destination tabs cannot be overwritten. Edits that
+arrive during a filesystem operation retain their original buffer with Save As
+guidance. Build selection is invalidated when its manifest or entry is moved.
+
+Deletion uses the Windows Recycle Bin on local fixed drives, with explicit
+confirmation. Network and removable locations are refused rather than offering
+permanent deletion. Restore recycled files using the operating system.
+
 ## Verification
 
 Use `npm run format` to format all supported files under `src` with the project
@@ -144,6 +168,15 @@ Add `--close` to verify cancelling a multi-document exit preserves all tabs and
 edits, then discarding closes the real application. The script also verifies
 external clean reloads, conflicting dirty edits, and entry-file rename/restore.
 Do not enable the inspection port for ordinary use or distributed builds.
+
+Run `node scripts/explorer-smoke.mjs` with the same native inspection setup for
+creation, collision/traversal rejection, multi-tab folder rename/cancellation,
+case-only rename, keyboard/context-menu/reveal behavior and recoverable deletion.
+It uses a disposable workspace, restores preferences, restores only its exact
+Recycle Bin fixtures, records Light/Dark screenshots and closes the application.
+The core `restore_explorer_smoke_items` test is excluded from ordinary unit runs
+because it requires that live smoke fixture; the script explicitly supplies the
+fixture path and runs the helper with `--ignored` to verify restoration.
 
 Run `node scripts/build-smoke.mjs` with the same native inspection setup for
 compilation, diagnostic navigation, manifest setup, named builds, YAML, official

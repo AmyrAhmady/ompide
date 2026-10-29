@@ -23,6 +23,9 @@ pub use builds::*;
 #[path = "search_commands.rs"]
 mod searches;
 pub use searches::*;
+#[path = "file_commands.rs"]
+mod file_operations;
+pub use file_operations::*;
 
 #[derive(Default)]
 pub struct NativeState {
@@ -544,9 +547,14 @@ pub async fn watch_start(
             if path.exists() {
                 scope.resolve(path)?;
             } else {
-                let parent = path
+                let mut parent = path
                     .parent()
                     .ok_or_else(|| error("permissionDenied", "invalid file parent"))?;
+                while !parent.exists() {
+                    parent = parent.parent().ok_or_else(|| {
+                        error("permissionDenied", "no existing workspace ancestor")
+                    })?;
+                }
                 scope.resolve(parent)?;
             }
         }

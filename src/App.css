@@ -206,6 +206,63 @@ hr {
   width: 9px;
   flex-shrink: 0;
 }
+.explorer-tools {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.explorer .panel-heading {
+  padding: 0 8px 0 12px;
+}
+.tree-row[aria-disabled="true"] {
+  opacity: 0.55;
+}
+.tree-notice {
+  margin: 4px 8px;
+  font-size: 12px;
+  color: var(--descriptionForeground);
+}
+.explorer-context {
+  position: fixed;
+  z-index: 100;
+  min-width: 220px;
+  max-height: calc(100vh - 12px);
+  overflow: auto;
+  padding: 4px;
+  background: var(--editorWidget-background);
+  color: var(--editor-foreground);
+  border: 1px solid var(--editorWidget-border);
+}
+.explorer-context button {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+.explorer-context button:hover:enabled,
+.explorer-context button:focus-visible {
+  background: var(--list-hoverBackground);
+}
+.entry-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.entry-dialog p {
+  max-width: 440px;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.entry-dialog input {
+  width: 100%;
+}
+.entry-location {
+  font-size: 12px;
+}
 .file-icon {
   color: var(--focusBorder);
   padding-right: 3px;
