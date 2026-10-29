@@ -2,6 +2,7 @@ pub mod framing;
 pub mod lsp;
 pub mod process;
 pub mod project;
+pub mod search;
 pub mod tools;
 pub mod watch;
 pub mod workspace;

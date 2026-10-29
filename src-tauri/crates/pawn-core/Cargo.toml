@@ -11,6 +11,8 @@ sha2 = "0.10"
 tempfile = "3"
 url = "2"
 notify = "=8.2.1"
+ignore = "=0.4.34"
+regex = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
