@@ -1086,6 +1086,7 @@ dialog footer button.primary {
   width: 46px;
   flex-shrink: 0;
   background: var(--activityBar-background);
+  border-radius: var(--radius-panel);
   color: var(--sideBar-foreground);
   display: flex;
   flex-direction: column;
