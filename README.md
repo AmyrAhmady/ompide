@@ -289,6 +289,9 @@ Run `node scripts/theme-smoke.mjs` to verify local file import, validation,
 customization/cancellation, Monaco syntax colors, Light/Dark/custom switching
 and native preference reload. It also rejects CSS/network content, records
 custom-theme screenshots and restores preferences before closing the test app.
+Add `--audit` to capture Light/Dark/custom screenshots for menus, commands,
+Search, Build output, verified project configuration, Settings, diagnostics and
+unsaved prompts, including syntax-color checks after each theme switch.
 
 Run `node scripts/build-smoke.mjs` with the same native inspection setup for
 compilation, diagnostic navigation, manifest setup, named builds, YAML, official

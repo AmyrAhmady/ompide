@@ -38,7 +38,8 @@ select:focus-visible {
   outline-offset: -1px;
 }
 textarea:focus-visible,
-.settings-fields:focus-visible {
+.settings-fields:focus-visible,
+.project-dialog:focus-visible {
   outline: 1px solid var(--focusBorder);
   outline-offset: -1px;
 }

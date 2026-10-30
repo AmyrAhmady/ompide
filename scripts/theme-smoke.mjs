@@ -101,6 +101,17 @@ async function background(expected) {
   );
 }
 
+async function command(query) {
+  await page.keyboard.press("Control+Shift+p");
+  const palette = page.getByRole("dialog", {
+    name: "Command Palette…",
+    exact: true,
+  });
+  await palette.getByRole("combobox").fill(query);
+  await palette.getByRole("combobox").press("Enter");
+  await expect(palette).toHaveCount(0);
+}
+
 const ocean = JSON.parse(
   await readFile(path.join(root, "examples/themes/ocean.json"), "utf8")
 );
@@ -290,6 +301,97 @@ try {
   evidence.push(
     "Custom themes cover real diagnostics, menus, tabs, explorer, panels, dialogs and syntax; a customized light-base theme survives native preference reload."
   );
+  if (process.argv.includes("--audit")) {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await evaluate(
+      (workbench, customTheme) => workbench.settings({ customTheme }),
+      normalized
+    );
+    await expect
+      .poll(() =>
+        evaluate((workbench) => workbench.getSnapshot().languagePhase)
+      )
+      .toBe("ready");
+    for (const [theme, color, numeric] of [
+      ["light", "rgb(255, 255, 255)", "rgb(9, 134, 88)"],
+      ["dark", "rgb(30, 30, 30)", "rgb(181, 206, 168)"],
+      ["custom", "rgb(16, 35, 42)", "rgb(255, 158, 101)"],
+    ]) {
+      await page.keyboard.press("Control+,");
+      await selector().selectOption(theme);
+      await background(color);
+      await screenshot("audit-" + theme + "-settings");
+      await settingsDialog()
+        .getByRole("button", { name: "Dismiss", exact: true })
+        .click();
+      await expect
+        .poll(() =>
+          page
+            .locator(".view-line span")
+            .filter({ hasText: /^1$/ })
+            .evaluateAll((elements) =>
+              elements.map(
+                (element) => globalThis.getComputedStyle(element).color
+              )
+            )
+        )
+        .toContain(numeric);
+      await command("problems");
+      if (!(await page.locator(".problems-panel").isVisible()))
+        await command("problems");
+      await expect
+        .poll(() => page.locator(".problems-panel li").count())
+        .toBeGreaterThan(0);
+      await screenshot("audit-" + theme + "-editor");
+      await page.locator(".ide-menubar summary").first().click();
+      await page
+        .getByRole("menuitem", { name: "New File", exact: false })
+        .first()
+        .hover();
+      await screenshot("audit-" + theme + "-menu");
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Control+Shift+p");
+      await screenshot("audit-" + theme + "-commands");
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Control+Shift+f");
+      await page.getByLabel("Search text", { exact: true }).fill("Add");
+      await expect(
+        page.locator(".search-results button").first()
+      ).toBeVisible();
+      await screenshot("audit-" + theme + "-search");
+      await command("build output");
+      await expect(page.locator(".build-panel")).toBeVisible();
+      await screenshot("audit-" + theme + "-build");
+      await command("configure project");
+      const project = page.getByRole("dialog", {
+        name: "Configure Project…",
+        exact: true,
+      });
+      await expect(
+        project.getByRole("button", { name: "Build Project", exact: true })
+      ).toBeEnabled();
+      await screenshot("audit-" + theme + "-project");
+      await project
+        .getByRole("button", { name: "Dismiss", exact: true })
+        .click();
+      await page.keyboard.press("Control+n");
+      await page
+        .getByRole("textbox", { name: "Pawn IDE", exact: true })
+        .focus();
+      await page.keyboard.type("// unsaved theme audit");
+      await page.keyboard.press("Control+w");
+      const prompt = page.getByRole("dialog", { name: /^Save changes to/ });
+      await expect(prompt).toBeVisible();
+      await screenshot("audit-" + theme + "-unsaved");
+      await prompt
+        .getByRole("button", { name: "Discard", exact: true })
+        .click();
+      await page.keyboard.press("Control+Shift+e");
+    }
+    evidence.push(
+      "Visual audit records Light, Dark and custom themes across real diagnostics, menus, commands, Search, Build output, verified project configuration, Settings and unsaved prompts; default/custom numeric syntax colors are checked after each switch."
+    );
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(remoteRequests, []);
   await writeFile(
