@@ -26,9 +26,6 @@ pub use searches::*;
 #[path = "file_commands.rs"]
 mod file_operations;
 pub use file_operations::*;
-#[path = "dependency_commands.rs"]
-mod dependencies;
-pub use dependencies::*;
 
 #[derive(Default)]
 pub struct NativeState {

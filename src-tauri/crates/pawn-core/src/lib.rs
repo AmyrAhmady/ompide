@@ -1,4 +1,4 @@
-pub mod dependencies;
+pub mod compiler;
 pub mod framing;
 pub mod lsp;
 pub mod process;

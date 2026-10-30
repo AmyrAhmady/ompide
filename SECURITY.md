@@ -32,14 +32,11 @@ Tauri Channels, with session-ID checks; no language-server network listener is
 created. A separate stdin lease lets Stop kill an unresponsive child before
 waiting for a blocked writer. The frontend preserves FIFO notification ordering.
 
-Builds invoke the pinned PawnKit CLI using argument arrays, a verified compiler,
-an explicit output path and an explicit user action. The pinned CLI selects its
-direct compiler backend when no `--backend` is supplied; supplying `--compiler`
-bypasses automatic compiler acquisition. These contracts were checked against
-local upstream tag `v1.34.38`, commit
-`bacacd60b442e7602533fe07a72a1bf33caf0a2f`, in
-[`pkg/cli/backend.go`](https://github.com/pawnkit/pawnkit-cli/blob/v1.34.38/pkg/cli/backend.go)
-and [`pkg/directbackend/direct.go`](https://github.com/pawnkit/pawnkit-cli/blob/v1.34.38/pkg/directbackend/direct.go).
+Builds invoke the pinned open.mp compiler directly with an explicit argument
+array, selected entry and scoped working directory/output. Local JSON/YAML
+configuration is validated before compilation; response files and options that
+redirect writes or select alternate input/output modes are rejected. Compiler
+exit status and a real 32-bit AMX header are checked before declaring success.
 Compiler arguments are visible in project configuration. Compilation is a trusted
 tool operation, not an operating-system sandbox for compiler input. Project-defined
 backends, scripts and runtime servers are not selected by the IDE's Build action.
@@ -77,15 +74,8 @@ framing limits, blocked-pipe shutdown, process limits/descendant cancellation an
 Recycle Bin restoration. Native Search, Explorer, language, build and theme smoke
 tests verify corresponding user workflows.
 
-Dependency review is read-only: it parses saved manifests/locks without invoking
-the CLI or creating targets. Native scope checks run before reading a project,
-and core review rejects traversal, protected Git paths, junctions, credentialed
-source URLs, invalid commit/checksum formats and colliding source destinations.
-It reports lock contents rather than certifying installed checkouts. Native
-dependency smoke verifies denied unselected/outside access, no acquired files or
-external WebView requests, error recovery and preservation of dirty lock buffers.
-
 Installed-release CSP, bundled tool placement and the full install/edit/build
-workflow remain part of release verification. The planned dependency-management
-workflow introduces explicit acquisition and must receive its own source/checksum,
-destination, execution and cancellation review before shipping.
+workflow remain part of release verification. The approved release does not
+provide project dependency installation/restoration or runtime/server management.
+Source-control operations are planned and require their own repository scope,
+subprocess, network-action and dirty-buffer verification when implemented.

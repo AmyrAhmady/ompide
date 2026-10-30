@@ -395,17 +395,14 @@ try {
     )
   ).toBe("external");
   expectedFailure = true;
-  await page.evaluate(
-    async (invalid) => {
-      await globalThis.languageWorkbench.settings({
-        languageServerPath: invalid,
-      });
-      await globalThis.languageWorkbench.restartLanguage();
-    },
-    path.join(root, "src-tauri/binaries/pawn-x86_64-pc-windows-msvc.exe")
-  );
+  await page.evaluate(async (invalid) => {
+    await globalThis.languageWorkbench.settings({
+      languageServerPath: invalid,
+    });
+    await globalThis.languageWorkbench.restartLanguage();
+  }, process.execPath);
   await expect(page.locator(".error-banner")).toContainText(
-    `Expected pawnlsp ${lspVersion}, but the executable reports pawn 1.34.38`
+    `Expected pawnlsp ${lspVersion}, but the executable reports ${process.version}`
   );
   expect(
     await page.evaluate(

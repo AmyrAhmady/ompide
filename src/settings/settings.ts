@@ -13,7 +13,6 @@ export interface Settings {
   formatOnSave: boolean;
   languageServerPath: string;
   compilerPath: string;
-  pawnPath: string;
   layout: Layout;
 }
 
@@ -29,7 +28,6 @@ export const defaults: Settings = {
   formatOnSave: false,
   languageServerPath: "",
   compilerPath: "",
-  pawnPath: "",
   layout: { ...defaultLayout },
 };
 
@@ -66,9 +64,11 @@ export function parseSettings(value: unknown): Settings {
     source.languageServerPath.length <= 32768
   )
     settings.languageServerPath = source.languageServerPath;
-  for (const key of ["compilerPath", "pawnPath"] as const)
-    if (typeof source[key] === "string" && source[key].length <= 32768)
-      settings[key] = source[key];
+  if (
+    typeof source.compilerPath === "string" &&
+    source.compilerPath.length <= 32768
+  )
+    settings.compilerPath = source.compilerPath;
   for (const key of [
     "insertSpaces",
     "wordWrap",

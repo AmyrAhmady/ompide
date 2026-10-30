@@ -4,7 +4,6 @@ import { Modal } from "../components/Modal";
 import { t, describeError } from "../lib/i18n";
 import { buildConfiguration } from "./configuration";
 import type { Discovery, BuildTools } from "./types";
-import { DependencySection } from "./DependencySection";
 
 export function ProjectDialog({
   state,
@@ -259,76 +258,50 @@ export function ProjectDialog({
             </button>
           </section>
         )}
-        {project && (
-          <DependencySection
-            key={project.manifest.path}
-            state={state}
-            openFile={(path) =>
-              execute(async () => {
-                await workbench.openPath(path);
-                close();
-              })
-            }
-          />
-        )}
         <fieldset>
           <legend>{t("project.tools")}</legend>
           <p className="muted">{t("project.toolsHint")}</p>
-          {(["compiler", "pawn"] as const).map((kind) => (
-            <div key={kind} className="project-tool">
-              <strong>
-                {t(kind === "compiler" ? "project.compiler" : "project.pawn")}
-              </strong>
-              <p className="tool-path">
-                {tools?.[kind]
-                  ? `${tools[kind].version} — ${tools[kind].path}`
-                  : state.settings[
-                      kind === "compiler" ? "compilerPath" : "pawnPath"
-                    ] ||
-                    t(
-                      verifyingTools
-                        ? "project.verifyingTools"
-                        : "project.toolUnavailable"
-                    )}
-              </p>
-              <div className="settings-tool-actions">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    execute(async () => {
-                      setTools(undefined);
-                      await workbench.configureBuildTool(kind === "compiler");
-                      setTools(await workbench.buildTools());
-                    })
-                  }
-                >
-                  {t("settings.chooseLanguageServer")}
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    busy ||
-                    !state.settings[
-                      kind === "compiler" ? "compilerPath" : "pawnPath"
-                    ]
-                  }
-                  onClick={() =>
-                    execute(async () => {
-                      setTools(undefined);
-                      await workbench.configureBuildTool(
-                        kind === "compiler",
-                        true
-                      );
-                      setTools(await workbench.buildTools());
-                    })
-                  }
-                >
-                  {t("settings.useBundled")}
-                </button>
-              </div>
+          <div className="project-tool">
+            <strong>{t("project.compiler")}</strong>
+            <p className="tool-path">
+              {tools?.compiler
+                ? tools.compiler.version + " — " + tools.compiler.path
+                : state.settings.compilerPath ||
+                  t(
+                    verifyingTools
+                      ? "project.verifyingTools"
+                      : "project.toolUnavailable"
+                  )}
+            </p>
+            <div className="settings-tool-actions">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  execute(async () => {
+                    setTools(undefined);
+                    await workbench.configureBuildTool();
+                    setTools(await workbench.buildTools());
+                  })
+                }
+              >
+                {t("settings.chooseLanguageServer")}
+              </button>
+              <button
+                type="button"
+                disabled={busy || !state.settings.compilerPath}
+                onClick={() =>
+                  execute(async () => {
+                    setTools(undefined);
+                    await workbench.configureBuildTool(true);
+                    setTools(await workbench.buildTools());
+                  })
+                }
+              >
+                {t("settings.useBundled")}
+              </button>
             </div>
-          ))}
+          </div>
         </fieldset>
         <p className="muted">{t("project.buildHint")}</p>
         <footer>

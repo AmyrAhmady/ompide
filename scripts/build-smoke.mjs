@@ -225,12 +225,9 @@ try {
   await evaluate(async (workbench, yaml) => {
     await workbench.selectProject(yaml);
   }, yaml);
-  await build("failed");
-  await expect(page.locator(".build-summary")).toContainText(
-    "rejects pawnkit.schemaVersion in YAML"
-  );
+  await build("passed");
   evidence.push(
-    "Pinned PawnKit YAML extension validation bug is reported with actionable JSON guidance; no manifest is silently rewritten."
+    "Local YAML configuration accepts integer schemaVersion without the removed CLI loader limitation."
   );
 
   await evaluate(async (workbench, openmp) => {
@@ -280,7 +277,7 @@ try {
     .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
     .toBe("passed");
   evidence.push(
-    "Ambiguous manifest-less folders require entry selection; preview writes nothing, explicit creation uses PawnKit schema, then real compilation passes."
+    "Ambiguous manifest-less folders require entry selection; preview writes nothing, explicit creation preserves the existing manifest format, then real compilation passes."
   );
 
   const firstPath = path.join(setup, "first.pwn");
@@ -349,7 +346,9 @@ try {
     const tools = await workbench.buildTools();
     await workbench.settings({ compilerPath: tools.compiler.path });
     const external = await workbench.buildTools();
-    await workbench.settings({ compilerPath: tools.pawn.path });
+    const tool = workbench.getSnapshot().languageTool;
+    if (!tool) throw new Error("Expected the real language server tool");
+    await workbench.settings({ compilerPath: tool.path });
     let rejected;
     try {
       await workbench.buildTools();
@@ -362,7 +361,7 @@ try {
   assert.equal(selection.source, "external");
   assert.equal(selection.rejected, "buildToolVersion");
   evidence.push(
-    "Compatible external compiler paths are verified; selecting the Pawn CLI as compiler is rejected."
+    "Compatible external compiler paths are verified; selecting the language server as compiler is rejected."
   );
   for (const theme of ["light", "dark"]) {
     await mkdir(path.join(root, "test-results"), { recursive: true });

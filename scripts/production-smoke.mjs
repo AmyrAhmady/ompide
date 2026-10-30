@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const pins = JSON.parse(await readFile(path.join(root, 'toolchain/tools.json'), 'utf8'));
-for (const name of ['pawnlsp', 'pawn']) {
+for (const name of ['pawnlsp']) {
   const tool = pins.tools.find(tool => tool.name === name);
   const bytes = await readFile(path.join(root, `src-tauri/target/debug/${name}.exe`));
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(tool.executableSha256);

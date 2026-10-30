@@ -25,9 +25,9 @@ it("selects plural forms and maps backend codes to English resources", () => {
   expect(
     describeError({
       code: "toolVersion",
-      parameters: { expected: "0.33.75", actual: "pawn 1.34.38" },
+      parameters: { expected: "0.33.75", actual: "different-tool 1.0" },
     })
   ).toContain(
-    "Expected pawnlsp 0.33.75, but the executable reports pawn 1.34.38"
+    "Expected pawnlsp 0.33.75, but the executable reports different-tool 1.0"
   );
 });

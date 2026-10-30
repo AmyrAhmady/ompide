@@ -19,7 +19,6 @@ export interface ProjectInfo {
 }
 
 export interface BuildTools {
-  pawn: ToolInfo;
   compiler: ToolInfo;
 }
 
@@ -63,7 +62,7 @@ export interface BuildReport {
 
 export interface BuildResult {
   outcome:
-    "completed" | "cancelled" | "timeout" | "outputLimit" | "invalidReport";
+    "completed" | "cancelled" | "timeout" | "outputLimit" | "invalidArtifact";
   report: BuildReport | null;
   stdout: string;
   stderr: string;

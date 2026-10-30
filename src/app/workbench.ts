@@ -551,11 +551,11 @@ export class Workbench {
     if (!building(this.state.build)) this.update({ selectedBuild });
   }
 
-  async configureBuildTool(compiler: boolean, bundled = false): Promise<void> {
+  async configureBuildTool(bundled = false): Promise<void> {
     if (building(this.state.build)) throw { code: "buildBusy" };
-    const path = bundled ? "" : await native.chooseBuildTool(compiler);
+    const path = bundled ? "" : await native.chooseBuildTool();
     if (path === null) return;
-    await this.settings({ [compiler ? "compilerPath" : "pawnPath"]: path });
+    await this.settings({ compilerPath: path });
   }
 
   previewProject = (

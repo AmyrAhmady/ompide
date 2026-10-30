@@ -1,7 +1,7 @@
 # Pawn IDE
 
 A standalone Tauri 2 / React / TypeScript desktop IDE for open.mp and SA-MP Pawn.
-PawnKit provides language intelligence and compiler orchestration. Development is
+pawnlsp provides language intelligence, including PawnKit formatting, linting, analysis and parsing. Rust invokes the open.mp compiler directly. Development is
 in progress; the application is not yet ready for an installed release.
 
 Verified on Windows x64: a compact editor with top tabs, folder explorer, reusable
@@ -17,12 +17,12 @@ settings are also verified. English UI resources are in
 
 The Build menu selects a project and named build, verifies the bundled open.mp
 compiler or an explicitly chosen compatible executable, saves open files and
-compiles through PawnKit. Build output includes compiler logs, clickable
+invokes openmultiplayer/compiler directly. Build output includes compiler logs, clickable
 diagnostics, cancellation, exit status and the verified AMX location. Workspace
 file/content search and previewed replacements include unsaved buffers and retain
 Undo support. Explorer creation, rename, recoverable deletion, current-file reveal
 and keyboard/context-menu workflows are also verified on Windows. Installed
-packaging remains unfinished. Debugging is outside the project scope.
+packaging remains unfinished. Debugging through pawndebug is planned for a later release, outside the first-release scope.
 
 Deferred additions after the core IDE is stable: an integrated terminal, an
 opt-in local MCP server for external AI agents, and an integrated title bar
@@ -72,7 +72,7 @@ containing several projects require an explicit selection. Named builds can
 select a different entry point; the displayed entry follows that selection.
 
 Folders without a manifest offer entry-point and include-folder selection, a
-PawnKit-generated preview, and an explicit **Create pawn.json** action. Previewing
+locally generated configuration preview, and an explicit **Create pawn.json** action. Previewing
 does not write files. Existing manifests can be opened with **Edit Manifest**;
 save changes and use **Refresh Configuration** before building.
 
@@ -80,33 +80,29 @@ Press **Ctrl+Shift+B** or use **Build Project**. Builds save open files first;
 cancelling a Save As dialog prevents compilation. The bundled compiler is
 [openmultiplayer/compiler 3.10.11](https://github.com/openmultiplayer/compiler/releases/tag/v3.10.11).
 The artifact is `output/<entry-name>.amx` under the selected project. Compiler
-output is returned at completion by PawnKit; the running state is indeterminate
-and **Cancel Build** terminates the CLI and compiler. Editing remains available.
+output is displayed at completion; the running state is indeterminate
+and **Cancel Build** terminates the owned compiler process. Editing remains available.
 
 No project scripts, servers or automatic downloads run when opening or building
 a project. Choose compatible external executables in Configure Project when
 using manual/offline installations. The current Windows compiler workflow requires
-ASCII project/compiler paths. For the pinned PawnKit YAML extension limitation,
-see [the toolchain notes](toolchain/README.md).
+ASCII project/compiler/include paths. JSON and YAML build configuration is read locally; no CLI wrapper is needed.
 
-## Reviewing project dependencies
+Build configuration preserves existing pawn.json / pawn.yaml / pawn.yml files.
+Supported fields are entry, preset, pawnkit.profile/includePaths, include_path,
+build/builds input/args/includes/constants, with inherited defaults for named builds.
+The IDE owns output/<entry-name>.amx. Install library files manually and add their
+include directories explicitly; project dependency installation/restoration and
+server/runtime management are outside the approved scope.
 
-In **Build → Configure Project…**, choose **Review Dependencies** to inspect
-saved declarations and the selected project's lockfile. Both PawnKit and
-sampctl-compatible locks are supported, including `pawnkit.lockfile` overrides.
-Expand a source or asset to see its URL, locked commit/checksum, host target and
-destination. **Open Lockfile** opens the real file in the editor.
+Compiler response files, additional source arguments and output-redirection,
+working-directory, listing/assembly/report options are rejected. Configure include
+folders through the manifest. Normal diagnostic, warning, optimization, debug-info,
+stack and compatibility options remain available; see the compiler's pinned help.
 
-Reviewing reads saved files and never installs, downloads or starts a build.
-Unsaved manifest/lockfile edits stay in their buffers and are identified in the
-review. Refresh the review after changing files. Installation/restoration actions
-remain unfinished; this view does not verify installed checkout state.
-
-Run `npm run test:dependencies` with prepared tools for the local-only pinned CLI
-contract check. `node scripts/dependencies-smoke.mjs` uses the native debug app's
-loopback CDP connection on port 9222 to verify the real review UI and authorization,
-dirty-buffer preservation, malformed-lock recovery and both default themes. It
-uses disposable fixtures, restores preferences and closes the test application.
+Source Control is planned before first-release packaging: an activity bar for
+Explorer/Search/Git, working/staged diffs, staging, commits/amend/undo, push/pull,
+branches, tags and stashes. These features are not implemented yet.
 
 ## Workspace search
 

@@ -15,7 +15,6 @@
     "audit:localization": "node scripts/audit-localization.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
-    "test:dependencies": "node scripts/verify-dependencies.mjs",
     "tools:prepare": "node scripts/prepare-tools.mjs",
     "fixtures:prepare": "node scripts/prepare-fixtures.mjs",
     "test:tools": "cargo build --manifest-path src-tauri/Cargo.toml -p pawn-core --bin pawn-lsp-bridge && node scripts/verify-tools.mjs",
