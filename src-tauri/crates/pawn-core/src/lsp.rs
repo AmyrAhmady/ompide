@@ -20,8 +20,13 @@ pub enum LspEvent {
 /// Owns the process and a single ordered protocol writer. No network listener is involved.
 pub struct LspSession {
     child: Child,
-    stdin: Mutex<Option<ChildStdin>>,
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
     readers: Vec<JoinHandle<()>>,
+}
+
+#[derive(Clone)]
+pub struct LspWriter {
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
 }
 
 impl LspSession {
@@ -31,8 +36,15 @@ impl LspSession {
         emit: impl Fn(LspEvent) + Send + Sync + 'static,
     ) -> io::Result<Self> {
         let mut command = Command::new(executable);
+        command.current_dir(workspace);
+        Self::spawn(command, emit)
+    }
+
+    fn spawn(
+        mut command: Command,
+        emit: impl Fn(LspEvent) + Send + Sync + 'static,
+    ) -> io::Result<Self> {
         command
-            .current_dir(workspace)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -74,11 +86,42 @@ impl LspSession {
         });
         Ok(Self {
             child,
-            stdin: Mutex::new(Some(stdin)),
+            stdin: Arc::new(Mutex::new(Some(stdin))),
             readers: vec![output, errors],
         })
     }
 
+    pub fn send(&self, message: &str) -> io::Result<()> {
+        self.writer().send(message)
+    }
+
+    pub fn writer(&self) -> LspWriter {
+        LspWriter {
+            stdin: Arc::clone(&self.stdin),
+        }
+    }
+
+    pub fn stop(&mut self) {
+        // Kill before taking the pipe lock: a busy server may not be reading stdin.
+        // Termination releases blocked writers, allowing their acknowledgements to fail.
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        if let Ok(mut stdin) = self.stdin.lock() {
+            stdin.take();
+        }
+        for reader in self.readers.drain(..) {
+            let _ = reader.join();
+        }
+    }
+}
+
+impl Drop for LspSession {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+impl LspWriter {
     pub fn send(&self, message: &str) -> io::Result<()> {
         let value: serde_json::Value = serde_json::from_str(message)?;
         if !value.is_object() || value.get("jsonrpc").and_then(|v| v.as_str()) != Some("2.0") {
@@ -98,22 +141,68 @@ impl LspSession {
             message,
         )
     }
-
-    pub fn stop(&mut self) {
-        if let Ok(mut stdin) = self.stdin.lock() {
-            stdin.take();
-        }
-        // The client sends shutdown/exit first; kill also handles crashed or unresponsive servers.
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-        for reader in self.readers.drain(..) {
-            let _ = reader.join();
-        }
-    }
 }
 
-impl Drop for LspSession {
-    fn drop(&mut self) {
-        self.stop();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        sync::mpsc,
+        time::{Duration, Instant},
+    };
+
+    #[test]
+    fn stop_interrupts_a_blocked_protocol_write() {
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "lsp::tests::blocked_reader_fixture",
+                "--nocapture",
+            ])
+            .env("PAWN_IDE_LSP_BLOCKED_FIXTURE", "1");
+        let mut session = LspSession::spawn(command, |_| {}).unwrap();
+        let writer = session.writer();
+        let (done, completed) = mpsc::channel();
+        let send = thread::spawn(move || {
+            let message = serde_json::json!({"jsonrpc":"2.0", "method":"test/large", "params": {"text":"x".repeat(2 * 1024 * 1024)}}).to_string();
+            done.send(writer.send(&message)).unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while session.stdin.try_lock().is_ok() {
+            assert!(
+                Instant::now() < deadline,
+                "writer did not enter the pipe write"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(completed.try_recv().is_err());
+        let start = Instant::now();
+        session.stop();
+        let elapsed = start.elapsed();
+        assert!(
+            completed
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+                .is_err()
+        );
+        send.join().unwrap();
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "stop waited on the blocked writer for {elapsed:?}"
+        );
+        assert!(
+            session
+                .writer()
+                .send(r#"{"jsonrpc":"2.0","method":"test/late"}"#)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn blocked_reader_fixture() {
+        if std::env::var_os("PAWN_IDE_LSP_BLOCKED_FIXTURE").is_some() {
+            thread::sleep(Duration::from_secs(5));
+        }
     }
 }

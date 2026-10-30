@@ -153,6 +153,11 @@ configuration come from vscode-pawn commit
   Continue closing only after Rust's explicit stop has killed and waited for the
   owned process. Native cleanup failures still propagate; a handled graceful
   timeout cannot veto a confirmed discard/exit or workspace switch.
+  Pipe writes run on the blocking pool with a separate stdin lease, outside the
+  process-ownership mutex. Stop kills/waits for the child before taking the stdin
+  lock, releasing a writer stalled on an unread pipe. A core regression uses a
+  deliberately non-reading child; real large-document typing/exit checks cover
+  the native IPC path. The frontend still serializes writes and preserves framing.
 
 - Production CSP needs `data:` in `connect-src`: the editor API registers our
   bundled grammar and theme contents as data URLs and fetches them as resources.

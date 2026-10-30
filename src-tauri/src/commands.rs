@@ -493,14 +493,21 @@ pub async fn lsp_start(
 }
 #[tauri::command]
 pub async fn lsp_send(state: State<'_, NativeState>, session_id: u64, body: String) -> Result<()> {
-    let owned = lock(&state.lsp)?;
-    let (id, session) = owned
-        .as_ref()
-        .ok_or_else(|| error("lspStopped", "no session"))?;
-    if *id != session_id {
-        return Err(error("lspStopped", "stale session"));
-    }
-    session.send(&body)?;
+    let writer = {
+        let owned = lock(&state.lsp)?;
+        let (id, session) = owned
+            .as_ref()
+            .ok_or_else(|| error("lspStopped", "no session"))?;
+        if *id != session_id {
+            return Err(error("lspStopped", "stale session"));
+        }
+        session.writer()
+    };
+    // A pipe write can block while the server indexes. Do not hold process ownership
+    // or occupy an async runtime worker: Stop must still be able to kill the child.
+    tauri::async_runtime::spawn_blocking(move || writer.send(&body))
+        .await
+        .map_err(|failure| error("operationFailed", failure.to_string()))??;
     Ok(())
 }
 #[tauri::command]
