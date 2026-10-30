@@ -21,8 +21,8 @@ compiles through PawnKit. Build output includes compiler logs, clickable
 diagnostics, cancellation, exit status and the verified AMX location. Workspace
 file/content search and previewed replacements include unsaved buffers and retain
 Undo support. Explorer creation, rename, recoverable deletion, current-file reveal
-and keyboard/context-menu workflows are also verified on Windows. Custom-theme
-loading and installed packaging remain unfinished. Debugging is outside the project scope.
+and keyboard/context-menu workflows are also verified on Windows. Installed
+packaging remains unfinished. Debugging is outside the project scope.
 
 Deferred additions after the core IDE is stable: an integrated terminal, an
 opt-in local MCP server for external AI agents, and an integrated title bar
@@ -126,6 +126,60 @@ view. **Toggle Bottom Panel** reopens the last selected Problems or Build view;
 only one bottom view appears at a time. Pane sizes, visibility and selected views
 survive restart. **View → Reset Layout** restores the initial layout.
 
+## Themes
+
+Open **Settings** with **Ctrl+,** to select Light, Dark or your saved custom theme.
+**Customize Theme…** opens an editable JSON copy of the current theme.
+**Load Theme File…** reads an explicitly selected local JSON file into that editor.
+Review it and choose **Apply Custom Theme** to update the application and Monaco;
+**Cancel Theme Changes** keeps the previous theme. Invalid data leaves the active
+theme intact and reports the field to fix.
+
+The application stores one custom theme snapshot in its preferences, alongside
+the selected theme. Applying another replaces that snapshot. Imported files are
+never modified or watched, and startup does not depend on their original path.
+Keep separate JSON files for variants: copy the editor text into a `.json` file
+and load it again after making external edits. No theme code or network resources
+are executed. The format is specific to Pawn IDE; it is not a VS Code theme importer.
+
+Start with [Ocean](examples/themes/ocean.json), or this minimal theme:
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "My Theme",
+  "base": "dark",
+  "colors": { "editor.background": "#10232a" },
+  "tokenColors": [
+    { "scope": "constant.numeric", "settings": { "foreground": "#ff9e65" } }
+  ]
+}
+```
+
+Version 1 requires a name of 1–64 characters and `base` of `light` or `dark`.
+`colors` and `tokenColors` are optional. Missing colors and syntax rules inherit
+the chosen built-in base. Syntax rules override matching TextMate scopes;
+each needs a nonempty `scope` of at most 256 characters and an opaque
+`settings.foreground` color. Up to 500 rules and 256 KiB per file are accepted.
+JSON comments are unsupported; UTF-8 BOM is accepted. Unknown top-level fields
+are ignored. Unknown color tokens, malformed rules and unsupported versions
+are rejected. Colors use `#RRGGBB` or `#RRGGBBAA`; syntax foregrounds use `#RRGGBB`.
+
+These versioned color tokens are shared with the shell and Monaco where relevant:
+
+| Area | Tokens |
+| --- | --- |
+| Editor | `editor.background`, `editor.foreground`, `editor.selectionBackground`, `editor.lineHighlightBackground`, `editorLineNumber.foreground`, `editorCursor.foreground` |
+| Widgets and diagnostics | `editorWidget.background`, `editorWidget.border`, `editorSuggestWidget.selectedBackground`, `editorError.foreground`, `editorWarning.foreground` |
+| Sidebar and header | `sideBar.background`, `sideBar.foreground`, `activityBar.background`, `titleBar.activeBackground` |
+| Tabs and panels | `tab.activeBackground`, `tab.inactiveBackground`, `panel.background`, `panel.border` |
+| Status | `statusBar.background`, `statusBar.foreground` |
+| Interaction | `focusBorder`, `list.hoverBackground`, `list.activeSelectionBackground`, `button.background`, `button.foreground` |
+| Inputs and secondary text | `input.background`, `input.foreground`, `input.border`, `descriptionForeground` |
+
+Use the complete [Dark](src/settings/themes/dark.json) and
+[Light](src/settings/themes/light.json) files to inspect every default value.
+
 ## Explorer
 
 Use the Explorer toolbar or a folder's context menu to create files and folders.
@@ -215,6 +269,11 @@ Run `node scripts/layout-smoke.mjs` with the same inspection setup for pointer
 and keyboard resizing, cancellation, focus, native preference restoration and a
 scaled viewport with an external-file conflict. It records both themes, restores
 preferences and closes the application.
+
+Run `node scripts/theme-smoke.mjs` to verify local file import, validation,
+customization/cancellation, Monaco syntax colors, Light/Dark/custom switching
+and native preference reload. It also rejects CSS/network content, records
+custom-theme screenshots and restores preferences before closing the test app.
 
 Run `node scripts/build-smoke.mjs` with the same native inspection setup for
 compilation, diagnostic navigation, manifest setup, named builds, YAML, official

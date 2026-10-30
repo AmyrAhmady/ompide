@@ -37,7 +37,14 @@ select:focus-visible {
   outline: 1px solid var(--focusBorder);
   outline-offset: -1px;
 }
+textarea:focus-visible,
+.settings-fields:focus-visible {
+  outline: 1px solid var(--focusBorder);
+  outline-offset: -1px;
+}
 .workbench {
+  scrollbar-color: var(--input-border) var(--editorWidget-background);
+  accent-color: var(--focusBorder);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -556,7 +563,10 @@ dialog footer button.primary {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  min-width: 400px;
+  width: min(570px, 78vw);
+  max-height: 65vh;
+  overflow: auto;
+  padding-right: 6px;
 }
 .settings-fields label {
   display: flex;
@@ -588,7 +598,34 @@ dialog footer button.primary {
 }
 .settings-tool-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.theme-editor label {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.theme-editor textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 150px;
+  max-height: 45vh;
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-background);
+  color: var(--input-foreground);
+  font:
+    12px Consolas,
+    monospace;
+  tab-size: 2;
+}
+.theme-settings p {
+  line-height: 1.5;
+  max-width: 570px;
+}
+.theme-settings [role="alert"] {
+  color: var(--editorError-foreground);
 }
 .settings-tool-actions button {
   padding: 5px 9px;

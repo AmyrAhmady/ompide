@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "Ocean",
+  "base": "dark",
+  "colors": {
+    "editor.background": "#10232a",
+    "editor.foreground": "#e0f0f2",
+    "tab.activeBackground": "#10232a",
+    "sideBar.background": "#16333d",
+    "titleBar.activeBackground": "#204550",
+    "panel.background": "#14303a",
+    "statusBar.background": "#236372",
+    "editorWidget.background": "#173b47",
+    "focusBorder": "#70d5dc",
+    "list.activeSelectionBackground": "#275763"
+  },
+  "tokenColors": [
+    { "scope": "constant.numeric", "settings": { "foreground": "#ff9e65" } }
+  ]
+}

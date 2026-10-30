@@ -29,7 +29,8 @@ import {
   QuickOpen,
   initialSearchFields,
 } from "./search/SearchPanel";
-import { defaultThemes, themeVariables } from "./settings/theme";
+import { selectedTheme, themeVariables } from "./settings/theme";
+import { ThemeSettings } from "./settings/ThemeSettings";
 import type { Settings } from "./settings/settings";
 import toolPins from "../toolchain/tools.json";
 import "./App.css";
@@ -71,14 +72,25 @@ function SettingsDialog({
             value={settings.theme}
             onChange={(event) =>
               update({
-                theme: event.target.value === "light" ? "light" : "dark",
+                theme:
+                  event.target.value === "custom" && settings.customTheme
+                    ? "custom"
+                    : event.target.value === "light"
+                      ? "light"
+                      : "dark",
               })
             }
           >
             <option value="dark">{t("settings.dark")}</option>
             <option value="light">{t("settings.light")}</option>
+            {settings.customTheme && (
+              <option value="custom">
+                {t("theme.customOption", { name: settings.customTheme.name })}
+              </option>
+            )}
           </select>
         </label>
+        <ThemeSettings settings={settings} />
         <label>
           {t("settings.fontFamily")}
           <input
@@ -588,7 +600,8 @@ function App() {
       className="workbench"
       style={
         {
-          ...themeVariables(defaultThemes[state.settings.theme]),
+          ...themeVariables(selectedTheme(state.settings)),
+          colorScheme: selectedTheme(state.settings).base,
           "--sidebar-width": `${layout.sidebarWidth}px`,
           "--panel-height": `${layout.panelHeight}px`,
         } as CSSProperties

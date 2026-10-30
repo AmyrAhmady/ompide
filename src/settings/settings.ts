@@ -1,7 +1,9 @@
 import { defaultLayout, parseLayout, type Layout } from "./layout";
+import { parseTheme, type Theme, type ThemeChoice } from "./theme";
 
 export interface Settings {
-  theme: "light" | "dark";
+  theme: ThemeChoice;
+  customTheme: Theme | null;
   fontSize: number;
   fontFamily: string;
   tabSize: number;
@@ -17,6 +19,7 @@ export interface Settings {
 
 export const defaults: Settings = {
   theme: "dark",
+  customTheme: null,
   fontSize: 14,
   fontFamily: 'Consolas, "Cascadia Code", monospace',
   tabSize: 4,
@@ -37,6 +40,14 @@ export function parseSettings(value: unknown): Settings {
   settings.layout = parseLayout(source.layout);
   if (source.theme === "light" || source.theme === "dark")
     settings.theme = source.theme;
+  if (source.customTheme !== undefined && source.customTheme !== null) {
+    try {
+      settings.customTheme = parseTheme(source.customTheme);
+      if (source.theme === "custom") settings.theme = "custom";
+    } catch {
+      // Invalid persisted data falls back to a usable built-in theme.
+    }
+  }
   for (const key of ["fontSize", "tabSize"] as const) {
     const maximum = key === "fontSize" ? 48 : 8;
     const minimum = key === "fontSize" ? 8 : 1;

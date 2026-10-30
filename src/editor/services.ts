@@ -6,7 +6,7 @@ import { registerFileSystemOverlay } from "@codingame/monaco-vscode-files-servic
 import { MonacoVscodeApiWrapper } from "monaco-languageclient/vscodeApiWrapper";
 import { configureWorkers } from "./workers";
 import type { Settings } from "../settings/settings";
-import { defaultThemes } from "../settings/theme";
+import { defaultThemes, selectedTheme } from "../settings/theme";
 import grammar from "./pawn/pawn.tmLanguage.json?raw";
 import languageConfiguration from "./pawn/language-configuration.json?raw";
 import "monaco-editor/esm/vs/editor/edcore.main";
@@ -21,8 +21,14 @@ registerFileSystemOverlay(-1, new NativeReadProvider(false));
 let started: Promise<void> | undefined;
 
 function configuration(settings: Settings) {
+  const theme = selectedTheme(settings);
+  const custom = settings.theme === "custom";
   return {
-    "workbench.colorTheme": defaultThemes[settings.theme].name,
+    "workbench.colorTheme": defaultThemes[theme.base].name,
+    "workbench.colorCustomizations": custom ? theme.colors : {},
+    "editor.tokenColorCustomizations": custom
+      ? { textMateRules: theme.tokenColors }
+      : {},
     "telemetry.telemetryLevel": "off",
     "workbench.enableExperiments": false,
     "editor.fontSize": settings.fontSize,
