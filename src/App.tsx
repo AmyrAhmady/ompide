@@ -967,17 +967,24 @@ function App() {
         </section>
       </div>
       <footer className="statusbar">
-        <span title={state.languageTool?.path}>
+        <span role="status" title={state.languageTool?.path}>
           {state.languageProgress || state.status}
         </span>
-        {!connected && nativeReady && state.languagePhase !== "starting" && (
-          <button
-            type="button"
-            onClick={() => run(() => workbench.restartLanguage())}
-          >
-            {t("command.restartLanguage")}
-          </button>
-        )}
+        {!connected &&
+          command("command.restartLanguage").enabled &&
+          state.languagePhase !== "starting" && (
+            <button
+              type="button"
+              onClick={() =>
+                executeCommand(
+                  command("command.restartLanguage"),
+                  workbench.report
+                )
+              }
+            >
+              {t("command.restartLanguage")}
+            </button>
+          )}
         <button
           type="button"
           onClick={() => setProblemsOpen((value) => !value)}

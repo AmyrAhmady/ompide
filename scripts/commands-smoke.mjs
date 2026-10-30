@@ -82,6 +82,9 @@ try {
   await expect
     .poll(() => evaluate((workbench) => workbench.getSnapshot().ready))
     .toBe(true);
+  await expect(
+    page.getByRole("button", { name: "Restart Language Server", exact: true })
+  ).toHaveCount(0);
   await find("build project", "F1");
   await expect(palette().getByRole("option")).toHaveAttribute(
     "aria-disabled",

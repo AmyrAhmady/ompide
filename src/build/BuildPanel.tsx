@@ -27,7 +27,11 @@ export function BuildPanel({
   }, [log]);
   const busy = building(state);
   return (
-    <section className="build-panel" aria-label={t("build.output")}>
+    <section
+      className="build-panel"
+      aria-label={t("build.output")}
+      aria-busy={busy}
+    >
       <div className="panel-heading">
         <span>
           {t("build.output")} — {t(`build.${state.phase}`)}
