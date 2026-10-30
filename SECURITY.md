@@ -97,4 +97,11 @@ Core real-Git tests cover ordinary/renamed/deleted/untracked/conflicted states,
 index/working diffs, paths/refs, stashes, local bare-remote push/pull and dirty-file
 switch refusal. `scripts/git-smoke.mjs` verifies the real native controls, unsaved
 buffers, confirmation flows and cancellation during a configured hook. External
-credential dialogs and installed-release Git behavior remain release checks.
+credential dialogs for a fresh login and installed-release Git behavior remain
+manual checks. Cached GitHub authentication and a private-repository HEAD query
+have been verified read-only, with credentials and private URLs excluded from
+reports. `scripts/git-auth-smoke.mjs` exercises real native Git/GCM against a
+loopback smart-HTTPS backend and disposable DPAPI store, including failures and
+cancellation. Its per-repository certificate trust never changes OS/global trust.
+IDE-owned Git disables GCM credential tracing and secret tracing, even when a
+workspace enables those settings; ordinary raw Git failure output is retained.

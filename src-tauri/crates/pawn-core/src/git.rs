@@ -151,6 +151,8 @@ impl Repository {
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_EDITOR", "false")
             .env("GIT_SEQUENCE_EDITOR", "false")
+            .env("GCM_TRACE", "0")
+            .env("GCM_TRACE_SECRETS", "0")
             .args([
                 "--no-pager",
                 "--literal-pathspecs",
@@ -164,6 +166,10 @@ impl Repository {
                 "merge.autoStash=false",
                 "-c",
                 "rebase.autoStash=false",
+                "-c",
+                "credential.trace=false",
+                "-c",
+                "credential.traceSecrets=false",
             ]);
         command
     }

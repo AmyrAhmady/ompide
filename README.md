@@ -127,8 +127,24 @@ Run `node scripts/git-smoke.mjs` against the native development app with the
 existing test CDP launcher. It tests real staged/working/unsaved diffs, commit,
 amend/undo, branch/tag/stash operations, cancellation and a local bare remote.
 `--appearance-only` runs the focused Light/Dark/custom-theme and activity-bar
-persistence checks without repeating the mutation workflows. Remote service
-credential dialogs and installed-release behavior still need release validation.
+persistence checks without repeating the mutation workflows.
+
+`node scripts/git-auth-smoke.mjs` verifies actual authenticated HTTPS push/pull
+through the native UI using installed Git Credential Manager, an isolated DPAPI
+store and Git's real smart-HTTP backend. The temporary loopback certificate is
+trusted only by that disposable repository; certificate verification is enabled.
+It covers missing/denied credentials, HTTP 403/404/503, connection refusal,
+untrusted certificates, server policy rejection, non-fast-forward/diverged
+branches and cancellation with unsaved edits. Credential traces are disabled for
+IDE-owned Git operations so secrets do not enter displayed diagnostics.
+
+`node scripts/verify-github-auth.mjs` is an optional live, read-only check using an
+existing cached GitHub login. It verifies authenticated API access and reads HEAD
+refs from one accessible private repository; it does not fetch source, create
+repositories, push, or print credentials/private repository names. Its report
+contains only success flags/status codes, and missing credentials produce a
+nonzero result. New-account browser sign-in dialogs and installed-release
+behavior still require manual verification.
 
 ## Workspace search
 

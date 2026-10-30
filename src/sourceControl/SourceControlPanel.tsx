@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { native, desktop } from "../lib/native";
-import { describeError, t, type TranslationKey } from "../lib/i18n";
+import { t, type TranslationKey } from "../lib/i18n";
+import { describeGitError } from "./errors";
 import { workbench } from "../app/workbench";
 import { Modal } from "../components/Modal";
 import {
@@ -102,7 +103,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     } catch (failure) {
       if (current !== generation.current) return;
       setSnapshot(undefined);
-      setError(describeError(failure));
+      setError(describeGitError(failure));
       setOutput(rawError(failure));
     } finally {
       if (task.current === id) {
@@ -153,7 +154,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
         setBranch(action.name);
       if (action.kind === "renameBranch") setBranch(action.newName);
     } catch (failure) {
-      setError(describeError(failure));
+      setError(describeGitError(failure));
       setOutput(rawError(failure));
     } finally {
       task.current = undefined;
@@ -195,7 +196,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
       });
       openDiff(workbench.gitDiff(change.path, staged, value));
     } catch (failure) {
-      setError(describeError(failure));
+      setError(describeGitError(failure));
       setOutput(rawError(failure));
     } finally {
       task.current = undefined;

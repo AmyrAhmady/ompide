@@ -341,5 +341,10 @@
   "error.gitDirty": "Save or close unsaved editor buffers before changing branches, pulling or stashing. Your edits have been preserved.",
   "scm.behavior": "Git behavior",
   "scm.openFile": "Open working file",
-  "error.historyUpdateFailed": "The file operation succeeded, but recent-file history could not be saved. Your files and editor tabs reflect the completed change."
+  "error.historyUpdateFailed": "The file operation succeeded, but recent-file history could not be saved. Your files and editor tabs reflect the completed change.",
+  "scm.authFailure": "Git authentication or repository access was denied. Sign in with your configured Git credential helper and check repository permissions. See Git output for details.",
+  "scm.certificateFailure": "Git could not verify the remote certificate. Check the remote URL and your Git certificate configuration; do not disable certificate verification.",
+  "scm.pullDiverged": "The local and remote branches have diverged. Fast-forward pull cannot continue. Reconcile the branches with Git, then retry.",
+  "scm.pushRejected": "The remote rejected this push. Pull remote changes or review its branch rules and Git output before retrying.",
+  "scm.connectionFailure": "Git could not access the remote repository. Check the remote URL, network connection and repository availability, then retry."
 }
