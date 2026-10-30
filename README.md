@@ -205,6 +205,20 @@ permanent deletion. Restore recycled files using the operating system.
 
 ## Verification
 
+`npm run audit:localization` checks literal JSX copy/accessibility labels,
+translation keys, frontend/native error-code coverage and English resource
+shapes. Product names, keyboard labels, UTF-8 and the case-match icon remain
+stable identifiers. Strict TypeScript additionally checks translation-key unions;
+unit tests exercise a French test resource with English fallback, plurals and
+named interpolation. Only English ships. Internal protocol errors and raw
+compiler/LSP messages remain technical output; native errors expose structured
+codes/parameters instead of displaying their diagnostic detail as UI copy.
+
+Add future translations as resources for `createTranslator` in `src/lib/i18n.ts`.
+Use the keys and interpolation names from `src/locales/en.json`; the helper
+accepts a locale and partial resources, falling back to English for omitted keys.
+Runtime language selection/resource packaging is left for those later languages.
+
 Use `npm run format` to format all supported files under `src` with the project
 Prettier configuration and ESLint blank-line rules. Keep functions and class
 members visually separated and write readable blocks rather than dense chains
@@ -214,6 +228,7 @@ changing files.
 ```powershell
 npm run format:check
 npm run lint
+npm run audit:localization
 npm run typecheck
 npm test
 npm run build

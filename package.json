@@ -12,6 +12,7 @@
     "lint": "eslint src scripts vite.config.ts",
     "format": "eslint ./src --fix && prettier --write ./src",
     "format:check": "prettier --check ./src && eslint ./src",
+    "audit:localization": "node scripts/audit-localization.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "tools:prepare": "node scripts/prepare-tools.mjs",
