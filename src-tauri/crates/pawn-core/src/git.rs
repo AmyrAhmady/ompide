@@ -361,6 +361,39 @@ impl Repository {
         Ok(())
     }
 
+    fn remote_branch(
+        &self,
+        status: &Snapshot,
+        remote: &str,
+        cancel: &AtomicBool,
+    ) -> Result<String> {
+        let configured_remote = self.raw(
+            &[
+                "config",
+                "--get",
+                &format!("branch.{}.remote", status.branch),
+            ],
+            cancel,
+        )?;
+        if configured_remote.exit_code == Some(0) && configured_remote.stdout.trim() == remote {
+            let merge = self.run(
+                &[
+                    "config",
+                    "--get",
+                    &format!("branch.{}.merge", status.branch),
+                ],
+                cancel,
+            )?;
+            let name = merge
+                .trim()
+                .strip_prefix("refs/heads/")
+                .ok_or_else(|| fail("gitReference", "upstream must be a branch"))?;
+            self.reference(name, "heads", cancel)?;
+            return Ok(name.to_owned());
+        }
+        Ok(status.branch.clone())
+    }
+
     pub fn execute(
         &self,
         expected_revision: &str,
@@ -462,7 +495,10 @@ impl Repository {
                         "--porcelain",
                         "--set-upstream",
                         &name,
-                        &format!("HEAD:refs/heads/{}", status.branch),
+                        &format!(
+                            "HEAD:refs/heads/{}",
+                            self.remote_branch(&status, &name, cancel)?
+                        ),
                     ],
                     cancel,
                 )
@@ -477,7 +513,7 @@ impl Repository {
                         "--no-rebase",
                         "--no-edit",
                         &name,
-                        &status.branch,
+                        &self.remote_branch(&status, &name, cancel)?,
                     ],
                     cancel,
                 )
@@ -556,7 +592,16 @@ fn parse_status(text: &str) -> Result<Snapshot> {
             });
         } else if record.starts_with(['1', '2', 'u']) {
             let fields: Vec<_> = record
-                .splitn(if record.starts_with('1') { 9 } else { 10 }, ' ')
+                .splitn(
+                    if record.starts_with('1') {
+                        9
+                    } else if record.starts_with('u') {
+                        11
+                    } else {
+                        10
+                    },
+                    ' ',
+                )
                 .collect();
             if fields.len() < 9 || fields[1].len() != 2 {
                 return Err(fail("gitFailed", "malformed status"));
@@ -922,6 +967,81 @@ mod tests {
         )
         .unwrap();
         assert!(parsed.changes[0].conflict);
+        assert_eq!(parsed.changes[0].path, "conflict.pwn");
         assert_eq!(parsed.changes[1].path, "new\nline.inc");
+    }
+}
+
+#[cfg(test)]
+mod conflict_tests {
+    use super::*;
+
+    #[test]
+    fn real_conflict_paths_and_dirty_switch_are_preserved() {
+        let directory = tempfile::tempdir().unwrap();
+        let git = installed_git().unwrap();
+        assert!(
+            Command::new(git)
+                .current_dir(directory.path())
+                .args(["init", "-b", "main"])
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+        let cancel = AtomicBool::new(false);
+        let repo = Repository::open(Workspace::open(directory.path()).unwrap(), &cancel).unwrap();
+        for (key, value) in [
+            ("user.name", "Test"),
+            ("user.email", "fixture@example.invalid"),
+            ("commit.gpgsign", "false"),
+            ("core.autocrlf", "false"),
+        ] {
+            repo.run(&["config", key, value], &cancel).unwrap();
+        }
+        let file = directory.path().join("conflict file.inc");
+        fs::write(&file, "original\n").unwrap();
+        repo.run(&["add", "--", "conflict file.inc"], &cancel)
+            .unwrap();
+        repo.run(&["commit", "-m", "Initial"], &cancel).unwrap();
+        repo.run(&["switch", "-c", "other"], &cancel).unwrap();
+        fs::write(&file, "other branch\n").unwrap();
+        repo.run(&["commit", "-am", "Other"], &cancel).unwrap();
+        repo.run(&["switch", "main"], &cancel).unwrap();
+        fs::write(&file, "main branch\n").unwrap();
+        repo.run(&["commit", "-am", "Main"], &cancel).unwrap();
+        fs::write(&file, "local dirty file\n").unwrap();
+        let status = repo.status(&cancel).unwrap();
+        assert!(
+            repo.execute(
+                &status.revision,
+                Action::Switch {
+                    name: "other".into()
+                },
+                &cancel
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read_to_string(&file).unwrap(), "local dirty file\n");
+        fs::write(&file, "main branch\n").unwrap();
+        assert!(repo.run(&["merge", "--no-edit", "other"], &cancel).is_err());
+        let conflict = repo.status(&cancel).unwrap();
+        assert_eq!(conflict.changes[0].path, "conflict file.inc");
+        assert!(conflict.changes[0].conflict);
+        assert!(
+            repo.diff("conflict file.inc", false, &cancel)
+                .unwrap()
+                .unsupported
+        );
+        fs::write(&file, "resolved\n").unwrap();
+        repo.execute(
+            &conflict.revision,
+            Action::Stage {
+                paths: vec!["conflict file.inc".into()],
+            },
+            &cancel,
+        )
+        .unwrap();
+        assert!(!repo.status(&cancel).unwrap().changes[0].conflict);
     }
 }

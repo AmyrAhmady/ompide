@@ -77,5 +77,24 @@ tests verify corresponding user workflows.
 Installed-release CSP, bundled tool placement and the full install/edit/build
 workflow remain part of release verification. The approved release does not
 provide project dependency installation/restoration or runtime/server management.
-Source-control operations are planned and require their own repository scope,
-subprocess, network-action and dirty-buffer verification when implemented.
+Source Control resolves an absolute installed Git executable before entering a
+workspace, strips inherited Git override variables, disables fsmonitor during
+inspection, uses NUL-separated status and literal path arguments, and rejects
+links/traversal for file actions. A workspace inside a larger repository must open
+the repository root before using Git. Repository snapshots detect changed HEAD,
+index entries, branch/tag names and stashes before a requested action. Status is an observation,
+not an exclusive lock against external Git clients; Git still owns repository locks.
+
+Only explicit Git actions invoke mutations or network operations. Git hooks,
+filters, signing and credential helpers follow the user's Git configuration when
+an action is explicitly invoked. There is no automatic fetch, pull, push or tool
+download. Subprocesses have time/output limits and descendant cancellation.
+Working-tree mutations refuse dirty editor buffers, retain raced edits during
+reconciliation, and invalidate the selected build configuration. Cancelled or failed
+operations refresh actual state and never claim automatic rollback.
+
+Core real-Git tests cover ordinary/renamed/deleted/untracked/conflicted states,
+index/working diffs, paths/refs, stashes, local bare-remote push/pull and dirty-file
+switch refusal. `scripts/git-smoke.mjs` verifies the real native controls, unsaved
+buffers, confirmation flows and cancellation during a configured hook. External
+credential dialogs and installed-release Git behavior remain release checks.

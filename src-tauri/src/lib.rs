@@ -37,12 +37,19 @@ pub fn run() {
             commands::create_entry,
             commands::rename_entry,
             commands::trash_entry,
+            commands::git_request,
+            commands::cancel_git,
         ])
         .build(tauri::generate_context!())
         .expect("could not initialize Pawn IDE")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
+                if let Ok(git) = app.state::<commands::NativeState>().git.lock()
+                    && let Some((_, signal)) = git.as_ref()
+                {
+                    signal.store(true, std::sync::atomic::Ordering::Release);
+                }
                 if let Ok(search) = app.state::<commands::NativeState>().search.lock()
                     && let Some((_, cancel)) = search.as_ref()
                 {

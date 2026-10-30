@@ -149,7 +149,7 @@ hr {
 .explorer {
   width: var(--sidebar-width, 235px);
   min-width: 170px;
-  max-width: min(640px, calc(100% - 284px));
+  max-width: min(640px, calc(100% - 330px));
   flex-shrink: 0;
   overflow: auto;
   background: var(--sideBar-background);
@@ -908,4 +908,150 @@ dialog footer button.primary {
 }
 .quick-open-results {
   min-width: min(500px, 70vw);
+}
+
+.activity-bar {
+  width: 46px;
+  flex-shrink: 0;
+  background: var(--activityBar-background);
+  color: var(--sideBar-foreground);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.activity-bar button {
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  min-height: 48px;
+  padding: 8px;
+}
+.activity-bar button[aria-pressed="true"] {
+  border-left-color: var(--focusBorder);
+  background: var(--list-activeSelectionBackground);
+  color: var(--editor-foreground);
+}
+.activity-bar button:hover:enabled {
+  background: var(--list-hoverBackground);
+}
+.source-control {
+  padding: 0 8px 12px;
+  font-size: 12px;
+}
+.source-control[hidden] {
+  display: none;
+}
+.source-control p {
+  overflow-wrap: anywhere;
+}
+.source-control label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+}
+.source-control textarea,
+.source-control input,
+.source-control select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+}
+.source-control textarea {
+  resize: vertical;
+}
+.scm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0;
+}
+.scm-branch {
+  font-weight: 600;
+}
+.scm-upstream {
+  font-size: 11px;
+}
+.scm-error {
+  color: var(--editorError-foreground);
+}
+.scm-changes {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 12px;
+}
+.scm-changes .panel-heading {
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+.scm-changes ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.scm-changes li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.scm-changes .scm-file {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+}
+.scm-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scm-file b {
+  color: var(--descriptionForeground);
+}
+.source-control details {
+  border-top: 1px solid var(--panel-border);
+  padding: 9px 0;
+}
+.source-control summary {
+  cursor: pointer;
+}
+.source-control fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.scm-output {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  user-select: text;
+}
+.git-diff-view {
+  position: absolute;
+  inset: 0;
+  background: var(--editor-background);
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+.git-diff-view .panel-heading {
+  padding: 5px 10px;
+  overflow-wrap: anywhere;
+}
+.git-diff-labels {
+  margin: 5px 10px;
+  font-size: 12px;
+}
+.git-diff-editor {
+  flex: 1;
+  min-height: 0;
 }

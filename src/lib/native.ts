@@ -1,4 +1,5 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
+import type { GitRequest } from "../sourceControl/types";
 import type { Settings } from "../settings/settings";
 import type {
   Discovery,
@@ -50,6 +51,9 @@ export interface ToolInfo {
 export const desktop = isTauri();
 
 export const native = {
+  git: <T>(root: string, id: number, request: GitRequest) =>
+    invoke<T>("git_request", { root, id, request }),
+  cancelGit: (id: number) => invoke<void>("cancel_git", { id }),
   preferences: () => invoke<Preferences>("load_preferences"),
   storeSettings: (settings: Settings) =>
     invoke<void>("store_preferences", { settings }),

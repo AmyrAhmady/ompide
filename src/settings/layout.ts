@@ -2,7 +2,7 @@ export interface Layout {
   sidebarWidth: number;
   panelHeight: number;
   sidebarVisible: boolean;
-  sidebar: "explorer" | "search";
+  sidebar: "explorer" | "search" | "sourceControl";
   panelVisible: boolean;
   panel: "problems" | "build";
 }
@@ -34,7 +34,11 @@ export function parseLayout(value: unknown): Layout {
   for (const key of ["sidebarVisible", "panelVisible"] as const) {
     if (typeof source[key] === "boolean") layout[key] = source[key];
   }
-  if (source.sidebar === "explorer" || source.sidebar === "search")
+  if (
+    source.sidebar === "explorer" ||
+    source.sidebar === "search" ||
+    source.sidebar === "sourceControl"
+  )
     layout.sidebar = source.sidebar;
   if (source.panel === "problems" || source.panel === "build")
     layout.panel = source.panel;
@@ -42,7 +46,7 @@ export function parseLayout(value: unknown): Layout {
 }
 
 export function paneLimits(vertical: boolean, available: number, fixed = 0) {
-  const reserve = vertical ? 284 : 124 + fixed;
+  const reserve = vertical ? 284 + fixed : 124 + fixed;
   const minimum = vertical
     ? 170
     : Math.min(100, Math.max(35, Math.floor(available - reserve)));

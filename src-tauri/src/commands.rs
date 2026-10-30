@@ -26,9 +26,13 @@ pub use searches::*;
 #[path = "file_commands.rs"]
 mod file_operations;
 pub use file_operations::*;
+#[path = "git_commands.rs"]
+mod source_control;
+pub use source_control::*;
 
 #[derive(Default)]
 pub struct NativeState {
+    pub git: Mutex<Option<(u64, std::sync::Arc<std::sync::atomic::AtomicBool>)>>,
     workspace: Mutex<Option<Workspace>>,
     allowed: Mutex<HashSet<PathBuf>>,
     pub lsp: Mutex<Option<(u64, LspSession)>>,
@@ -128,6 +132,13 @@ fn write_preferences(app: &AppHandle, preferences: &Preferences) -> Result<()> {
     Ok(())
 }
 fn select_workspace(app: &AppHandle, state: &NativeState, path: &Path) -> Result<PathBuf> {
+    let git = lock(&state.git)?;
+    if git.is_some() {
+        return Err(error(
+            "gitBusy",
+            "wait for Git or cancel it before changing workspace",
+        ));
+    }
     if lock(&state.build)?.is_some() {
         return Err(error(
             "buildBusy",

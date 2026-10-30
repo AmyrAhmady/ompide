@@ -62,7 +62,8 @@ export function Splitter({
         reserve: vertical ? 284 : 160,
       };
     const fixed = vertical
-      ? 0
+      ? (parent.querySelector(".activity-bar")?.getBoundingClientRect().width ??
+        0)
       : [...parent.children]
           .filter(
             (child) =>
@@ -82,7 +83,7 @@ export function Splitter({
           : parent.getBoundingClientRect().height,
         fixed
       ),
-      reserve: vertical ? 284 : 124 + fixed,
+      reserve: vertical ? 284 + fixed : 124 + fixed,
     };
   };
 

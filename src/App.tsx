@@ -1,3 +1,7 @@
+import { ActivityBar } from "./components/ActivityBar";
+import { SourceControlPanel } from "./sourceControl/SourceControlPanel";
+import { GitDiffView } from "./sourceControl/GitDiffView";
+import type { OpenGitDiff } from "./sourceControl/types";
 import {
   useCallback,
   useEffect,
@@ -316,6 +320,7 @@ function App() {
   const shell = useRef<HTMLElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const [gitDiff, setGitDiff] = useState<OpenGitDiff>();
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [symbolsOpen, setSymbolsOpen] = useState<
@@ -419,6 +424,17 @@ function App() {
       focusMain();
   };
 
+  const showSourceControl = () => {
+    changeLayout({ sidebar: "sourceControl", sidebarVisible: true });
+    requestAnimationFrame(() =>
+      sidebar.current
+        ?.querySelector<HTMLButtonElement>(".source-control button")
+        ?.focus()
+    );
+  };
+
+  useEffect(() => setGitDiff(undefined), [state.root]);
+
   const showSearch = () => {
     setSearchOpen(true);
     requestAnimationFrame(() =>
@@ -462,6 +478,7 @@ function App() {
     project: configureProject,
     explorer: showExplorer,
     search: showSearch,
+    sourceControl: showSourceControl,
     quickOpen: () => setQuickOpen(true),
     problems: () => setProblemsOpen((value) => !value),
     symbols: setSymbolsOpen,
@@ -509,6 +526,18 @@ function App() {
       )
         return;
       const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "g") {
+        event.preventDefault();
+        changeLayout({ sidebar: "sourceControl", sidebarVisible: true });
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "w" && gitDiff) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setGitDiff(undefined);
+        workbench.focusEditor();
+        return;
+      }
       let operation: (() => Promise<unknown>) | undefined;
       const key = event.key.toLowerCase();
       if (event.key === "F1" || (modifier && event.shiftKey && key === "p")) {
@@ -605,6 +634,7 @@ function App() {
     symbolsOpen,
     projectOpen,
     quickOpen,
+    gitDiff,
   ]);
   useEffect(() => {
     const preventLoss = (event: BeforeUnloadEvent) => {
@@ -695,6 +725,7 @@ function App() {
             <CommandMenuItem command={command("command.problems")} />
             <CommandMenuItem command={command("command.settings")} />
             <CommandMenuItem command={command("search.title")} />
+            <CommandMenuItem command={command("scm.title")} />
             <CommandMenuItem command={command("search.files")} />
             <CommandMenuItem command={command("layout.toggleSidebar")} />
             <CommandMenuItem command={command("layout.togglePanel")} />
@@ -738,13 +769,36 @@ function App() {
         </div>
       )}
       <div className="workspace-body">
+        <ActivityBar
+          layout={layout}
+          ready={state.ready}
+          select={(view) => {
+            const visible = layout.sidebar !== view || !layout.sidebarVisible;
+            changeLayout({ sidebar: view, sidebarVisible: visible });
+            if (visible)
+              requestAnimationFrame(() =>
+                sidebar.current
+                  ?.querySelector<HTMLElement>("button, input")
+                  ?.focus()
+              );
+            else focusMain();
+          }}
+        />
         <aside
           id="workspace-sidebar"
           className="explorer"
           ref={sidebar}
           hidden={!layout.sidebarVisible}
         >
-          {searchOpen ? (
+          <SourceControlPanel
+            root={state.root}
+            ready={state.ready}
+            visible={
+              layout.sidebarVisible && layout.sidebar === "sourceControl"
+            }
+            openDiff={setGitDiff}
+          />
+          {layout.sidebar === "sourceControl" ? null : searchOpen ? (
             <SearchPanel
               root={state.root}
               fields={searchFields}
@@ -789,7 +843,10 @@ function App() {
                   type="button"
                   role="tab"
                   aria-selected={tab.uri === state.active}
-                  onClick={() => workbench.activate(tab.uri)}
+                  onClick={() => {
+                    setGitDiff(undefined);
+                    workbench.activate(tab.uri);
+                  }}
                 >
                   <span className="file-icon" aria-hidden="true">
                     #
@@ -834,8 +891,21 @@ function App() {
             </div>
           )}
           <div className="editor-area" data-editor-fill="true">
-            <div className="monaco-container" ref={container} />
-            {!active && (
+            <div
+              className="monaco-container"
+              ref={container}
+              style={gitDiff ? { visibility: "hidden" } : undefined}
+            />
+            {gitDiff && (
+              <GitDiffView
+                diff={gitDiff}
+                close={() => {
+                  setGitDiff(undefined);
+                  workbench.focusEditor();
+                }}
+              />
+            )}
+            {!active && !gitDiff && (
               <div className="empty-editor">
                 <h1>{t("app.name")}</h1>
                 <p>{t("editor.welcome")}</p>

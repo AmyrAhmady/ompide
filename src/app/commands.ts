@@ -14,6 +14,7 @@ export interface CommandViews {
   project: () => void;
   explorer: () => void;
   search: () => void;
+  sourceControl: () => void;
   quickOpen: () => void;
   problems: () => void;
   symbols: (mode: "document" | "workspace") => void;
@@ -146,6 +147,7 @@ export function createCommands(
     "Ctrl+Shift+E"
   );
   add("search.title", true, views.search, "Ctrl+Shift+F");
+  add("scm.title", state.ready, views.sourceControl, "Ctrl+Shift+G");
   add(
     "search.files",
     mutable && Boolean(state.root),

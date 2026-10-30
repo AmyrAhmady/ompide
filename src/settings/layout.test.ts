@@ -3,6 +3,9 @@ import { clampPane, defaultLayout, paneLimits, parseLayout } from "./layout";
 
 it("loads valid layout preferences without accepting malformed sizes or view identities", () => {
   expect(parseLayout(null)).toEqual(defaultLayout);
+  expect(parseLayout({ sidebar: "sourceControl" }).sidebar).toBe(
+    "sourceControl"
+  );
   expect(
     parseLayout({
       sidebarWidth: Infinity,
@@ -34,6 +37,7 @@ it("loads valid layout preferences without accepting malformed sizes or view ide
 it("keeps split limits usable on wide and scaled viewports and rounds pixel values", () => {
   expect(paneLimits(true, 521)).toEqual({ minimum: 170, maximum: 237 });
   expect(paneLimits(true, 1920).maximum).toBe(640);
+  expect(paneLimits(true, 521, 46)).toEqual({ minimum: 170, maximum: 191 });
   expect(paneLimits(false, 338, 35)).toEqual({ minimum: 100, maximum: 179 });
   expect(paneLimits(false, 150, 35)).toEqual({ minimum: 35, maximum: 35 });
   expect(paneLimits(false, 338, 150)).toEqual({ minimum: 64, maximum: 64 });

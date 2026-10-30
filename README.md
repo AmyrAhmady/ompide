@@ -100,9 +100,35 @@ working-directory, listing/assembly/report options are rejected. Configure inclu
 folders through the manifest. Normal diagnostic, warning, optimization, debug-info,
 stack and compatibility options remain available; see the compiler's pinned help.
 
-Source Control is planned before first-release packaging: an activity bar for
-Explorer/Search/Git, working/staged diffs, staging, commits/amend/undo, push/pull,
-branches, tags and stashes. These features are not implemented yet.
+## Source Control
+
+The left activity bar switches Explorer, Workspace Search and Source Control
+(`Ctrl+Shift+E`, `Ctrl+Shift+F`, `Ctrl+Shift+G`). Its selected view is persisted.
+Source Control uses installed Git from PATH and requires the repository root to
+be opened as the workspace. Refresh is local and read-only.
+
+Working and staged files open separate read-only Monaco diffs. Working diffs can
+show an unsaved editor buffer; staging reads the saved file, and commits include
+only staged content. File/all stage and unstage, commit/amend/soft undo,
+branch create/switch/rename/delete, local tag create/delete/push, and stash
+create/apply/pop/drop operate on the actual repository. Amend, undo, deletion,
+stash removal and remote actions have explicit confirmation. Git refuses deletion
+of an unmerged branch. Undo requires a parent commit.
+
+Push publishes the current branch to the selected configured remote; pull is
+fast-forward only. An existing upstream on that remote is honored. Authentication
+uses the user's installed Git configuration and credential helpers; terminal
+prompts are disabled. Explicit actions can run configured Git hooks and filters.
+An operation has a running/cancel state and bounded output; cancellation stops the
+owned process tree and refreshes status, without claiming to roll back changes.
+Save or close dirty buffers before switching branches, pulling or applying stashes.
+
+Run `node scripts/git-smoke.mjs` against the native development app with the
+existing test CDP launcher. It tests real staged/working/unsaved diffs, commit,
+amend/undo, branch/tag/stash operations, cancellation and a local bare remote.
+`--appearance-only` runs the focused Light/Dark/custom-theme and activity-bar
+persistence checks without repeating the mutation workflows. Remote service
+credential dialogs and installed-release behavior still need release validation.
 
 ## Workspace search
 

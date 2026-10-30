@@ -22,6 +22,12 @@ import {
 import { defaults, parseSettings, type Settings } from "../settings/settings";
 import { startLanguageSession, type LanguageSession } from "../language/client";
 import { BufferVersion } from "./documents";
+import {
+  changesWorkingTree,
+  type GitAction,
+  type GitDiff,
+  type OpenGitDiff,
+} from "../sourceControl/types";
 import { protocolUri } from "../lib/uri";
 import { languageFeatures, type LanguageFeatures } from "../language/features";
 import { RecoveryPolicy } from "../language/recovery";
@@ -181,6 +187,72 @@ export class Workbench {
   private buildCancelRequested = false;
 
   private searchId = 0;
+
+  async runGit(
+    root: string,
+    id: number,
+    revision: string,
+    action: GitAction
+  ): Promise<string> {
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
+    if (building(this.state.build)) throw { code: "buildBusy" };
+    if (this.state.root !== root) throw { code: "gitChanged" };
+    const changesFiles = changesWorkingTree(action);
+    if (changesFiles && this.state.tabs.some((tab) => tab.dirty))
+      throw { code: "gitDirty" };
+    this.update({ mutationBusy: true });
+    this.codeEditor?.updateOptions({ readOnly: true });
+    try {
+      if (changesFiles) {
+        await this.stopWatching();
+        await this.diskQueue;
+        await Promise.all(this.saving.values());
+        if (this.state.tabs.some((tab) => tab.dirty))
+          throw { code: "gitDirty" };
+      }
+      return await native.git<string>(root, id, {
+        kind: "execute",
+        revision,
+        action,
+      });
+    } finally {
+      try {
+        if (changesFiles) {
+          for (const document of this.documents.values())
+            await this.reconcileDocument(document);
+          await this.restartLanguage();
+          this.update({ project: undefined, selectedBuild: "" });
+        }
+      } finally {
+        this.codeEditor?.updateOptions({ readOnly: false });
+        this.update({
+          mutationBusy: false,
+          treeVersion: this.state.treeVersion + 1,
+        });
+        await this.startWatching();
+      }
+    }
+  }
+
+  gitDiff(path: string, staged: boolean, value: GitDiff): OpenGitDiff {
+    const fullPath = this.state.root ? childPath(this.state.root, path) : "";
+    const document = [...this.documents.values()].find(
+      (document) =>
+        document.snapshot &&
+        pathKey(document.snapshot.path) === pathKey(fullPath)
+    );
+    const unsaved = !staged && Boolean(document?.versions.dirty);
+    return {
+      ...value,
+      path,
+      staged,
+      unsaved,
+      after:
+        unsaved && document && !value.unsupported
+          ? document.model.getValue()
+          : value.after,
+    };
+  }
 
   getSnapshot = (): WorkbenchState => this.state;
 
