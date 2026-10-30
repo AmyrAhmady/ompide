@@ -1405,7 +1405,9 @@ export class Workbench {
         // pawnlsp 0.33.75 can retain an empty project graph after a missing entry returns.
         // Restart only on presence transitions/rescan, reopening every unsaved buffer.
         if (reindex && this.language) await this.restartLanguage();
-        else if (relevant.length && this.language?.client.isRunning()) {
+        // A restarted server still needs the filesystem event after its initial
+        // document opens have settled, otherwise it can keep the missing graph.
+        if (relevant.length && this.language?.client.isRunning()) {
           await this.language.client.sendNotification(
             "workspace/didChangeWatchedFiles",
             {

@@ -55,7 +55,7 @@ try {
   await writeFile(preferences, JSON.stringify({ recentWorkspaces: [existing, setup, yaml, openmp], settings: { theme: 'dark' } }));
   await page.reload();
   await page.getByRole('button', { name: existing, exact: true }).click();
-  await page.getByRole('button', { name: 'main.pwn', exact: true }).click();
+  await page.getByRole('treeitem', { name: 'main.pwn', exact: true }).click();
   await assert.rejects(stat(path.join(existing, 'output')), { code: 'ENOENT' });
   await page.keyboard.press('Control+Shift+B');
   await expect(dialog()).toBeVisible();

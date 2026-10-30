@@ -26,13 +26,19 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.1`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.2`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
 includes declarations from included files in workspace-symbol results. It never
 writes unsaved buffers to disk. The regression fails on the original server and
-passes with the patch; the full upstream Go suite also passes.
+passes with the patch; the full upstream Go suite also passes. Version `.2` also
+disables unsafe compatible-expansion reuse for workspace entry analysis in
+pawn-analysis 0.30.3. Without that change, a cached valid entry can keep returning
+no argument-count diagnostic after an invalid edit, or retain an error after a
+correction. Token caching, trivia reuse, debounce and background analysis remain
+enabled. A synchronous workspace-analysis regression fails before this fix;
+real protocol tests cover repeated full-text and full-range valid/invalid edits.
 
 `pawnlsp-build.json` pins source/patch checksums and development compiler provenance.
 `scripts/build-pawnlsp.mjs` extracts a fresh verified source archive, applies the
@@ -159,8 +165,10 @@ configuration come from vscode-pawn commit
   so subsequent keyboard input reaches the selected document.
 - pawnlsp 0.34.47 crashes during rapid typing with an index-out-of-range panic in
   pawn-analysis 0.30.24 `preprocess.directiveRange`/`reuseCompatibleContext`.
-  Pin 0.33.75, which predates the incremental workspace expansion reuse and passes
-  both protocol and desktop typing tests. Do not update it without rerunning them.
+  Pin 0.33.75 with the local workspace-reuse fix described above. That older
+  release also has compatible-expansion reuse; do not assume a version pin alone
+  prevents stale diagnostics. Do not update it without rerunning protocol,
+  desktop typing and diagnostic-clear regressions.
 - PawnKit compares serialized file URI identities in some diagnostic paths. Use
   standard client URI converters to agree with native/PawnKit file URLs, including
   uppercase Windows drive letters and literal drive colons, while preserving URL
@@ -178,7 +186,9 @@ configuration come from vscode-pawn commit
 - pawnlsp 0.33.75 can retain an empty project graph after an entry file is removed
   and restored. Restart on open-file presence transitions or watcher overflow;
   preserve and reopen all unsaved models. Ordinary disk writes use standard
-  watched-file notifications without restarting the server.
+  watched-file notifications without restarting the server. Presence-transition
+  notifications are still forwarded after a restart and after initial opens
+  settle, so project reload sees the restored files and current unsaved buffers.
 - Serialize document changes above the transport. VS Code's pending initial
   opens can otherwise race edits when restarting with background documents.
   Explicitly flush public didOpen providers, order changes/requests/save/close,

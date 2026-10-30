@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "0.33.75-pawnide.1",
+  "version": "0.33.75-pawnide.2",
   "goVersion": "go1.26.5",
   "source": {
     "commit": "bffabaa538c3b290fe22ccfbb61c3a4558af2a33",
@@ -10,7 +10,7 @@
   },
   "patch": {
     "path": "patches/pawnlsp-open-overlays.patch",
-    "sha256": "dec55efa1cd7f9ab99dc8e73fc582ae797dd3563b41d133043f8ab454e9e5227"
+    "sha256": "6f352bbc64003dac11f34e7eeef4d70f5d5c3fb9520d67e3f05145b7addcafe0"
   },
   "developmentGoDistribution": {
     "url": "https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-win32-x64.zip",

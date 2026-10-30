@@ -27,7 +27,6 @@ index f9fbf7a..add7427 100644
  github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 diff --git a/lsp/open_overlays.go b/lsp/open_overlays.go
 new file mode 100644
-index 0000000..4a9911c
 --- /dev/null
 +++ b/lsp/open_overlays.go
 @@ -0,0 +1,69 @@
@@ -102,7 +101,6 @@ index 0000000..4a9911c
 +}
 diff --git a/lsp/open_overlays_test.go b/lsp/open_overlays_test.go
 new file mode 100644
-index 0000000..232e9f5
 --- /dev/null
 +++ b/lsp/open_overlays_test.go
 @@ -0,0 +1,98 @@
@@ -242,10 +240,24 @@ index 91bf675..fcd9909 100644
  			Revision:                 fmt.Sprintf("%s:%T:%T:%d", doc.Path, doc.Includes, doc.Names, doc.Revision),
  			TokenCache:               s.tokenCache,
 diff --git a/lsp/workspace.go b/lsp/workspace.go
-index f834c01..0021e91 100644
+index f834c01..3dbcce0 100644
 --- a/lsp/workspace.go
 +++ b/lsp/workspace.go
-@@ -309,35 +309,41 @@ func (s *server) workspaceSymbols(id, raw json.RawMessage) error {
+@@ -257,10 +257,12 @@ func analyzeWorkspaceEntry(
+ 			return nil, err
+ 		}
+ 	}
++	// pawn-analysis 0.30.3 can retain stale argument diagnostics when reusing
++	// compatible expansions. Keep token/trivia caches but rebuild changed code.
+ 	return analysis.AnalyzeContext(ctx, text, analysis.Options{
+ 		URI: coresource.FileURI(entry), Includes: workspaceOverlayResolver{base: includes, open: open}, Names: names, RetainExpanded: true,
+ 		Revision: root, MaxOutputTokens: analysisOutputTokenLimit, TokenCache: tokenCache, Previous: previous,
+-		ReuseCompatibleExpansion: true, CollectFunctionFacts: true,
++		ReuseCompatibleExpansion: false, CollectFunctionFacts: true,
+ 	})
+ }
+ 
+@@ -309,35 +311,41 @@ func (s *server) workspaceSymbols(id, raw json.RawMessage) error {
  	queryText := strings.ToLower(params.Query)
  	items := make([]map[string]any, 0)
  	seen := make(map[string]bool)
@@ -310,3 +322,57 @@ index f834c01..0021e91 100644
  		}
  	}
  	sort.Slice(items, func(i, j int) bool {
+diff --git a/lsp/workspace_diagnostics_reuse_test.go b/lsp/workspace_diagnostics_reuse_test.go
+new file mode 100644
+--- /dev/null
++++ b/lsp/workspace_diagnostics_reuse_test.go
+@@ -0,0 +1,49 @@
++package lsp
++
++import (
++	"context"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	analysis "github.com/pawnkit/pawn-analysis"
++	"github.com/pawnkit/pawn-analysis/preprocess"
++)
++
++func TestWorkspaceDiagnosticsFollowArgumentEdits(t *testing.T) {
++	root := t.TempDir()
++	entry := filepath.Join(root, "main.pwn")
++	valid := "#include \"math.inc\"\nmain() { return Add(1, 2); }\n"
++	for name, text := range map[string]string{
++		"pawn.json": `{"entry":"main.pwn"}`,
++		"main.pwn":  valid,
++		"math.inc":  "stock Add(left, right) { return left + right; }\n",
++	} {
++		if err := os.WriteFile(filepath.Join(root, name), []byte(text), 0o600); err != nil {
++			t.Fatal(err)
++		}
++	}
++	includes, _, projectRoot, resolvedEntry := loadProjectContext(entry)
++	cache := preprocess.NewTokenCache()
++	var previous *analysis.Result
++	for _, invalid := range []bool{false, true, false, true, false} {
++		text := valid
++		if invalid {
++			text = strings.Replace(text, "Add(1, 2)", "Add(1)", 1)
++		}
++		current, err := analyzeWorkspaceEntry(context.Background(), projectRoot, resolvedEntry,
++			map[string][]byte{workspacePathKey(entry): []byte(text)}, includes, nil, cache, previous)
++		if err != nil {
++			t.Fatal(err)
++		}
++		found := false
++		for _, finding := range current.Diagnostics {
++			found = found || strings.HasSuffix(finding.Code, "sema/argument-count")
++		}
++		if found != invalid {
++			t.Fatalf("invalid=%v, argument diagnostic=%v: %#v", invalid, found, current.Diagnostics)
++		}
++		previous = current
++	}
++}

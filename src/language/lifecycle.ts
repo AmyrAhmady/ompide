@@ -76,7 +76,11 @@ export class DocumentLifecycle {
   async close(uri: string, send: () => Promise<void>): Promise<void> {
     if (this.disposed) return;
     const state = this.documents.get(uri);
-    if (state) await state.changes;
+    if (state) {
+      await state.opened;
+      await state.changes;
+    }
+    if (this.disposed || state?.disposed) return;
     await send();
     this.documents.delete(uri);
   }
@@ -91,7 +95,10 @@ export class DocumentLifecycle {
 
   async changes(): Promise<void> {
     await Promise.all(
-      [...this.documents.values()].map((state) => state.changes)
+      [...this.documents.values()].map(async (state) => {
+        await state.opened;
+        await state.changes;
+      })
     );
   }
 
