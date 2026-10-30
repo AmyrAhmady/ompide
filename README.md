@@ -296,6 +296,12 @@ on the local machine, not a guarantee for every device or a substitute for insta
 release verification. The script restores preferences and removes its generated
 files; it reports if Windows retains an otherwise empty temporary directory.
 
+Run `node scripts/security-smoke.mjs` to exercise native authorization directly,
+including outside paths, Windows junctions, protected entries, stale session IDs
+and history/grant revocation. It uses disposable fixtures, restores preferences
+and closes the test app. [Application boundaries](SECURITY.md) documents the
+ownership model and release checks still required.
+
 Run `node scripts/theme-smoke.mjs` to verify local file import, validation,
 customization/cancellation, Monaco syntax colors, Light/Dark/custom switching
 and native preference reload. It also rejects CSS/network content, records
