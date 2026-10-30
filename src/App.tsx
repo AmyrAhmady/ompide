@@ -12,6 +12,13 @@ import { Explorer } from "./explorer/Explorer";
 import { t } from "./lib/i18n";
 import { Menubar, Menu, MenuItem } from "./components/Menubar";
 import { Modal } from "./components/Modal";
+import { CommandPalette } from "./components/CommandPalette";
+import {
+  createCommands,
+  executeCommand,
+  type AppCommand,
+} from "./app/commands";
+import type { TranslationKey } from "./lib/i18n";
 import { ProjectDialog } from "./build/ProjectDialog";
 import { BuildPanel } from "./build/BuildPanel";
 import { building } from "./build/types";
@@ -28,6 +35,17 @@ import "./App.css";
 const run = (operation: () => Promise<unknown>) => {
   void operation().catch(workbench.report);
 };
+
+function CommandMenuItem({ command }: { command: AppCommand }) {
+  return (
+    <MenuItem
+      label={command.label}
+      shortcut={command.shortcut}
+      disabled={!command.enabled}
+      action={() => executeCommand(command, workbench.report)}
+    />
+  );
+}
 
 function SettingsDialog({
   settings,
@@ -280,6 +298,7 @@ function App() {
     workbench.getSnapshot
   );
   const container = useRef<HTMLDivElement>(null);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [symbolsOpen, setSymbolsOpen] = useState<
     "document" | "workspace" | undefined
@@ -307,6 +326,27 @@ function App() {
     setProblemsOpen(false);
     run(() => workbench.buildProject());
   };
+  const registeredCommands = createCommands(state, workbench, nativeReady, {
+    settings: () => setSettingsOpen(true),
+    project: () => setProjectOpen(true),
+    explorer: () => {
+      setSearchOpen(false);
+      setExplorerReveal((value) => value + 1);
+    },
+    search: () => setSearchOpen(true),
+    quickOpen: () => setQuickOpen(true),
+    problems: () => setProblemsOpen((value) => !value),
+    symbols: setSymbolsOpen,
+    build: startBuild,
+    buildOutput: () => {
+      setBuildOpen(true);
+      setProblemsOpen(false);
+    },
+    palette: () => setCommandOpen(true),
+  });
+
+  const command = (label: TranslationKey) =>
+    registeredCommands.find((entry) => entry.label === label)!;
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => void) | undefined;
@@ -329,6 +369,7 @@ function App() {
     const handle = (event: KeyboardEvent) => {
       if (
         state.prompt ||
+        commandOpen ||
         settingsOpen ||
         symbolsOpen ||
         projectOpen ||
@@ -339,6 +380,12 @@ function App() {
       const modifier = event.ctrlKey || event.metaKey;
       let operation: (() => Promise<unknown>) | undefined;
       const key = event.key.toLowerCase();
+      if (event.key === "F1" || (modifier && event.shiftKey && key === "p")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (state.ready) setCommandOpen(true);
+        return;
+      }
       if (modifier && key === "k") {
         chordUntil = Date.now() + 1500;
         event.preventDefault();
@@ -411,6 +458,8 @@ function App() {
     return () => window.removeEventListener("keydown", handle, true);
   }, [
     state.active,
+    state.ready,
+    commandOpen,
     state.prompt,
     state.languageFeatures,
     state.root,
@@ -448,61 +497,17 @@ function App() {
         </span>
         <Menubar label={t("app.name")}>
           <Menu label="menu.file">
-            <MenuItem
-              label="command.newFile"
-              shortcut="Ctrl+N"
-              disabled={!nativeReady}
-              action={() => run(() => workbench.newFile())}
-            />
-            <MenuItem
-              label="command.openFile"
-              shortcut="Ctrl+O"
-              disabled={!nativeReady}
-              action={() => run(() => workbench.openFile())}
-            />
-            <MenuItem
-              label="command.openFolder"
-              shortcut="Ctrl+K Ctrl+O"
-              disabled={!nativeReady}
-              action={() => run(() => workbench.chooseFolder())}
-            />
+            <CommandMenuItem command={command("command.newFile")} />
+            <CommandMenuItem command={command("command.openFile")} />
+            <CommandMenuItem command={command("command.openFolder")} />
             <hr />
-            <MenuItem
-              label="command.save"
-              shortcut="Ctrl+S"
-              disabled={!active}
-              action={() => run(() => workbench.save())}
-            />
-            <MenuItem
-              label="command.saveAs"
-              shortcut="Ctrl+Shift+S"
-              disabled={!active}
-              action={() => run(() => workbench.save(undefined, true))}
-            />
-            <MenuItem
-              label="command.saveAll"
-              shortcut="Ctrl+Alt+S"
-              disabled={!active}
-              action={() => run(() => workbench.saveAll())}
-            />
+            <CommandMenuItem command={command("command.save")} />
+            <CommandMenuItem command={command("command.saveAs")} />
+            <CommandMenuItem command={command("command.saveAll")} />
             <hr />
-            <MenuItem
-              label="command.close"
-              shortcut="Ctrl+W"
-              disabled={!active}
-              action={() => run(() => workbench.close(state.active!))}
-            />
-            <MenuItem
-              label="command.reopen"
-              shortcut="Ctrl+Shift+T"
-              disabled={!nativeReady}
-              action={() => run(() => workbench.reopen())}
-            />
-            <MenuItem
-              label="command.reload"
-              disabled={!active}
-              action={() => run(() => workbench.reload())}
-            />
+            <CommandMenuItem command={command("command.close")} />
+            <CommandMenuItem command={command("command.reopen")} />
+            <CommandMenuItem command={command("command.reload")} />
             {state.recentFiles.length > 0 && (
               <>
                 <hr />
@@ -526,151 +531,49 @@ function App() {
               </>
             )}
             <hr />
-            <MenuItem
-              label="command.quit"
-              disabled={!nativeReady}
-              action={() => run(() => workbench.quit())}
-            />
+            <CommandMenuItem command={command("command.quit")} />
           </Menu>
           <Menu label="menu.edit">
             {(
               [
-                ["command.undo", "undo", "Ctrl+Z"],
-                ["command.redo", "redo", "Ctrl+Y"],
-                ["command.find", "actions.find", "Ctrl+F"],
-                [
-                  "command.replace",
-                  "editor.action.startFindReplaceAction",
-                  "Ctrl+H",
-                ],
+                "command.undo",
+                "command.redo",
+                "command.find",
+                "command.replace",
+                "command.format",
+                "command.codeActions",
               ] as const
-            ).map(([label, action, shortcut]) => (
-              <MenuItem
-                key={action}
-                label={label}
-                shortcut={shortcut}
-                disabled={!active}
-                action={() => run(() => workbench.action(action))}
-              />
+            ).map((label) => (
+              <CommandMenuItem key={label} command={command(label)} />
             ))}
-            <MenuItem
-              label="command.format"
-              shortcut="Shift+Alt+F"
-              disabled={!active || !state.languageFeatures?.formatting}
-              action={() =>
-                run(() => workbench.action("editor.action.formatDocument"))
-              }
-            />
-            <MenuItem
-              label="command.codeActions"
-              shortcut="Ctrl+."
-              disabled={!active || !state.languageFeatures?.codeActions}
-              action={() =>
-                run(() => workbench.action("editor.action.quickFix"))
-              }
-            />
           </Menu>
           <Menu label="menu.view">
-            <MenuItem
-              label="explorer.title"
-              shortcut="Ctrl+Shift+E"
-              disabled={!nativeReady || !state.root}
-              action={() => {
-                setSearchOpen(false);
-                setExplorerReveal((value) => value + 1);
-              }}
-            />
-            <MenuItem
-              label="command.problems"
-              shortcut="Ctrl+J"
-              action={() => setProblemsOpen((value) => !value)}
-            />
-            <MenuItem
-              label="command.settings"
-              shortcut="Ctrl+,"
-              disabled={!state.ready}
-              action={() => setSettingsOpen(true)}
-            />
-            <MenuItem
-              label="search.title"
-              shortcut="Ctrl+Shift+F"
-              action={() => setSearchOpen((value) => !value)}
-            />
-            <MenuItem
-              label="search.files"
-              shortcut="Ctrl+P"
-              disabled={!nativeReady || !state.root}
-              action={() => setQuickOpen(true)}
-            />
+            <CommandMenuItem command={command("command.palette")} />
+            <CommandMenuItem command={command("explorer.title")} />
+            <CommandMenuItem command={command("command.problems")} />
+            <CommandMenuItem command={command("command.settings")} />
+            <CommandMenuItem command={command("search.title")} />
+            <CommandMenuItem command={command("search.files")} />
           </Menu>
           <Menu label="menu.go">
             {(
               [
-                [
-                  "command.definition",
-                  "editor.action.revealDefinition",
-                  "F12",
-                  "definition",
-                ],
-                [
-                  "command.references",
-                  "editor.action.goToReferences",
-                  "Shift+F12",
-                  "references",
-                ],
-                ["command.rename", "editor.action.rename", "F2", "rename"],
+                "command.definition",
+                "command.references",
+                "command.rename",
               ] as const
-            ).map(([label, action, shortcut, feature]) => (
-              <MenuItem
-                key={action}
-                label={label}
-                shortcut={shortcut}
-                disabled={!active || !state.languageFeatures?.[feature]}
-                action={() => run(() => workbench.action(action))}
-              />
+            ).map((label) => (
+              <CommandMenuItem key={label} command={command(label)} />
             ))}
-            <MenuItem
-              label="command.symbols"
-              shortcut="Ctrl+Shift+O"
-              disabled={!active || !state.languageFeatures?.symbols}
-              action={() => setSymbolsOpen("document")}
-            />
-            <MenuItem
-              label="command.workspaceSymbols"
-              shortcut="Ctrl+T"
-              disabled={!state.languageFeatures?.workspaceSymbols}
-              action={() => setSymbolsOpen("workspace")}
-            />
-            <MenuItem
-              label="command.restartLanguage"
-              disabled={!nativeReady}
-              action={() => run(() => workbench.restartLanguage())}
-            />
+            <CommandMenuItem command={command("command.symbols")} />
+            <CommandMenuItem command={command("command.workspaceSymbols")} />
+            <CommandMenuItem command={command("command.restartLanguage")} />
           </Menu>
           <Menu label="menu.build">
-            <MenuItem
-              label="build.command"
-              shortcut="Ctrl+Shift+B"
-              disabled={!nativeReady || !state.root || buildBusy}
-              action={startBuild}
-            />
-            <MenuItem
-              label="build.cancel"
-              disabled={!buildBusy}
-              action={() => run(() => workbench.cancelBuild())}
-            />
-            <MenuItem
-              label="project.title"
-              disabled={!nativeReady || !state.root || buildBusy}
-              action={() => setProjectOpen(true)}
-            />
-            <MenuItem
-              label="build.output"
-              action={() => {
-                setBuildOpen(true);
-                setProblemsOpen(false);
-              }}
-            />
+            <CommandMenuItem command={command("build.command")} />
+            <CommandMenuItem command={command("build.cancel")} />
+            <CommandMenuItem command={command("project.title")} />
+            <CommandMenuItem command={command("build.output")} />
           </Menu>
         </Menubar>
         <span className="window-title">
@@ -984,6 +887,12 @@ function App() {
         />
       )}
       {quickOpen && <QuickOpen close={() => setQuickOpen(false)} />}
+      {commandOpen && (
+        <CommandPalette
+          commands={registeredCommands}
+          close={() => setCommandOpen(false)}
+        />
+      )}
     </main>
   );
 }

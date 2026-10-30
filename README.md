@@ -99,6 +99,19 @@ Changed buffers or files invalidate old previews. Search excludes dependency/bui
 directories, symlinks, binary/unsupported files and files over 8 MiB; results and
 preview sizes are bounded, with incomplete previews prevented from applying.
 
+## Commands
+
+Press **F1** or **Ctrl+Shift+P**, or use **View → Command Palette…**, to search
+commands by words or shortcut. Arrow keys select an available command, Enter runs
+it and Escape restores focus. Unavailable commands are identified explicitly.
+**Ctrl+P** remains workspace file lookup.
+
+Menus and the palette use the same command definitions and availability rules.
+Pawn language actions require a real Pawn file and negotiated server support;
+they are unavailable for untitled or JSON buffers. Reopen becomes available after
+closing a file. The palette also offers Focus Editor, Toggle Minimap and Toggle
+Word Wrap; editor preferences persist in the application data directory.
+
 ## Explorer
 
 Use the Explorer toolbar or a folder's context menu to create files and folders.
@@ -177,6 +190,12 @@ Recycle Bin fixtures, records Light/Dark screenshots and closes the application.
 The core `restore_explorer_smoke_items` test is excluded from ordinary unit runs
 because it requires that live smoke fixture; the script explicitly supplies the
 fixture path and runs the helper with `--ignored` to verify restoration.
+
+Run `node scripts/commands-smoke.mjs` with the same inspection setup to verify
+palette shortcuts/search, unavailable commands, real Save All, Settings/Find,
+persisted Monaco toggles, reopen history and dialog focus restoration. The script
+backs up/restores preferences, uses disposable source files, records Light/Dark
+screenshots and closes the test application.
 
 Run `node scripts/build-smoke.mjs` with the same native inspection setup for
 compilation, diagnostic navigation, manifest setup, named builds, YAML, official

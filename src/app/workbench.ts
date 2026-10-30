@@ -105,6 +105,7 @@ export interface WorkbenchState {
   selectedBuild: string;
   build: BuildState;
   mutationBusy: boolean;
+  canReopen: boolean;
 }
 
 export class Workbench {
@@ -122,6 +123,7 @@ export class Workbench {
     selectedBuild: "",
     build: { phase: "idle" },
     mutationBusy: false,
+    canReopen: false,
   };
 
   private subscribers = new Set<() => void>();
@@ -191,6 +193,7 @@ export class Workbench {
     this.state = {
       ...this.state,
       ...patch,
+      canReopen: this.closed.length > 0,
       tabs: [...this.documents.values()].map((document) => ({
         uri: document.uri,
         name: document.name,
