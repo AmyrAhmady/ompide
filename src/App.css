@@ -760,6 +760,20 @@ dialog footer button.primary {
 .project-tool {
   margin: 12px 0;
 }
+.dependency-review {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 18px;
+}
+.dependency-review ul {
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}
+.dependency-record summary {
+  overflow-wrap: anywhere;
+}
+.dependency-record dl {
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+}
 .build-panel {
   height: 280px;
   min-height: 140px;

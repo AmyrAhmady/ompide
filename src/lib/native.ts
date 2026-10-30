@@ -1,5 +1,6 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { Settings } from "../settings/settings";
+import type { DependencyReview } from "../build/dependencies";
 import type {
   Discovery,
   ProjectInfo,
@@ -83,6 +84,8 @@ export const native = {
   discoverProjects: () => invoke<Discovery>("discover_projects"),
   inspectProject: (path: string) =>
     invoke<ProjectInfo>("inspect_project", { path }),
+  reviewDependencies: (path: string) =>
+    invoke<DependencyReview>("review_project_dependencies", { path }),
   buildTools: () => invoke<BuildTools>("build_tools"),
   chooseBuildTool: (compiler: boolean) =>
     invoke<string | null>("choose_build_tool", { compiler }),

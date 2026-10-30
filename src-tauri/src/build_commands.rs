@@ -51,7 +51,7 @@ pub struct BuildResult {
     exit_code: Option<i32>,
 }
 
-fn root(state: &NativeState, selected: Option<PathBuf>) -> Result<Workspace> {
+pub(super) fn root(state: &NativeState, selected: Option<PathBuf>) -> Result<Workspace> {
     let guard = lock(&state.workspace)?;
     let workspace = guard
         .as_ref()

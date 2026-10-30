@@ -4,6 +4,7 @@ import { Modal } from "../components/Modal";
 import { t, describeError } from "../lib/i18n";
 import { buildConfiguration } from "./configuration";
 import type { Discovery, BuildTools } from "./types";
+import { DependencySection } from "./DependencySection";
 
 export function ProjectDialog({
   state,
@@ -257,6 +258,18 @@ export function ProjectDialog({
               {t("project.editManifest")}
             </button>
           </section>
+        )}
+        {project && (
+          <DependencySection
+            key={project.manifest.path}
+            state={state}
+            openFile={(path) =>
+              execute(async () => {
+                await workbench.openPath(path);
+                close();
+              })
+            }
+          />
         )}
         <fieldset>
           <legend>{t("project.tools")}</legend>

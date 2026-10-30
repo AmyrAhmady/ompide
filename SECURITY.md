@@ -77,6 +77,14 @@ framing limits, blocked-pipe shutdown, process limits/descendant cancellation an
 Recycle Bin restoration. Native Search, Explorer, language, build and theme smoke
 tests verify corresponding user workflows.
 
+Dependency review is read-only: it parses saved manifests/locks without invoking
+the CLI or creating targets. Native scope checks run before reading a project,
+and core review rejects traversal, protected Git paths, junctions, credentialed
+source URLs, invalid commit/checksum formats and colliding source destinations.
+It reports lock contents rather than certifying installed checkouts. Native
+dependency smoke verifies denied unselected/outside access, no acquired files or
+external WebView requests, error recovery and preservation of dirty lock buffers.
+
 Installed-release CSP, bundled tool placement and the full install/edit/build
 workflow remain part of release verification. The planned dependency-management
 workflow introduces explicit acquisition and must receive its own source/checksum,

@@ -258,5 +258,33 @@
   "error.invalidLanguageEdit": "The language server returned an invalid edit range. No edits were applied.",
   "error.operationFailed": "The operation failed.",
   "error.watchFailed": "File watching failed. Use Refresh Explorer or Reload from Disk to check for external changes.",
-  "error.themeInvalid": "Invalid theme file: {reason}"
+  "error.themeInvalid": "Invalid theme file: {reason}",
+  "error.dependencyReview": "Dependencies could not be reviewed. Check the saved manifest and lockfile format, source URLs, pinned commits, and project-relative paths.",
+  "dependencies.title": "Dependencies",
+  "dependencies.reviewHint": "Review saved declarations, locked sources and assets. Reviewing does not install or download anything. Refresh the review after changing files.",
+  "dependencies.review": "Review Dependencies",
+  "dependencies.reading": "Reading dependencies…",
+  "dependencies.dirtyInputs": "The manifest or lockfile has unsaved changes. This review shows the saved version; your edits are preserved.",
+  "dependencies.declarations": "Declared dependencies",
+  "dependencies.development": "(development)",
+  "dependencies.noDeclarations": "No dependencies are declared in the saved manifest.",
+  "dependencies.lockfile": "Lockfile",
+  "dependencies.openLockfile": "Open Lockfile",
+  "dependencies.lockedSources": {
+    "one": "{count} locked source",
+    "other": "{count} locked sources"
+  },
+  "dependencies.noLockedSources": "No sources are recorded in this lockfile.",
+  "dependencies.localSource": "Local source",
+  "dependencies.gitSource": "Git source",
+  "dependencies.commit": "Locked commit",
+  "dependencies.checksum": "SHA-256",
+  "dependencies.destination": "Destination",
+  "dependencies.destinations": "Destinations",
+  "dependencies.lockedResources": {
+    "one": "{count} locked asset",
+    "other": "{count} locked assets"
+  },
+  "dependencies.assetSource": "Asset source",
+  "dependencies.missingLockfile": "No saved lockfile was found at this path. Sources and assets cannot be restored from a lockfile yet."
 }

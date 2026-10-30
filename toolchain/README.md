@@ -199,3 +199,46 @@ configuration come from vscode-pawn commit
   Explicitly flush public didOpen providers, order changes/requests/save/close,
   and cancel retired-session requests during shutdown. The desktop smoke checks
   real diagnostics after reopen, conflicting external changes and rename/restore.
+
+## Dependency command contract
+
+Reviewed against pawnkit-cli **v1.34.38**, commit
+`bacacd60b442e7602533fe07a72a1bf33caf0a2f`, and pawn-project **v0.34.2**,
+commit `14c28fb0fedb0bf4b6be647b6b17fd1e94061b04`. Sources:
+`pkg/cli/{install,restore,dependency_cache}.go` in
+[pawnkit-cli](https://github.com/pawnkit/pawnkit-cli/tree/v1.34.38/pkg/cli), and
+`dependency` / `lockfile` in
+[pawn-project](https://github.com/pawnkit/pawn-project/tree/v0.34.2).
+
+- `pawn restore --project DIR --format json` restores locked source revisions
+  and locked resources for the host target. It requires a lockfile; it does not
+  resolve new dependencies or rewrite the lock. Never pass `--backend`.
+- `pawn install --project DIR --format json` may resolve the graph, write source
+  records, acquire sources, resolve release assets and update resource records.
+  `--update` explicitly refreshes revisions. Installation can change source
+  records as well as the PawnKit resource section.
+- Both return schema 1: `dependencies` contains `{name,path,status}`, where status
+  is `installed`, `present` or `local`. Optional `resources` contains
+  `{package,resource,target,files}`. Paths can use forward slashes on Windows.
+  Failure can return only stderr, after partial changes have already been made.
+- Source restoration uses Git on PATH, credential-free HTTPS URLs, locked commits
+  and optional directory SHA-256 integrity. It uses the shared OS cache under
+  `pawnkit/pawn-project/dependencies`. Missing cached sources may require network
+  access. There is no `restore --offline` switch. Existing verified clean
+  checkouts or a populated cache can work offline; assets are fetched and verified
+  against locked archive/file sizes and checksums.
+- Remote source targets are `dependencies/<repo>`, not `<owner>/<repo>`.
+  Check collisions case-insensitively on Windows. Local sources stay at their
+  declared paths. Directory existence does not prove that a checkout is verified.
+- Locks can use `schemaVersion: 1` plus `packages`/`resources`, or sampctl's
+  `version: 1` plus `dependencies` and optional
+  `pawnkit: {schema_version: 1, resources: [...]}`. Respect `pawnkit.lockfile`
+  in the manifest. Core review reports saved inputs, commits, checksums, asset
+  targets and destinations without running tools or writing files. It does not
+  replace PawnKit semantic validation or authorize a later acquisition. Recheck
+  revisions, scope and dirty buffers before execution.
+
+`npm run test:dependencies` exercises the prepared pinned CLI against disposable
+local sources in both lock formats, with unchanged inputs and no acquisition.
+Core tests cover read-only review, path/junction rejection, source identity and
+limits. Dependency execution remains a separate unfinished milestone.

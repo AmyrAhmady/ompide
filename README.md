@@ -89,6 +89,25 @@ using manual/offline installations. The current Windows compiler workflow requir
 ASCII project/compiler paths. For the pinned PawnKit YAML extension limitation,
 see [the toolchain notes](toolchain/README.md).
 
+## Reviewing project dependencies
+
+In **Build → Configure Project…**, choose **Review Dependencies** to inspect
+saved declarations and the selected project's lockfile. Both PawnKit and
+sampctl-compatible locks are supported, including `pawnkit.lockfile` overrides.
+Expand a source or asset to see its URL, locked commit/checksum, host target and
+destination. **Open Lockfile** opens the real file in the editor.
+
+Reviewing reads saved files and never installs, downloads or starts a build.
+Unsaved manifest/lockfile edits stay in their buffers and are identified in the
+review. Refresh the review after changing files. Installation/restoration actions
+remain unfinished; this view does not verify installed checkout state.
+
+Run `npm run test:dependencies` with prepared tools for the local-only pinned CLI
+contract check. `node scripts/dependencies-smoke.mjs` uses the native debug app's
+loopback CDP connection on port 9222 to verify the real review UI and authorization,
+dirty-buffer preservation, malformed-lock recovery and both default themes. It
+uses disposable fixtures, restores preferences and closes the test application.
+
 ## Workspace search
 
 Use **Ctrl+P** to find workspace files by path and **Ctrl+Shift+F** for literal
