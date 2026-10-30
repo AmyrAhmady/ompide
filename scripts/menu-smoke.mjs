@@ -84,49 +84,33 @@ try {
     await expect(opened).toHaveCount(0);
 
     // Keyboard navigation wraps, skips disabled commands, and restores focus on dismissal.
+    const viewCommands = [
+      "Command Palette… Ctrl+Shift+P",
+      "Problems Ctrl+J",
+      "Settings Ctrl+,",
+      "Search Workspace Ctrl+Shift+F",
+      "Toggle Sidebar Ctrl+B",
+      "Toggle Bottom Panel",
+      "Reset Layout",
+    ];
     await heading("View").focus();
+    for (const name of viewCommands) {
+      await page.keyboard.press("ArrowDown");
+      await expect(
+        page.getByRole("menuitem", { name, exact: true })
+      ).toBeFocused();
+    }
     await page.keyboard.press("ArrowDown");
     await expect(
-      page.getByRole("menuitem", {
-        name: "Command Palette… Ctrl+Shift+P",
-        exact: true,
-      })
-    ).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(
-      page.getByRole("menuitem", { name: "Problems Ctrl+J", exact: true })
-    ).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(
-      page.getByRole("menuitem", { name: "Settings Ctrl+,", exact: true })
-    ).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(
-      page.getByRole("menuitem", {
-        name: "Search Workspace Ctrl+Shift+F",
-        exact: true,
-      })
-    ).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(
-      page.getByRole("menuitem", {
-        name: "Command Palette… Ctrl+Shift+P",
-        exact: true,
-      })
+      page.getByRole("menuitem", { name: viewCommands[0], exact: true })
     ).toBeFocused();
     await page.keyboard.press("End");
     await expect(
-      page.getByRole("menuitem", {
-        name: "Search Workspace Ctrl+Shift+F",
-        exact: true,
-      })
+      page.getByRole("menuitem", { name: viewCommands.at(-1), exact: true })
     ).toBeFocused();
     await page.keyboard.press("Home");
     await expect(
-      page.getByRole("menuitem", {
-        name: "Command Palette… Ctrl+Shift+P",
-        exact: true,
-      })
+      page.getByRole("menuitem", { name: viewCommands[0], exact: true })
     ).toBeFocused();
     await page.keyboard.press("ArrowRight");
     await assertOpen("Go");

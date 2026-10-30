@@ -1,3 +1,5 @@
+import { defaultLayout, parseLayout, type Layout } from "./layout";
+
 export interface Settings {
   theme: "light" | "dark";
   fontSize: number;
@@ -10,6 +12,7 @@ export interface Settings {
   languageServerPath: string;
   compilerPath: string;
   pawnPath: string;
+  layout: Layout;
 }
 
 export const defaults: Settings = {
@@ -24,12 +27,14 @@ export const defaults: Settings = {
   languageServerPath: "",
   compilerPath: "",
   pawnPath: "",
+  layout: { ...defaultLayout },
 };
 
 export function parseSettings(value: unknown): Settings {
   const settings = { ...defaults };
   if (typeof value !== "object" || value === null) return settings;
   const source = value as Record<string, unknown>;
+  settings.layout = parseLayout(source.layout);
   if (source.theme === "light" || source.theme === "dark")
     settings.theme = source.theme;
   for (const key of ["fontSize", "tabSize"] as const) {

@@ -222,6 +222,7 @@ export function SearchPanel({
       <div className="search-fields">
         <label className="search-query-row">
           <input
+            data-search-query="true"
             autoFocus
             type="text"
             maxLength={1024}

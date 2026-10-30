@@ -20,6 +20,9 @@ export interface CommandViews {
   build: () => void;
   buildOutput: () => void;
   palette: () => void;
+  toggleSidebar: () => void;
+  togglePanel: () => void;
+  resetLayout: () => void;
 }
 
 /** Menus and the palette share command availability and execution. */
@@ -167,6 +170,9 @@ export function createCommands(
     workbench.settings({ wordWrap: !state.settings.wordWrap })
   );
   add("command.palette", state.ready, views.palette, "Ctrl+Shift+P");
+  add("layout.toggleSidebar", state.ready, views.toggleSidebar, "Ctrl+B");
+  add("layout.togglePanel", state.ready, views.togglePanel);
+  add("layout.reset", state.ready, views.resetLayout);
   return commands;
 }
 

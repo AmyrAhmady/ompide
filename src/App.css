@@ -139,15 +139,57 @@ hr {
   min-height: 0;
 }
 .explorer {
-  width: 235px;
+  width: var(--sidebar-width, 235px);
   min-width: 170px;
-  max-width: 40%;
+  max-width: min(640px, calc(100% - 284px));
   flex-shrink: 0;
   overflow: auto;
-  resize: horizontal;
   background: var(--sideBar-background);
   color: var(--sideBar-foreground);
-  border-right: 1px solid var(--panel-border);
+}
+.explorer[hidden] {
+  display: none;
+}
+.pane-resizer {
+  flex-shrink: 0;
+  background: var(--panel-border);
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.pane-resizer.vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+.pane-resizer.horizontal {
+  height: 4px;
+  cursor: row-resize;
+}
+.pane-resizer:hover,
+.pane-resizer:focus-visible {
+  background: var(--focusBorder);
+  outline: 1px solid var(--focusBorder);
+  outline-offset: -1px;
+}
+.pane-resizer[aria-disabled="true"] {
+  pointer-events: none;
+}
+.bottom-panel {
+  height: var(--panel-height, 220px);
+  min-height: min(100px, max(35px, calc(100% - var(--panel-reserve, 160px))));
+  max-height: min(
+    var(--panel-limit, 800px),
+    calc(100% - var(--panel-reserve, 160px))
+  );
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.bottom-panel > .problems-panel,
+.bottom-panel > .build-panel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border-top: 0;
 }
 .panel-heading {
   display: flex;
@@ -322,7 +364,7 @@ hr {
 .editor-area {
   position: relative;
   flex: 1;
-  min-height: 0;
+  min-height: 120px;
 }
 .monaco-container {
   width: 100%;
@@ -458,6 +500,8 @@ hr {
 }
 .external-notice {
   display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
   gap: 12px;
   align-items: center;
   padding: 8px 14px;
@@ -465,7 +509,7 @@ hr {
   background: var(--editorWidget-background);
 }
 .external-notice span {
-  flex: 1;
+  flex: 1 1 180px;
 }
 .external-notice button {
   background: var(--button-background);
@@ -615,9 +659,6 @@ dialog footer button.primary {
 @media (max-width: 900px) {
   .window-title {
     padding-right: 15px;
-  }
-  .explorer {
-    width: 190px;
   }
 }
 .project-dialog {

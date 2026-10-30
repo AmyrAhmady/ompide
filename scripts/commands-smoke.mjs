@@ -149,7 +149,7 @@ try {
   );
 
   await find("toggle");
-  await palette().getByRole("combobox").press("ArrowDown");
+  await palette().getByRole("combobox").press("Control+End");
   await expect(
     palette().getByRole("option", { name: "Toggle Word Wrap", exact: true })
   ).toHaveAttribute("aria-selected", "true");

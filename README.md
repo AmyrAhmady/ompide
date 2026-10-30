@@ -112,6 +112,20 @@ they are unavailable for untitled or JSON buffers. Reopen becomes available afte
 closing a file. The palette also offers Focus Editor, Toggle Minimap and Toggle
 Word Wrap; editor preferences persist in the application data directory.
 
+## Layout
+
+Drag the divider beside the sidebar or above the bottom panel to resize it.
+Preferences save when the drag ends. Focus a divider to resize with arrow keys
+(10 pixels, or 50 with Shift); Home/End select its limits, double-click restores
+its default size and Escape cancels a drag. Small windows temporarily constrain
+pane sizes while retaining the preferred dimensions for a larger window.
+
+**Ctrl+B** toggles the sidebar without losing expanded Explorer folders or the
+current Search input. Search/Explorer commands also reveal and focus the chosen
+view. **Toggle Bottom Panel** reopens the last selected Problems or Build view;
+only one bottom view appears at a time. Pane sizes, visibility and selected views
+survive restart. **View → Reset Layout** restores the initial layout.
+
 ## Explorer
 
 Use the Explorer toolbar or a folder's context menu to create files and folders.
@@ -197,6 +211,11 @@ persisted Monaco toggles, reopen history and dialog focus restoration. The scrip
 backs up/restores preferences, uses disposable source files, records Light/Dark
 screenshots and closes the test application.
 
+Run `node scripts/layout-smoke.mjs` with the same inspection setup for pointer
+and keyboard resizing, cancellation, focus, native preference restoration and a
+scaled viewport with an external-file conflict. It records both themes, restores
+preferences and closes the application.
+
 Run `node scripts/build-smoke.mjs` with the same native inspection setup for
 compilation, diagnostic navigation, manifest setup, named builds, YAML, official
 open.mp includes, cancellation and compatible external tool selection. Prepare
@@ -243,6 +262,8 @@ uses the debug profile; a release-optimized installer remains unverified.
 | Build Project | Ctrl+Shift+B |
 | Find File / Search Workspace | Ctrl+P / Ctrl+Shift+F |
 | Problems / Settings | Ctrl+J / Ctrl+, |
+| Toggle Sidebar / Reveal Explorer | Ctrl+B / Ctrl+Shift+E |
+| Command Palette | F1 / Ctrl+Shift+P |
 
 Source/tool provenance and upstream integration limitations are documented in
 [toolchain/README.md](toolchain/README.md). The detailed local implementation plan,

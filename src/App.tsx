@@ -13,6 +13,8 @@ import { t } from "./lib/i18n";
 import { Menubar, Menu, MenuItem } from "./components/Menubar";
 import { Modal } from "./components/Modal";
 import { CommandPalette } from "./components/CommandPalette";
+import { Splitter } from "./components/Splitter";
+import { defaultLayout, parseLayout, type Layout } from "./settings/layout";
 import {
   createCommands,
   executeCommand,
@@ -298,19 +300,111 @@ function App() {
     workbench.getSnapshot
   );
   const container = useRef<HTMLDivElement>(null);
+  const shell = useRef<HTMLElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [symbolsOpen, setSymbolsOpen] = useState<
     "document" | "workspace" | undefined
   >();
-  const [problemsOpen, setProblemsOpen] = useState(false);
-  const [buildOpen, setBuildOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [searchFields, setSearchFields] = useState(initialSearchFields);
   const [treeRevision, setTreeRevision] = useState(0);
   const [explorerReveal, setExplorerReveal] = useState(0);
+  const layout = state.settings.layout;
+  const problemsOpen = layout.panelVisible && layout.panel === "problems";
+  const buildOpen = layout.panelVisible && layout.panel === "build";
+  const searchOpen = layout.sidebar === "search";
+
+  const focusMain = () =>
+    requestAnimationFrame(() => {
+      if (workbench.getSnapshot().active) workbench.focusEditor();
+      else
+        shell.current
+          ?.querySelector<HTMLElement>(".ide-menubar summary")
+          ?.focus();
+    });
+
+  const changeLayout = (patch: Partial<Layout>) => {
+    const snapshot = workbench.getSnapshot();
+    if (!snapshot.ready) return;
+    const next = parseLayout({ ...snapshot.settings.layout, ...patch });
+    if (
+      (Object.keys(defaultLayout) as (keyof Layout)[]).every(
+        (key) => next[key] === snapshot.settings.layout[key]
+      )
+    )
+      return;
+    run(() => workbench.settings({ layout: next }));
+  };
+
+  const setPanel = (
+    kind: Layout["panel"],
+    update: boolean | ((visible: boolean) => boolean)
+  ) => {
+    const current = workbench.getSnapshot().settings.layout;
+    const visible = current.panelVisible && current.panel === kind;
+    const next = typeof update === "function" ? update(visible) : update;
+    if (next) changeLayout({ panel: kind, panelVisible: true });
+    else if (current.panel === kind) {
+      const inside = panel.current?.contains(document.activeElement);
+      changeLayout({ panelVisible: false });
+      if (inside || document.activeElement === document.body) focusMain();
+    }
+  };
+
+  const setProblemsOpen = (update: boolean | ((visible: boolean) => boolean)) =>
+    setPanel("problems", update);
+
+  const setBuildOpen = (update: boolean | ((visible: boolean) => boolean)) =>
+    setPanel("build", update);
+
+  const setSearchOpen = (update: boolean | ((search: boolean) => boolean)) => {
+    const current =
+      workbench.getSnapshot().settings.layout.sidebar === "search";
+    const search = typeof update === "function" ? update(current) : update;
+    changeLayout({
+      sidebar: search ? "search" : "explorer",
+      sidebarVisible: true,
+    });
+  };
+
+  const toggleSidebar = () => {
+    const visible = !workbench.getSnapshot().settings.layout.sidebarVisible;
+    const inside =
+      sidebar.current?.contains(document.activeElement) ||
+      shell.current?.querySelector(".pane-resizer.vertical") ===
+        document.activeElement;
+    changeLayout({ sidebarVisible: visible });
+    if (!visible && (inside || document.activeElement === document.body))
+      focusMain();
+  };
+
+  const showSearch = () => {
+    setSearchOpen(true);
+    requestAnimationFrame(() =>
+      sidebar.current
+        ?.querySelector<HTMLInputElement>("[data-search-query]")
+        ?.focus()
+    );
+  };
+
+  const showExplorer = () => {
+    setSearchOpen(false);
+    setExplorerReveal((value) => value + 1);
+  };
+
+  const togglePanel = () => {
+    const current = workbench.getSnapshot().settings.layout;
+    setPanel(current.panel, !current.panelVisible);
+  };
+
+  const resetLayout = () => {
+    changeLayout(defaultLayout);
+    focusMain();
+  };
   const active = Boolean(state.active);
   const external = state.tabs.find((tab) => tab.uri === state.active)?.external;
   const connected = state.languagePhase === "ready";
@@ -329,11 +423,8 @@ function App() {
   const registeredCommands = createCommands(state, workbench, nativeReady, {
     settings: () => setSettingsOpen(true),
     project: () => setProjectOpen(true),
-    explorer: () => {
-      setSearchOpen(false);
-      setExplorerReveal((value) => value + 1);
-    },
-    search: () => setSearchOpen(true),
+    explorer: showExplorer,
+    search: showSearch,
     quickOpen: () => setQuickOpen(true),
     problems: () => setProblemsOpen((value) => !value),
     symbols: setSymbolsOpen,
@@ -343,6 +434,9 @@ function App() {
       setProblemsOpen(false);
     },
     palette: () => setCommandOpen(true),
+    toggleSidebar,
+    togglePanel,
+    resetLayout,
   });
 
   const command = (label: TranslationKey) =>
@@ -402,13 +496,12 @@ function App() {
       } else if (modifier && event.shiftKey && key === "e") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        setSearchOpen(false);
-        setExplorerReveal((value) => value + 1);
+        showExplorer();
         return;
       } else if (modifier && event.shiftKey && key === "f") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        setSearchOpen(true);
+        showSearch();
         return;
       } else if (modifier && event.shiftKey && key === "b") {
         event.preventDefault();
@@ -435,6 +528,11 @@ function App() {
         event.preventDefault();
         event.stopImmediatePropagation();
         setSettingsOpen(true);
+        return;
+      } else if (modifier && key === "b") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        toggleSidebar();
         return;
       } else if (modifier && key === "j") {
         event.preventDefault();
@@ -486,9 +584,14 @@ function App() {
 
   return (
     <main
+      ref={shell}
       className="workbench"
       style={
-        themeVariables(defaultThemes[state.settings.theme]) as CSSProperties
+        {
+          ...themeVariables(defaultThemes[state.settings.theme]),
+          "--sidebar-width": `${layout.sidebarWidth}px`,
+          "--panel-height": `${layout.panelHeight}px`,
+        } as CSSProperties
       }
     >
       <header className="ide-menubar">
@@ -554,6 +657,9 @@ function App() {
             <CommandMenuItem command={command("command.settings")} />
             <CommandMenuItem command={command("search.title")} />
             <CommandMenuItem command={command("search.files")} />
+            <CommandMenuItem command={command("layout.toggleSidebar")} />
+            <CommandMenuItem command={command("layout.togglePanel")} />
+            <CommandMenuItem command={command("layout.reset")} />
           </Menu>
           <Menu label="menu.go">
             {(
@@ -593,13 +699,18 @@ function App() {
         </div>
       )}
       <div className="workspace-body">
-        <aside className="explorer">
+        <aside
+          id="workspace-sidebar"
+          className="explorer"
+          ref={sidebar}
+          hidden={!layout.sidebarVisible}
+        >
           {searchOpen ? (
             <SearchPanel
               root={state.root}
               fields={searchFields}
               change={setSearchFields}
-              close={() => setSearchOpen(false)}
+              close={showExplorer}
             />
           ) : (
             <>
@@ -615,6 +726,19 @@ function App() {
             </>
           )}
         </aside>
+        {layout.sidebarVisible && (
+          <Splitter
+            vertical
+            shell={shell}
+            pane={sidebar}
+            value={layout.sidebarWidth}
+            reset={defaultLayout.sidebarWidth}
+            enabled={state.ready}
+            change={(sidebarWidth) => changeLayout({ sidebarWidth })}
+            label="layout.resizeSidebar"
+            controls="workspace-sidebar"
+          />
+        )}
         <section className="editor-column">
           <div className="tabs" role="tablist" aria-label={t("editor.tabs")}>
             {state.tabs.map((tab) => (
@@ -670,7 +794,7 @@ function App() {
               </button>
             </div>
           )}
-          <div className="editor-area">
+          <div className="editor-area" data-editor-fill="true">
             <div className="monaco-container" ref={container} />
             {!active && (
               <div className="empty-editor">
@@ -744,69 +868,88 @@ function App() {
               </div>
             )}
           </div>
-          {problemsOpen && (
-            <section className="problems-panel">
-              <div className="panel-heading">
-                <span>
-                  {t("command.problems")} ({state.problems.length})
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setProblemsOpen(false)}
-                  aria-label={t("command.close")}
-                >
-                  ×
-                </button>
-              </div>
-              {state.problems.length ? (
-                <ul>
-                  {state.problems.map((problem, index) => (
-                    <li key={index}>
+          {layout.panelVisible && (
+            <>
+              <Splitter
+                vertical={false}
+                shell={shell}
+                pane={panel}
+                value={layout.panelHeight}
+                reset={defaultLayout.panelHeight}
+                enabled={state.ready}
+                change={(panelHeight) => changeLayout({ panelHeight })}
+                label="layout.resizePanel"
+                controls="workspace-panel"
+              />
+              <div ref={panel} id="workspace-panel" className="bottom-panel">
+                {problemsOpen && (
+                  <section className="problems-panel">
+                    <div className="panel-heading">
+                      <span>
+                        {t("command.problems")} ({state.problems.length})
+                      </span>
                       <button
                         type="button"
-                        onClick={() =>
-                          run(() =>
-                            workbench.openUri(
-                              problem.resource.toString(),
-                              problem.startLineNumber,
-                              problem.startColumn
-                            )
-                          )
-                        }
+                        onClick={() => setProblemsOpen(false)}
+                        aria-label={t("command.close")}
                       >
-                        <span
-                          className={
-                            problem.severity === 8
-                              ? "problem-error"
-                              : "problem-warning"
-                          }
-                          aria-hidden="true"
-                        >
-                          ●
-                        </span>
-                        <span>{problem.message}</span>
-                        <small>
-                          {t("problems.location", {
-                            file: problem.resource.path.split("/").at(-1) ?? "",
-                            line: problem.startLineNumber,
-                            column: problem.startColumn,
-                          })}
-                        </small>
+                        ×
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted">{t("problems.empty")}</p>
-              )}
-            </section>
-          )}
-          {buildOpen && !problemsOpen && (
-            <BuildPanel
-              state={state.build}
-              close={() => setBuildOpen(false)}
-              configure={() => setProjectOpen(true)}
-            />
+                    </div>
+                    {state.problems.length ? (
+                      <ul>
+                        {state.problems.map((problem, index) => (
+                          <li key={index}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                run(() =>
+                                  workbench.openUri(
+                                    problem.resource.toString(),
+                                    problem.startLineNumber,
+                                    problem.startColumn
+                                  )
+                                )
+                              }
+                            >
+                              <span
+                                className={
+                                  problem.severity === 8
+                                    ? "problem-error"
+                                    : "problem-warning"
+                                }
+                                aria-hidden="true"
+                              >
+                                ●
+                              </span>
+                              <span>{problem.message}</span>
+                              <small>
+                                {t("problems.location", {
+                                  file:
+                                    problem.resource.path.split("/").at(-1) ??
+                                    "",
+                                  line: problem.startLineNumber,
+                                  column: problem.startColumn,
+                                })}
+                              </small>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted">{t("problems.empty")}</p>
+                    )}
+                  </section>
+                )}
+                {buildOpen && !problemsOpen && (
+                  <BuildPanel
+                    state={state.build}
+                    close={() => setBuildOpen(false)}
+                    configure={() => setProjectOpen(true)}
+                  />
+                )}
+              </div>
+            </>
           )}
         </section>
       </div>
