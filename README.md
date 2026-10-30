@@ -285,6 +285,17 @@ and keyboard resizing, cancellation, focus, native preference restoration and a
 scaled viewport with an external-file conflict. It records both themes, restores
 preferences and closes the application.
 
+Run `node scripts/performance-smoke.mjs` to exercise actual keyboard input in a
+30,000-function Pawn file with 2,503 real Explorer rows, hidden/restored sidebar
+and 500 real Search results. It checks dirty/model preservation, typing totals,
+keydown-to-next-animation-frame latency and a confirmed dirty-buffer window close
+within ten seconds. `--baseline` records timings without enforcing typing limits;
+`--profile` also records browser CPU profiles (which add profiling overhead).
+Reports are written under `test-results/`. These are development-build measurements
+on the local machine, not a guarantee for every device or a substitute for installed
+release verification. The script restores preferences and removes its generated
+files; it reports if Windows retains an otherwise empty temporary directory.
+
 Run `node scripts/theme-smoke.mjs` to verify local file import, validation,
 customization/cancellation, Monaco syntax colors, Light/Dark/custom switching
 and native preference reload. It also rejects CSS/network content, records

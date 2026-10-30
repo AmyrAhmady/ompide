@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { editor } from "monaco-editor";
 import { workbench } from "../app/workbench";
 import { Modal } from "../components/Modal";
@@ -142,7 +142,7 @@ function ReplacePreview({
   );
 }
 
-export function SearchPanel({
+function SearchPanelView({
   root,
   fields,
   change,
@@ -363,6 +363,8 @@ export function SearchPanel({
     </div>
   );
 }
+
+export const SearchPanel = memo(SearchPanelView);
 
 export function QuickOpen({ close }: { close: () => void }) {
   const [query, setQuery] = useState("");

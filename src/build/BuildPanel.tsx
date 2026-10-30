@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { t } from "../lib/i18n";
 import { workbench } from "../app/workbench";
 import { building, type BuildState } from "./types";
 
-export function BuildPanel({
+function BuildPanelView({
   state,
   close,
   configure,
@@ -136,3 +136,5 @@ export function BuildPanel({
     </section>
   );
 }
+
+export const BuildPanel = memo(BuildPanelView);

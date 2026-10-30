@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -330,16 +331,26 @@ function App() {
   const buildOpen = layout.panelVisible && layout.panel === "build";
   const searchOpen = layout.sidebar === "search";
 
-  const focusMain = () =>
-    requestAnimationFrame(() => {
-      if (workbench.getSnapshot().active) workbench.focusEditor();
-      else
-        shell.current
-          ?.querySelector<HTMLElement>(".ide-menubar summary")
-          ?.focus();
-    });
+  const refreshExplorer = useCallback(
+    () => setTreeRevision((value) => value + 1),
+    []
+  );
 
-  const changeLayout = (patch: Partial<Layout>) => {
+  const configureProject = useCallback(() => setProjectOpen(true), []);
+
+  const focusMain = useCallback(
+    () =>
+      requestAnimationFrame(() => {
+        if (workbench.getSnapshot().active) workbench.focusEditor();
+        else
+          shell.current
+            ?.querySelector<HTMLElement>(".ide-menubar summary")
+            ?.focus();
+      }),
+    []
+  );
+
+  const changeLayout = useCallback((patch: Partial<Layout>) => {
     const snapshot = workbench.getSnapshot();
     if (!snapshot.ready) return;
     const next = parseLayout({ ...snapshot.settings.layout, ...patch });
@@ -350,38 +361,52 @@ function App() {
     )
       return;
     run(() => workbench.settings({ layout: next }));
-  };
+  }, []);
 
-  const setPanel = (
-    kind: Layout["panel"],
-    update: boolean | ((visible: boolean) => boolean)
-  ) => {
-    const current = workbench.getSnapshot().settings.layout;
-    const visible = current.panelVisible && current.panel === kind;
-    const next = typeof update === "function" ? update(visible) : update;
-    if (next) changeLayout({ panel: kind, panelVisible: true });
-    else if (current.panel === kind) {
-      const inside = panel.current?.contains(document.activeElement);
-      changeLayout({ panelVisible: false });
-      if (inside || document.activeElement === document.body) focusMain();
-    }
-  };
+  const setPanel = useCallback(
+    (
+      kind: Layout["panel"],
+      update: boolean | ((visible: boolean) => boolean)
+    ) => {
+      const current = workbench.getSnapshot().settings.layout;
+      const visible = current.panelVisible && current.panel === kind;
+      const next = typeof update === "function" ? update(visible) : update;
+      if (next) changeLayout({ panel: kind, panelVisible: true });
+      else if (current.panel === kind) {
+        const inside = panel.current?.contains(document.activeElement);
+        changeLayout({ panelVisible: false });
+        if (inside || document.activeElement === document.body) focusMain();
+      }
+    },
+    [changeLayout, focusMain]
+  );
 
-  const setProblemsOpen = (update: boolean | ((visible: boolean) => boolean)) =>
-    setPanel("problems", update);
+  const setProblemsOpen = useCallback(
+    (update: boolean | ((visible: boolean) => boolean)) =>
+      setPanel("problems", update),
+    [setPanel]
+  );
 
-  const setBuildOpen = (update: boolean | ((visible: boolean) => boolean)) =>
-    setPanel("build", update);
+  const setBuildOpen = useCallback(
+    (update: boolean | ((visible: boolean) => boolean)) =>
+      setPanel("build", update),
+    [setPanel]
+  );
 
-  const setSearchOpen = (update: boolean | ((search: boolean) => boolean)) => {
-    const current =
-      workbench.getSnapshot().settings.layout.sidebar === "search";
-    const search = typeof update === "function" ? update(current) : update;
-    changeLayout({
-      sidebar: search ? "search" : "explorer",
-      sidebarVisible: true,
-    });
-  };
+  const closeBuild = useCallback(() => setBuildOpen(false), [setBuildOpen]);
+
+  const setSearchOpen = useCallback(
+    (update: boolean | ((search: boolean) => boolean)) => {
+      const current =
+        workbench.getSnapshot().settings.layout.sidebar === "search";
+      const search = typeof update === "function" ? update(current) : update;
+      changeLayout({
+        sidebar: search ? "search" : "explorer",
+        sidebarVisible: true,
+      });
+    },
+    [changeLayout]
+  );
 
   const toggleSidebar = () => {
     const visible = !workbench.getSnapshot().settings.layout.sidebarVisible;
@@ -403,10 +428,10 @@ function App() {
     );
   };
 
-  const showExplorer = () => {
+  const showExplorer = useCallback(() => {
     setSearchOpen(false);
     setExplorerReveal((value) => value + 1);
-  };
+  }, [setSearchOpen]);
 
   const togglePanel = () => {
     const current = workbench.getSnapshot().settings.layout;
@@ -434,7 +459,7 @@ function App() {
   };
   const registeredCommands = createCommands(state, workbench, nativeReady, {
     settings: () => setSettingsOpen(true),
-    project: () => setProjectOpen(true),
+    project: configureProject,
     explorer: showExplorer,
     search: showSearch,
     quickOpen: () => setQuickOpen(true),
@@ -634,6 +659,7 @@ function App() {
                     role="menuitem"
                     key={path}
                     title={path}
+                    disabled={!command("command.openFile").enabled}
                     onClick={(event) => {
                       event.currentTarget
                         .closest("details")
@@ -734,7 +760,7 @@ function App() {
                 revision={treeRevision + state.treeVersion}
                 reveal={explorerReveal}
                 busy={state.mutationBusy || buildBusy}
-                refresh={() => setTreeRevision((value) => value + 1)}
+                refresh={refreshExplorer}
               />
             </>
           )}
@@ -823,7 +849,7 @@ function App() {
                 <div className="welcome-actions">
                   <button
                     type="button"
-                    disabled={!nativeReady}
+                    disabled={!command("command.openFile").enabled}
                     onClick={() => run(() => workbench.openFile())}
                   >
                     {t("command.openFile")}
@@ -831,7 +857,7 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    disabled={!nativeReady}
+                    disabled={!command("command.openFolder").enabled}
                     onClick={() => run(() => workbench.chooseFolder())}
                   >
                     {t("command.openFolder")}
@@ -847,6 +873,7 @@ function App() {
                           <button
                             type="button"
                             title={path}
+                            disabled={!command("command.openFolder").enabled}
                             onClick={() =>
                               run(() => workbench.chooseFolder(path))
                             }
@@ -867,6 +894,7 @@ function App() {
                           <button
                             type="button"
                             title={path}
+                            disabled={!command("command.openFile").enabled}
                             onClick={() =>
                               run(() => workbench.recentFile(path))
                             }
@@ -957,8 +985,8 @@ function App() {
                 {buildOpen && !problemsOpen && (
                   <BuildPanel
                     state={state.build}
-                    close={() => setBuildOpen(false)}
-                    configure={() => setProjectOpen(true)}
+                    close={closeBuild}
+                    configure={configureProject}
                   />
                 )}
               </div>

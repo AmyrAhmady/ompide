@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Uri } from "monaco-editor";
 import { workbench } from "../app/workbench";
 import type { Entry } from "../lib/native";
@@ -246,7 +246,7 @@ function ContextMenu({
   );
 }
 
-export function Explorer({
+function ExplorerView({
   root,
   active,
   revision,
@@ -714,3 +714,5 @@ export function Explorer({
     </>
   );
 }
+
+export const Explorer = memo(ExplorerView);
