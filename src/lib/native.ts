@@ -30,6 +30,13 @@ export interface Entry {
   symlink: boolean;
 }
 
+export interface EntryMutation {
+  source: string;
+  path: string | null;
+  recentFiles: string[] | null;
+  warning: unknown | null;
+}
+
 export interface Preferences {
   recentWorkspaces: string[];
   recentFiles: string[];
@@ -118,6 +125,6 @@ export const native = {
   createEntry: (parent: string, name: string, directory: boolean) =>
     invoke<string>("create_entry", { parent, name, directory }),
   renameEntry: (path: string, name: string) =>
-    invoke<string>("rename_entry", { path, name }),
-  trashEntry: (path: string) => invoke<void>("trash_entry", { path }),
+    invoke<EntryMutation>("rename_entry", { path, name }),
+  trashEntry: (path: string) => invoke<EntryMutation>("trash_entry", { path }),
 };

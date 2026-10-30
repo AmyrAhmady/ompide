@@ -11,11 +11,12 @@ import { chromium, expect as baseExpect } from '@playwright/test';
 
 const expect = baseExpect.configure({ timeout: 15_000 });
 const project = fileURLToPath(new URL('../', import.meta.url));
-const directory = await mkdtemp(path.join(tmpdir(), 'pawn-explorer-smoke-'));
 const preferences = path.join(process.env.APPDATA, 'mp.open.editor/preferences.json');
 const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
-const page = browser.contexts().flatMap((context) => context.pages()).find((page) => page.url().includes('1420'));
-if (!page) throw new Error('Start the native debug app connected to Vite with loopback CDP port 9222.');
+const context = browser.contexts()[0];
+const page = context.pages().find((page) => page.url().includes('1420')) ?? context.pages()[0] ?? await context.waitForEvent('page');
+await page.waitForURL((url) => url.port === '1420', { timeout: 30000, waitUntil: 'domcontentloaded' });
+const directory = await mkdtemp(path.join(tmpdir(), 'pawn-explorer-smoke-'));
 page.setDefaultTimeout(15_000);
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.stack || error.message));
@@ -95,6 +96,12 @@ try {
   await evaluate((workbench, target) => workbench.openPath(target), path.join(directory, 'scripts/sibling.inc'));
   await append('// unsaved second\n');
   evidence.push('Keyboard creation rejects collisions and traversal without overwriting existing source.');
+  await writeFile(path.join(directory, 'scripts/zz-closed.inc'), '// remembered but closed\n');
+  await evaluate(async (workbench, target) => { await workbench.openPath(target); await workbench.close(workbench.getSnapshot().active); }, path.join(directory, 'scripts/zz-closed.inc'));
+  await writeFile(path.join(directory, 'scripts-extra.inc'), '// sibling prefix must survive\n');
+  await evaluate(async (workbench, target) => { await workbench.openPath(target); await workbench.close(workbench.getSnapshot().active); }, path.join(directory, 'scripts-extra.inc'));
+  const historyBeforeCancel = await evaluate((workbench) => workbench.getSnapshot().recentFiles);
+
 
   await row('scripts').focus();
   await page.keyboard.press('F2');
@@ -110,7 +117,9 @@ try {
   const retained = await evaluate((workbench) => workbench.getSnapshot().tabs.filter((tab) => tab.dirty).map((tab) => tab.name));
   assert.deepEqual(retained.sort(), ['nested.inc', 'sibling.inc']);
   await dialog('Rename…').getByRole('button', { name: 'Cancel', exact: true }).click();
-  evidence.push('Cancelling the second dirty-file prompt during a folder rename keeps both unsaved buffers and the original disk paths.');
+  assert.deepEqual(await evaluate((workbench) => workbench.getSnapshot().recentFiles), historyBeforeCancel);
+  assert.deepEqual(JSON.parse(await readFile(preferences, 'utf8')).recentFiles, historyBeforeCancel);
+  evidence.push('Cancelling the second dirty-file prompt keeps unsaved buffers, disk paths and persisted recent history unchanged.');
 
   await page.keyboard.press('Control+Alt+s');
   await row('scripts').focus();
@@ -119,8 +128,20 @@ try {
   await dialog('Rename…').getByRole('button', { name: 'Rename', exact: true }).click();
   await expect(dialog('Rename…')).toHaveCount(0);
   await expect(row('renamed-scripts')).toBeVisible();
+  const movedHistory = await evaluate((workbench) => workbench.getSnapshot().recentFiles);
+  const normalize = (value) => value.replaceAll('\\', '/');
+  assert.ok(movedHistory.some((file) => normalize(file).endsWith('/renamed-scripts/zz-closed.inc')));
+  assert.ok(!movedHistory.some((file) => normalize(file).includes('/scripts/')));
+  assert.deepEqual(JSON.parse(await readFile(preferences, 'utf8')).recentFiles, movedHistory);
+  const reopenHistory = await evaluate((workbench) => Reflect.get(workbench, 'closed'));
+  assert.ok(reopenHistory.some((file) => normalize(file).endsWith('/renamed-scripts/zz-closed.inc')));
+  assert.ok(!reopenHistory.some((file) => normalize(file).includes('/scripts/')));
   const renamedTabs = await evaluate((workbench) => workbench.getSnapshot().tabs);
   assert.equal(renamedTabs.filter((tab) => /renamed-scripts/.test(tab.uri)).length, 2);
+  const movedClosed = movedHistory.find((file) => normalize(file).endsWith('/renamed-scripts/zz-closed.inc'));
+  await evaluate(async (workbench, target) => { await workbench.recentFile(target); await workbench.close(workbench.getSnapshot().active); }, movedClosed);
+  assert.equal(await evaluate(async (workbench, target) => { try { await workbench.recentFile(target); return 'unexpected-success'; } catch (error) { return error.code; } }, path.join(directory, 'scripts/zz-closed.inc')), 'permissionDenied');
+
   assert.match(await readFile(path.join(directory, 'renamed-scripts/nested.inc'), 'utf8'), /unsaved first/);
   await expect(page.locator('.external-notice')).toHaveCount(0);
   evidence.push('A confirmed folder rename moves real files, remaps all open document URIs and preserves saved contents without stale deleted-file notices.');
@@ -155,7 +176,11 @@ try {
   await expect(dialog('Rename…')).toHaveCount(0);
   await expect(row('NESTED.inc')).toBeVisible();
   await expect(page.getByRole('tab', { name: 'NESTED.inc', exact: true })).toHaveAttribute('aria-selected', 'true');
-  evidence.push('Case-only Windows rename updates disk spelling, the Explorer row and the active document tab.');
+  const caseHistory = await evaluate((workbench) => workbench.getSnapshot().recentFiles);
+  assert.ok(caseHistory.some((file) => normalize(file).endsWith('/renamed-scripts/NESTED.inc')));
+  assert.ok(!caseHistory.some((file) => normalize(file).endsWith('/renamed-scripts/nested.inc')));
+  assert.deepEqual(JSON.parse(await readFile(preferences, 'utf8')).recentFiles, caseHistory);
+  evidence.push('Case-only rename updates disk, tabs and persisted recent-file spelling.');
 
   await row('NESTED.inc').focus();
   await page.keyboard.press('F2');
@@ -179,6 +204,12 @@ try {
   await expect(row('renamed-scripts')).toHaveCount(0);
   await expect(row('main.pwn')).toBeFocused();
   assert.equal((await evaluate((workbench) => workbench.getSnapshot().tabs)).filter((tab) => /renamed-scripts/.test(tab.uri)).length, 0);
+  const deletedHistory = await evaluate((workbench) => workbench.getSnapshot().recentFiles);
+  assert.ok(!deletedHistory.some((file) => normalize(file).includes('/renamed-scripts/')));
+  assert.ok(deletedHistory.some((file) => normalize(file).endsWith('/scripts-extra.inc')));
+  assert.deepEqual(JSON.parse(await readFile(preferences, 'utf8')).recentFiles, deletedHistory);
+  assert.ok(!(await evaluate((workbench) => Reflect.get(workbench, 'closed'))).some((file) => normalize(file).includes('/renamed-scripts/')));
+  evidence.push('Folder deletion removes remembered open/closed descendants and reopen paths while preserving sibling-prefix history.');
   restoreRecycledFixtures();
   assert.match(await readFile(path.join(directory, 'renamed-scripts/NESTED.inc'), 'utf8'), /unsaved first/);
   evidence.push('Deletion requires explicit confirmation, Cancel leaves the folder intact, and the real Recycle Bin preserves the entire folder for restoration.');

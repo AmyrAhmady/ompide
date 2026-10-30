@@ -1,6 +1,7 @@
 pub mod compiler;
 pub mod framing;
 pub mod git;
+pub mod history;
 pub mod lsp;
 pub mod process;
 pub mod project;

@@ -12,6 +12,28 @@ export function withinPath(path: string, parent: string): boolean {
   return key === root || key.startsWith(root + "/");
 }
 
+export function reconcilePaths(
+  paths: string[],
+  source: string,
+  target?: string
+): string[] {
+  const seen = new Set<string>();
+  return paths.flatMap((path) => {
+    let next = path;
+    if (withinPath(path, source)) {
+      if (target === undefined) return [];
+      const suffix = path
+        .replaceAll("\\", "/")
+        .slice(source.replaceAll("\\", "/").replace(/\/+$/, "").length);
+      next = target + suffix;
+    }
+    const key = pathKey(next);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [next];
+  });
+}
+
 export function parentPath(path: string): string {
   const normalized = path.replaceAll("\\", "/").replace(/\/+$/, "");
   const index = normalized.lastIndexOf("/");

@@ -58,6 +58,7 @@ import {
   parentPath,
   childPath,
   fileName,
+  reconcilePaths,
 } from "../lib/paths";
 
 interface OpenDocument {
@@ -799,10 +800,19 @@ export class Workbench {
         )
       )
         throw { code: "fileOperationChanged" };
-      const newPath =
-        name === undefined ? undefined : await native.renameEntry(path, name);
-      if (name === undefined) await native.trashEntry(path);
+      const mutation =
+        name === undefined
+          ? await native.trashEntry(path)
+          : await native.renameEntry(path, name);
+      const newPath = mutation.path ?? undefined;
       changed = true;
+      this.closed = reconcilePaths(this.closed, mutation.source, newPath);
+      this.update({
+        recentFiles:
+          mutation.recentFiles ??
+          reconcilePaths(this.state.recentFiles, mutation.source, newPath),
+      });
+      if (mutation.warning) this.report(mutation.warning);
       let retained = false;
       for (const { document, version, view } of confirmed) {
         if (document.model.getAlternativeVersionId() !== version) {

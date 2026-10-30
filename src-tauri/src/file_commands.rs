@@ -1,5 +1,44 @@
 use super::*;
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryMutation {
+    source: PathBuf,
+    path: Option<PathBuf>,
+    recent_files: Option<Vec<PathBuf>>,
+    warning: Option<AppError>,
+}
+
+fn reconcile_history(
+    app: &AppHandle,
+    state: &NativeState,
+    source: PathBuf,
+    path: Option<PathBuf>,
+) -> EntryMutation {
+    let update = || -> Result<Vec<PathBuf>> {
+        let _guard = lock(&state.preferences_lock)?;
+        let mut preferences = load_preferences(app.clone())?;
+        let next =
+            pawn_core::history::reconcile(&preferences.recent_files, &source, path.as_deref());
+        if next != preferences.recent_files {
+            preferences.recent_files = next;
+            write_preferences(app, &preferences)?;
+        }
+        Ok(preferences.recent_files)
+    };
+    let (recent_files, warning) = match update() {
+        Ok(files) => (Some(files), None),
+        // The file operation already succeeded. Report it accurately even if preferences fail.
+        Err(failure) => (None, Some(error("historyUpdateFailed", failure.detail))),
+    };
+    EntryMutation {
+        source,
+        path,
+        recent_files,
+        warning,
+    }
+}
+
 fn scope(state: &NativeState) -> Result<Workspace> {
     Workspace::open(
         lock(&state.workspace)?
@@ -35,22 +74,29 @@ pub async fn create_entry(
 
 #[tauri::command]
 pub async fn rename_entry(
+    app: AppHandle,
     state: State<'_, NativeState>,
     path: PathBuf,
     name: String,
-) -> Result<PathBuf> {
+) -> Result<EntryMutation> {
     if lock(&state.build)?.is_some() {
         return Err(error("buildBusy", "cancel the build before renaming files"));
     }
     let scope = scope(&state)?;
-    tauri::async_runtime::spawn_blocking(move || scope.rename(&path, &name))
+    let source = scope.mutable_entry(&path)?;
+    let path = tauri::async_runtime::spawn_blocking(move || scope.rename(&path, &name))
         .await
         .map_err(|failure| error("operationFailed", failure.to_string()))?
-        .map_err(mutation_error)
+        .map_err(mutation_error)?;
+    Ok(reconcile_history(&app, &state, source, Some(path)))
 }
 
 #[tauri::command]
-pub async fn trash_entry(state: State<'_, NativeState>, path: PathBuf) -> Result<()> {
+pub async fn trash_entry(
+    app: AppHandle,
+    state: State<'_, NativeState>,
+    path: PathBuf,
+) -> Result<EntryMutation> {
     if lock(&state.build)?.is_some() {
         return Err(error(
             "buildBusy",
@@ -58,8 +104,10 @@ pub async fn trash_entry(state: State<'_, NativeState>, path: PathBuf) -> Result
         ));
     }
     let scope = scope(&state)?;
+    let source = scope.mutable_entry(&path)?;
     tauri::async_runtime::spawn_blocking(move || scope.trash(&path))
         .await
         .map_err(|failure| error("operationFailed", failure.to_string()))?
-        .map_err(mutation_error)
+        .map_err(mutation_error)?;
+    Ok(reconcile_history(&app, &state, source, None))
 }

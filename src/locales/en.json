@@ -340,5 +340,6 @@
   "error.gitBusy": "Another Git operation is running. Wait for it or cancel it first.",
   "error.gitDirty": "Save or close unsaved editor buffers before changing branches, pulling or stashing. Your edits have been preserved.",
   "scm.behavior": "Git behavior",
-  "scm.openFile": "Open working file"
+  "scm.openFile": "Open working file",
+  "error.historyUpdateFailed": "The file operation succeeded, but recent-file history could not be saved. Your files and editor tabs reflect the completed change."
 }
