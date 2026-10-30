@@ -191,7 +191,7 @@ try {
   await expect(page.locator(".build-panel")).toBeVisible();
   await expect(page.locator(".problems-panel")).toHaveCount(0);
   await command("toggle bottom panel");
-  await expect(panel()).toHaveCount(0);
+  await expect(panel()).toBeHidden();
   await expect(
     page.getByRole("textbox", { name: "Pawn IDE", exact: true })
   ).toBeFocused();
@@ -304,7 +304,7 @@ try {
 
   await command("reset layout");
   await expect.poll(() => size(sidebar(), "width")).toBe(235);
-  await expect(panel()).toHaveCount(0);
+  await expect(panel()).toBeHidden();
   await page.keyboard.press("Control+j");
   for (const theme of ["light", "dark"]) {
     await evaluate((workbench, theme) => workbench.settings({ theme }), theme);

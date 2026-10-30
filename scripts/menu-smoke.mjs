@@ -86,11 +86,12 @@ try {
     // Keyboard navigation wraps, skips disabled commands, and restores focus on dismissal.
     const viewCommands = [
       "Command Palette… Ctrl+Shift+P",
-      "Problems Ctrl+J",
+      "Problems",
       "Settings Ctrl+,",
       "Search Workspace Ctrl+Shift+F",
+      "Source Control Ctrl+Shift+G",
       "Toggle Sidebar Ctrl+B",
-      "Toggle Bottom Panel",
+      "Toggle Bottom Panel Ctrl+J",
       "Reset Layout",
     ];
     await heading("View").focus();

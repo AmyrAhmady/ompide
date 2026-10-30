@@ -2,6 +2,11 @@ import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { GitRequest } from "../sourceControl/types";
 import type { Settings } from "../settings/settings";
 import type {
+  TerminalEvent,
+  TerminalInfo,
+  ShellProfile,
+} from "../terminal/types";
+import type {
   Discovery,
   ProjectInfo,
   BuildTools,
@@ -58,6 +63,29 @@ export interface ToolInfo {
 export const desktop = isTauri();
 
 export const native = {
+  terminalShells: () => invoke<ShellProfile[]>("terminal_shells"),
+  terminalStart: (
+    shell: string,
+    root: string | null,
+    cols: number,
+    rows: number,
+    receive: (event: TerminalEvent) => void
+  ) =>
+    invoke<TerminalInfo>("terminal_start", {
+      shell,
+      root,
+      cols,
+      rows,
+      onEvent: new Channel<TerminalEvent>(receive),
+    }),
+  terminalWrite: (id: number, data: number[]) =>
+    invoke<void>("terminal_write", { id, data }),
+  terminalResize: (id: number, cols: number, rows: number) =>
+    invoke<void>("terminal_resize", { id, cols, rows }),
+  terminalAcknowledge: (id: number, sequence: number) =>
+    invoke<void>("terminal_acknowledge", { id, sequence }),
+  terminalClose: (id: number) => invoke<void>("terminal_close", { id }),
+  terminalCloseAll: () => invoke<void>("terminal_close_all"),
   git: <T>(root: string, id: number, request: GitRequest) =>
     invoke<T>("git_request", { root, id, request }),
   cancelGit: (id: number) => invoke<void>("cancel_git", { id }),

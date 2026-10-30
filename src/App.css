@@ -25,6 +25,7 @@ textarea {
 button {
   color: inherit;
   cursor: pointer;
+  border-radius: var(--radius-control, 4px);
 }
 button:disabled {
   cursor: default;
@@ -44,6 +45,9 @@ textarea:focus-visible,
   outline-offset: -1px;
 }
 .workbench {
+  --radius-control: 4px;
+  --radius-selection: 5px;
+  --radius-panel: 8px;
   scrollbar-color: var(--input-border) var(--editorWidget-background);
   accent-color: var(--focusBorder);
   height: 100%;
@@ -58,6 +62,7 @@ textarea:focus-visible,
   display: flex;
   align-items: center;
   background: var(--titleBar-activeBackground);
+  color: var(--titleBar-activeForeground);
   user-select: none;
   position: relative;
   z-index: 10;
@@ -73,20 +78,73 @@ textarea:focus-visible,
   height: 100%;
 }
 .window-title {
-  margin: 0 auto;
-  padding-right: 200px;
+  flex: 1;
+  min-width: 30px;
+  align-self: stretch;
+  line-height: 34px;
+  text-align: center;
+  padding: 0 12px;
   font-size: 12px;
-  color: var(--descriptionForeground);
+  color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .ide-menubar .menu summary {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+  .ide-menubar .app-mark {
+    padding: 0 8px;
+  }
+  .window-title {
+    min-width: 0;
+    padding: 0 6px;
+  }
+}
+.ide-menubar.inactive {
+  background: var(--titleBar-inactiveBackground);
+  color: var(--titleBar-inactiveForeground);
+}
+.window-controls {
+  display: flex;
+  height: 34px;
+  flex-shrink: 0;
+}
+.window-controls button {
+  width: 46px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+.window-controls svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+}
+.window-controls button:hover,
+.window-controls .snap-hover {
+  background: var(--list-hoverBackground);
+}
+.window-controls .window-close:hover {
+  background: var(--windowControl-closeBackground);
+  color: var(--windowControl-closeForeground);
 }
 .menu {
   position: relative;
 }
 .menu summary {
   cursor: pointer;
-  padding: 8px 10px;
+  padding: 6px 8px;
+  margin: 3px 1px;
+  height: 28px;
+  border-radius: var(--radius-control);
   list-style: none;
 }
 .menu summary::-webkit-details-marker {
@@ -107,6 +165,9 @@ textarea:focus-visible,
   padding: 5px;
   background: var(--editorWidget-background);
   border: 1px solid var(--editorWidget-border);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 8px 20px
+    color-mix(in srgb, var(--editor-background) 35%, transparent);
 }
 .menu button {
   display: flex;
@@ -145,6 +206,8 @@ hr {
   flex: 1;
   display: flex;
   min-height: 0;
+  padding: 0 5px 5px 0;
+  background: var(--titleBar-activeBackground);
 }
 .explorer {
   width: var(--sidebar-width, 235px);
@@ -154,16 +217,32 @@ hr {
   overflow: auto;
   background: var(--sideBar-background);
   color: var(--sideBar-foreground);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-panel);
 }
 .explorer[hidden] {
   display: none;
 }
 .pane-resizer {
   flex-shrink: 0;
-  background: var(--panel-border);
+  background: transparent;
+  position: relative;
   touch-action: none;
   user-select: none;
   z-index: 2;
+}
+.pane-resizer::before {
+  content: "";
+  position: absolute;
+  background: var(--panel-border);
+}
+.pane-resizer.vertical::before {
+  width: 1px;
+  inset: 6px auto 6px 50%;
+}
+.pane-resizer.horizontal::before {
+  height: 1px;
+  inset: 50% 6px auto;
 }
 .pane-resizer.vertical {
   width: 4px;
@@ -183,6 +262,8 @@ hr {
   pointer-events: none;
 }
 .bottom-panel {
+  display: flex;
+  flex-direction: column;
   height: var(--panel-height, 220px);
   min-height: min(100px, max(35px, calc(100% - var(--panel-reserve, 160px))));
   max-height: min(
@@ -191,13 +272,87 @@ hr {
   );
   flex-shrink: 0;
   overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-panel);
 }
-.bottom-panel > .problems-panel,
-.bottom-panel > .build-panel {
+.panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.bottom-panel[hidden],
+.panel-content[hidden] {
+  display: none;
+}
+.panel-content > .problems-panel,
+.panel-content > .build-panel {
   height: 100%;
   min-height: 0;
   max-height: none;
   border-top: 0;
+}
+.panel-tabs-heading {
+  height: 35px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  padding: 0 8px;
+  background: var(--panel-background);
+}
+.panel-tabs-heading [role="tablist"] {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  align-items: center;
+  gap: 3px;
+}
+.panel-header-actions {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.panel-tabs-heading .panel-header-actions > button {
+  align-self: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border: 1px solid var(--toolbar-buttonBorder);
+  background: var(--toolbar-buttonBackground);
+}
+.terminal-header-controls {
+  display: flex;
+  min-width: 0;
+}
+.terminal-header-controls[hidden] {
+  display: none;
+}
+.panel-tabs-heading button {
+  border: 0;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--descriptionForeground);
+  white-space: nowrap;
+  border-radius: var(--radius-control);
+}
+.panel-tabs-heading [role="tab"] {
+  height: 27px;
+}
+.panel-tabs-heading [aria-selected="true"] {
+  background: var(--panelTab-activeBackground);
+  color: var(--panelTab-activeForeground);
+}
+.panel-tabs-heading button:hover {
+  background: var(--list-hoverBackground);
+}
+.panel-count {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--button-background);
+  color: var(--button-foreground);
 }
 .panel-heading {
   display: flex;
@@ -236,7 +391,9 @@ hr {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  width: calc(100% - 12px);
+  margin: 1px 6px;
+  border-radius: var(--radius-selection);
   background: transparent;
   border: 0;
   text-align: left;
@@ -282,6 +439,7 @@ hr {
   background: var(--editorWidget-background);
   color: var(--editor-foreground);
   border: 1px solid var(--editorWidget-border);
+  border-radius: var(--radius-panel);
 }
 .explorer-context button {
   display: flex;
@@ -333,19 +491,23 @@ hr {
   min-height: 35px;
   background: var(--tab-inactiveBackground);
   user-select: none;
+  border: 1px solid var(--panel-border);
+  border-bottom: 0;
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  padding: 0 3px;
+  gap: 2px;
 }
 .tab {
   display: flex;
   align-items: center;
-  height: 35px;
-  border-right: 1px solid var(--panel-border);
-  background: var(--tab-inactiveBackground);
+  height: 29px;
+  margin: 3px 0;
+  border-radius: var(--radius-selection);
+  background: transparent;
   flex-shrink: 0;
-  border-top: 1px solid transparent;
 }
 .tab.active {
   background: var(--tab-activeBackground);
-  border-top-color: var(--focusBorder);
 }
 .tab button {
   background: transparent;
@@ -373,6 +535,10 @@ hr {
   position: relative;
   flex: 1;
   min-height: 120px;
+  border: 1px solid var(--panel-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  overflow: hidden;
 }
 .monaco-container {
   width: 100%;
@@ -533,6 +699,12 @@ dialog {
   min-width: 400px;
   max-width: 90vw;
   padding: 22px;
+  border-radius: var(--radius-panel);
+}
+input:not([type="checkbox"]),
+select,
+textarea {
+  border-radius: var(--radius-control);
 }
 dialog::backdrop {
   background: var(--editor-background);
@@ -915,27 +1087,29 @@ dialog footer button.primary {
   flex-shrink: 0;
   background: var(--activityBar-background);
   color: var(--sideBar-foreground);
-  border-right: 1px solid var(--panel-border);
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  padding: 4px;
+  gap: 4px;
 }
 .activity-bar button {
   border: 0;
-  border-left: 2px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-selection);
   background: transparent;
   color: inherit;
-  min-height: 48px;
-  padding: 8px;
+  min-height: 40px;
+  padding: 6px;
 }
 .activity-bar button[aria-pressed="true"] {
-  border-left-color: var(--focusBorder);
   background: var(--list-activeSelectionBackground);
   color: var(--editor-foreground);
 }
 .activity-bar button:hover:enabled {
   background: var(--list-hoverBackground);
+}
+.activity-bar button[aria-pressed="true"]:hover {
+  background: var(--list-activeSelectionBackground);
 }
 .source-control {
   padding: 0 8px 12px;

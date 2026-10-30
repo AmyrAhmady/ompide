@@ -1,3 +1,5 @@
+import { WindowControls } from "./components/WindowControls";
+import { TerminalPanel, type TerminalActions } from "./terminal/TerminalPanel";
 import { ActivityBar } from "./components/ActivityBar";
 import { SourceControlPanel } from "./sourceControl/SourceControlPanel";
 import { GitDiffView } from "./sourceControl/GitDiffView";
@@ -13,6 +15,7 @@ import {
 import { Uri } from "monaco-editor";
 import { workbench, type SymbolResult } from "./app/workbench";
 import { desktop } from "./lib/native";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Explorer } from "./explorer/Explorer";
 import { t } from "./lib/i18n";
 import { Menubar, Menu, MenuItem } from "./components/Menubar";
@@ -320,6 +323,9 @@ function App() {
   const shell = useRef<HTMLElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const terminal = useRef<TerminalActions>(null);
+  const [terminalControls, setTerminalControls] =
+    useState<HTMLDivElement | null>(null);
   const [gitDiff, setGitDiff] = useState<OpenGitDiff>();
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -334,6 +340,7 @@ function App() {
   const layout = state.settings.layout;
   const problemsOpen = layout.panelVisible && layout.panel === "problems";
   const buildOpen = layout.panelVisible && layout.panel === "build";
+  const terminalOpen = layout.panelVisible && layout.panel === "terminal";
   const searchOpen = layout.sidebar === "search";
 
   const refreshExplorer = useCallback(
@@ -398,7 +405,15 @@ function App() {
     [setPanel]
   );
 
-  const closeBuild = useCallback(() => setBuildOpen(false), [setBuildOpen]);
+  const showTerminal = () => {
+    setPanel("terminal", true);
+    requestAnimationFrame(() => terminal.current?.focus());
+  };
+
+  const newTerminal = () => {
+    showTerminal();
+    terminal.current?.create();
+  };
 
   const setSearchOpen = useCallback(
     (update: boolean | ((search: boolean) => boolean)) => {
@@ -462,6 +477,19 @@ function App() {
   const external = state.tabs.find((tab) => tab.uri === state.active)?.external;
   const connected = state.languagePhase === "ready";
   const nativeReady = desktop && state.ready;
+  const activeTitle = state.tabs.find((tab) => tab.uri === state.active);
+  const windowTitle = [
+    activeTitle ? `${activeTitle.dirty ? "● " : ""}${activeTitle.name}` : "",
+    state.root?.split(/[\\/]/).at(-1),
+    t("app.name"),
+  ]
+    .filter(Boolean)
+    .join(" — ");
+  useEffect(() => {
+    document.title = windowTitle;
+    if (desktop)
+      void getCurrentWindow().setTitle(windowTitle).catch(workbench.report);
+  }, [windowTitle]);
   const buildBusy = building(state.build);
 
   const startBuild = () => {
@@ -491,6 +519,11 @@ function App() {
     toggleSidebar,
     togglePanel,
     resetLayout,
+    terminal: () => {
+      if (terminalOpen) setPanel("terminal", false);
+      else showTerminal();
+    },
+    newTerminal,
   });
 
   const command = (label: TranslationKey) =>
@@ -546,6 +579,26 @@ function App() {
         if (state.ready) setCommandOpen(true);
         return;
       }
+      if (modifier && event.code === "Backquote") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.shiftKey) newTerminal();
+        else if (terminalOpen) setPanel("terminal", false);
+        else showTerminal();
+        return;
+      }
+      if (modifier && key === "j") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        togglePanel();
+        return;
+      }
+      // Terminal editing keys (Ctrl+C, Ctrl+W, Ctrl+K, etc.) belong to the shell.
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".terminal-panel")
+      )
+        return;
       if (modifier && key === "k") {
         chordUntil = Date.now() + 1500;
         event.preventDefault();
@@ -600,11 +653,6 @@ function App() {
         event.stopImmediatePropagation();
         toggleSidebar();
         return;
-      } else if (modifier && key === "j") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setProblemsOpen((value) => !value);
-        return;
       } else if (modifier && key === "t") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -635,6 +683,7 @@ function App() {
     projectOpen,
     quickOpen,
     gitDiff,
+    terminalOpen,
   ]);
   useEffect(() => {
     const preventLoss = (event: BeforeUnloadEvent) => {
@@ -662,7 +711,7 @@ function App() {
         } as CSSProperties
       }
     >
-      <header className="ide-menubar">
+      <header className="ide-menubar" data-tauri-drag-region>
         <span className="app-mark" aria-label={t("app.name")}>
           ♟
         </span>
@@ -726,6 +775,7 @@ function App() {
             <CommandMenuItem command={command("command.settings")} />
             <CommandMenuItem command={command("search.title")} />
             <CommandMenuItem command={command("scm.title")} />
+            <CommandMenuItem command={command("terminal.toggle")} />
             <CommandMenuItem command={command("search.files")} />
             <CommandMenuItem command={command("layout.toggleSidebar")} />
             <CommandMenuItem command={command("layout.togglePanel")} />
@@ -751,10 +801,15 @@ function App() {
             <CommandMenuItem command={command("project.title")} />
             <CommandMenuItem command={command("build.output")} />
           </Menu>
+          <Menu label="menu.terminal">
+            <CommandMenuItem command={command("terminal.new")} />
+            <CommandMenuItem command={command("terminal.toggle")} />
+          </Menu>
         </Menubar>
-        <span className="window-title">
-          {state.root?.split(/[\\/]/).at(-1) ?? t("app.name")}
+        <span className="window-title" data-tauri-drag-region>
+          {windowTitle}
         </span>
+        <WindowControls />
       </header>
       {state.error && (
         <div className="error-banner" role="alert">
@@ -979,8 +1034,8 @@ function App() {
               </div>
             )}
           </div>
-          {layout.panelVisible && (
-            <>
+          <>
+            {layout.panelVisible && (
               <Splitter
                 vertical={false}
                 shell={shell}
@@ -992,21 +1047,84 @@ function App() {
                 label="layout.resizePanel"
                 controls="workspace-panel"
               />
-              <div ref={panel} id="workspace-panel" className="bottom-panel">
+            )}
+            <div
+              ref={panel}
+              id="workspace-panel"
+              className="bottom-panel"
+              hidden={!layout.panelVisible}
+            >
+              <div className="panel-tabs-heading">
+                <div role="tablist" aria-label={t("panel.tabs")}>
+                  {(["problems", "build", "terminal"] as const).map(
+                    (kind, index, kinds) => (
+                      <button
+                        key={kind}
+                        id={`panel-tab-${kind}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={layout.panel === kind}
+                        aria-controls={`panel-${kind}`}
+                        tabIndex={layout.panel === kind ? 0 : -1}
+                        onClick={() => setPanel(kind, true)}
+                        onKeyDown={(event) => {
+                          let selected: typeof kind | undefined;
+                          if (event.key === "ArrowRight")
+                            selected = kinds[(index + 1) % kinds.length];
+                          if (event.key === "ArrowLeft")
+                            selected =
+                              kinds[(index + kinds.length - 1) % kinds.length];
+                          if (event.key === "Home") selected = kinds[0];
+                          if (event.key === "End") selected = kinds.at(-1);
+                          if (selected) {
+                            event.preventDefault();
+                            setPanel(selected, true);
+                            document
+                              .getElementById(`panel-tab-${selected}`)
+                              ?.focus();
+                          }
+                        }}
+                      >
+                        {t(
+                          kind === "problems"
+                            ? "command.problems"
+                            : kind === "build"
+                              ? "build.output"
+                              : "terminal.title"
+                        )}
+                        {kind === "problems" && state.problems.length > 0 && (
+                          <span className="panel-count">
+                            {state.problems.length}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  )}
+                </div>
+                <div className="panel-header-actions">
+                  <div
+                    ref={setTerminalControls}
+                    className="terminal-header-controls"
+                    hidden={!terminalOpen}
+                  />
+                  <button
+                    type="button"
+                    aria-label={t("panel.close")}
+                    onClick={() => setPanel(layout.panel, false)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div
+                role="tabpanel"
+                id="panel-problems"
+                aria-labelledby="panel-tab-problems"
+                className="panel-content"
+                hidden={!problemsOpen}
+              >
                 {problemsOpen && (
                   <section className="problems-panel">
-                    <div className="panel-heading">
-                      <span>
-                        {t("command.problems")} ({state.problems.length})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setProblemsOpen(false)}
-                        aria-label={t("command.close")}
-                      >
-                        ×
-                      </button>
-                    </div>
                     {state.problems.length ? (
                       <ul>
                         {state.problems.map((problem, index) => (
@@ -1052,16 +1170,38 @@ function App() {
                     )}
                   </section>
                 )}
-                {buildOpen && !problemsOpen && (
+              </div>
+              <div
+                role="tabpanel"
+                id="panel-build"
+                aria-labelledby="panel-tab-build"
+                className="panel-content"
+                hidden={!buildOpen}
+              >
+                {buildOpen && (
                   <BuildPanel
                     state={state.build}
-                    close={closeBuild}
                     configure={configureProject}
                   />
                 )}
               </div>
-            </>
-          )}
+              <div
+                role="tabpanel"
+                id="panel-terminal"
+                aria-labelledby="panel-tab-terminal"
+                className="panel-content"
+                hidden={!terminalOpen}
+              >
+                <TerminalPanel
+                  ref={terminal}
+                  root={state.root}
+                  visible={terminalOpen}
+                  controls={terminalControls}
+                  settings={state.settings}
+                />
+              </div>
+            </div>
+          </>
         </section>
       </div>
       <footer className="statusbar">

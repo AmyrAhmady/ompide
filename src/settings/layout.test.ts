@@ -11,10 +11,14 @@ it("loads valid layout preferences without accepting malformed sizes or view ide
       sidebarWidth: Infinity,
       panelHeight: -1,
       sidebarVisible: "yes",
-      panel: "terminal",
+      panel: "invalid",
       sidebar: "invalid",
     })
   ).toEqual(defaultLayout);
+  expect(parseLayout({ panel: "terminal", panelVisible: true })).toMatchObject({
+    panel: "terminal",
+    panelVisible: true,
+  });
   expect(
     parseLayout({
       sidebarWidth: 400,

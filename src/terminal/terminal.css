@@ -1,0 +1,77 @@
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--terminal-background);
+  color: var(--terminal-foreground);
+}
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.terminal-toolbar button,
+.terminal-toolbar select {
+  background: var(--toolbar-buttonBackground);
+  color: var(--editor-foreground);
+  border: 1px solid var(--toolbar-buttonBorder);
+  border-radius: var(--radius-control);
+  max-width: 135px;
+  min-width: 40px;
+}
+.terminal-toolbar select {
+  height: 26px;
+  padding: 0 5px;
+}
+.panel-tabs-heading .terminal-toolbar button {
+  padding: 0 4px;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  min-width: 28px;
+  background: var(--toolbar-buttonBackground);
+  border: 1px solid var(--toolbar-buttonBorder);
+}
+.panel-tabs-heading .terminal-toolbar button:hover:enabled,
+.terminal-toolbar select:hover {
+  background: var(--toolbar-buttonHoverBackground);
+}
+.terminal-toolbar svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+}
+.terminal-surface {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 4px 10px;
+}
+.terminal-surface[hidden] {
+  display: none;
+}
+.terminal-surface .xterm {
+  height: 100%;
+}
+.terminal-cwd {
+  font-size: 11px;
+  color: var(--descriptionForeground);
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.terminal-empty,
+.terminal-error {
+  padding: 8px 14px;
+}
+.terminal-error {
+  color: var(--editorError-foreground);
+  display: flex;
+  justify-content: space-between;
+}

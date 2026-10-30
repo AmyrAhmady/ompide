@@ -1,10 +1,35 @@
 mod commands;
+#[cfg(windows)]
+mod windows_chrome;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::NativeState::default())
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                use tauri::Manager;
+                let state = webview.state::<commands::NativeState>();
+                state
+                    .terminal_generation
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                if let Ok(mut terminals) = state.terminals.lock() {
+                    terminals.clear();
+                }
+            }
+        })
+        .setup(|app| {
+            #[cfg(windows)]
+            {
+                use tauri::Manager;
+                let window = app.get_webview_window("main").expect("main window missing");
+                windows_chrome::install(&window)?;
+            }
+            #[cfg(not(windows))]
+            let _ = app;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::choose_workspace,
             commands::activate_workspace,
@@ -39,12 +64,22 @@ pub fn run() {
             commands::trash_entry,
             commands::git_request,
             commands::cancel_git,
+            commands::terminal_shells,
+            commands::terminal_start,
+            commands::terminal_write,
+            commands::terminal_resize,
+            commands::terminal_acknowledge,
+            commands::terminal_close,
+            commands::terminal_close_all,
         ])
         .build(tauri::generate_context!())
         .expect("could not initialize Pawn IDE")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
+                if let Ok(mut terminals) = app.state::<commands::NativeState>().terminals.lock() {
+                    terminals.clear();
+                }
                 if let Ok(git) = app.state::<commands::NativeState>().git.lock()
                     && let Some((_, signal)) = git.as_ref()
                 {

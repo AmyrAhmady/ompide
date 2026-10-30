@@ -5,11 +5,9 @@ import { building, type BuildState } from "./types";
 
 function BuildPanelView({
   state,
-  close,
   configure,
 }: {
   state: BuildState;
-  close: () => void;
   configure: () => void;
 }) {
   const output = useRef<HTMLPreElement>(null);
@@ -56,9 +54,6 @@ function BuildPanelView({
               {t("build.cancel")}
             </button>
           )}
-          <button type="button" onClick={close} aria-label={t("command.close")}>
-            ×
-          </button>
         </div>
       </div>
       <div className="build-summary" role="status">

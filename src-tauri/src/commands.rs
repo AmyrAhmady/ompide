@@ -29,9 +29,14 @@ pub use file_operations::*;
 #[path = "git_commands.rs"]
 mod source_control;
 pub use source_control::*;
+#[path = "terminal_commands.rs"]
+mod terminals;
+pub use terminals::*;
 
 #[derive(Default)]
 pub struct NativeState {
+    pub terminal_generation: AtomicU64,
+    pub terminals: Mutex<std::collections::HashMap<u64, pawn_core::terminal::Session>>,
     pub git: Mutex<Option<(u64, std::sync::Arc<std::sync::atomic::AtomicBool>)>>,
     workspace: Mutex<Option<Workspace>>,
     allowed: Mutex<HashSet<PathBuf>>,

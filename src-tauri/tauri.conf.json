@@ -15,8 +15,9 @@
         "title": "Pawn IDE",
         "width": 1280,
         "height": 800,
-        "minWidth": 760,
-        "minHeight": 480
+        "minWidth": 500,
+        "minHeight": 360,
+        "decorations": false
       }
     ],
     "security": {
@@ -30,7 +31,8 @@
     ],
     "resources": [
       "binaries/licenses/",
-      "binaries/compiler/"
+      "binaries/compiler/",
+      "licenses/"
     ],
     "targets": "all",
     "icon": [

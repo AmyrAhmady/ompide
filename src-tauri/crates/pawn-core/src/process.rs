@@ -24,10 +24,13 @@ pub struct Output {
 }
 
 #[cfg(windows)]
-struct Job(windows_sys::Win32::Foundation::HANDLE);
+pub(crate) struct Job(windows_sys::Win32::Foundation::HANDLE);
+// This owned kernel handle has no thread affinity and is never borrowed after close.
+#[cfg(windows)]
+unsafe impl Send for Job {}
 #[cfg(windows)]
 impl Job {
-    fn new() -> io::Result<Self> {
+    pub(crate) fn new() -> io::Result<Self> {
         use windows_sys::Win32::System::JobObjects::*;
         // The handle is owned here, never inherited or exposed to the child.
         let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
@@ -52,11 +55,11 @@ impl Job {
     }
     fn assign(&self, child: &Child) -> io::Result<()> {
         use std::os::windows::io::AsRawHandle;
+        self.assign_handle(child.as_raw_handle())
+    }
+    pub(crate) fn assign_handle(&self, handle: std::os::windows::io::RawHandle) -> io::Result<()> {
         if unsafe {
-            windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(
-                self.0,
-                child.as_raw_handle(),
-            )
+            windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(self.0, handle)
         } == 0
         {
             return Err(io::Error::last_os_error());

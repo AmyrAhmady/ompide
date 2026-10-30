@@ -24,9 +24,68 @@ Undo support. Explorer creation, rename, recoverable deletion, current-file reve
 and keyboard/context-menu workflows are also verified on Windows. Installed
 packaging remains unfinished. Debugging through pawndebug is planned for a later release, outside the first-release scope.
 
-Deferred additions after the core IDE is stable: an integrated terminal, an
-opt-in local MCP server for external AI agents, and an integrated title bar
-replacing native window decorations. These are roadmap items, not current features.
+The bottom panel has Problems, Build Output and Terminal tabs. The integrated
+terminal uses xterm.js and native PTYs (Windows ConPTY), with installed shell
+profiles, multiple sessions and process cleanup. The integrated title bar replaces
+the native title strip while retaining native window operations and unsaved-close
+prompts. See the usage and validation notes below.
+
+An opt-in local MCP server for external AI agents and a further VS Code-style
+Source Control panel redesign remain deferred.
+
+The workbench uses a shared rounded visual style: subtle pane corners and thin
+separators, rounded selected editor/panel tabs, activity buttons and file rows,
+and consistent menus, fields and dialogs. Terminal header controls have visible
+themed surfaces, outlines and hover/focus states. The visual rules apply to the
+existing Source Control view; its larger layout redesign remains deferred.
+
+## Integrated terminal and title bar
+
+Use **Terminal → New Terminal** or **Ctrl+Shift+`** to create a shell. Select an
+installed shell in the Terminal toolbar before creating another session. Windows
+profiles include PowerShell 7 when installed, Windows PowerShell and Command
+Prompt. No shell or workspace command runs merely because a workspace or a saved
+Terminal tab opens. Shell profiles/autostart hooks are disabled for the supplied
+profiles; the IDE does not download or install a shell.
+
+**Ctrl+`** toggles Terminal; **Ctrl+J** hides or restores the selected bottom-panel
+tab. Problems, Build Output and Terminal share one resizable panel. Its tabs
+support arrows, Home and End. Session selection, shell profiles, **+** and Kill Terminal controls sit on the
+right side of the panel header, visible only while Terminal is selected. Up to eight sessions can remain open. Scrollback is
+bounded to 5,000 lines, native output uses acknowledgement-based backpressure, and
+input has bounded queues. A new session starts in the workspace folder, or the
+user's home folder when no workspace is open. Existing sessions retain their
+working directory after workspace changes; their original starting path remains
+visible. Tabs and hiding preserve live processes and output. Sessions do not
+persist across application exits or WebView reloads.
+
+Use **Ctrl+C** to interrupt commands, **Ctrl+Shift+C** to copy a selection, and
+**Ctrl+Shift+V** to paste. Paste
+uses xterm's bracketed-paste handling where the shell supports it. Terminal output
+does not receive clipboard or executable-link handlers. Commands entered or pasted
+by the user have the normal permissions of their shell. Killing a terminal or
+closing the IDE terminates its owned shell and descendants; it does not wait for
+long-running commands to finish. Cancelling an unsaved-editor close keeps sessions
+running.
+
+The integrated title bar supports dragging, double-click maximize/restore,
+minimize, maximize/restore and close, plus Windows edge resizing, snap layouts and
+system shortcuts. Window titles include the active file, dirty state and workspace.
+Windows uses a small native maximize-button hit-test overlay rather than a fake
+snap menu. Its MIT source adaptation and attribution are in
+`src-tauri/src/windows_chrome.rs` and `src-tauri/licenses/windows-chrome.txt`.
+Shells and window chrome have only been verified on Windows x64; Linux/macOS and
+installed-release validation remain outstanding.
+
+To run the native regression against an explicitly launched debug app with Vite
+and loopback CDP port 9222, use `node scripts/terminal-smoke.mjs --pid <app-pid>`.
+It uses disposable workspaces, restores preferences, tests PTY lifecycle and
+window controls, and closes the application afterward. Clipboard UI wiring uses an
+isolated browser clipboard in this test to preserve the user's real clipboard.
+`powershell -NoProfile -File scripts/window-probe.ps1 -ProcessId <app-pid>` inspects
+the real Windows hit-test regions. Native snap-flyout screenshots require visual
+inspection. Focused backend tests: `cargo test --manifest-path src-tauri/Cargo.toml
+-p pawn-core terminal::tests`.
 
 ## Development
 
@@ -228,7 +287,9 @@ These versioned color tokens are shared with the shell and Monaco where relevant
 | --- | --- |
 | Editor | `editor.background`, `editor.foreground`, `editor.selectionBackground`, `editor.lineHighlightBackground`, `editorLineNumber.foreground`, `editorCursor.foreground` |
 | Widgets and diagnostics | `editorWidget.background`, `editorWidget.border`, `editorSuggestWidget.selectedBackground`, `editorError.foreground`, `editorWarning.foreground` |
-| Sidebar and header | `sideBar.background`, `sideBar.foreground`, `activityBar.background`, `titleBar.activeBackground` |
+| Sidebar and header | `sideBar.background`, `sideBar.foreground`, `activityBar.background`, `titleBar.activeBackground`, `titleBar.activeForeground`, `titleBar.inactiveBackground`, `titleBar.inactiveForeground`, `windowControl.closeBackground`, `windowControl.closeForeground` |
+| Terminal | `terminal.background`, `terminal.foreground`, `terminalCursor.foreground`, `terminal.selectionBackground`, the 16 `terminal.ansi*` colors |
+| Panel tabs and toolbar | `panelTab.activeBackground`, `panelTab.activeForeground`, `toolbar.buttonBackground`, `toolbar.buttonHoverBackground`, `toolbar.buttonBorder` |
 | Tabs and panels | `tab.activeBackground`, `tab.inactiveBackground`, `panel.background`, `panel.border` |
 | Status | `statusBar.background`, `statusBar.foreground` |
 | Interaction | `focusBorder`, `list.hoverBackground`, `list.activeSelectionBackground`, `button.background`, `button.foreground` |
@@ -412,7 +473,8 @@ uses the debug profile; a release-optimized installer remains unverified.
 | Format Document | Shift+Alt+F |
 | Build Project | Ctrl+Shift+B |
 | Find File / Search Workspace | Ctrl+P / Ctrl+Shift+F |
-| Problems / Settings | Ctrl+J / Ctrl+, |
+| Toggle Bottom Panel / Settings | Ctrl+J / Ctrl+, |
+| Toggle Terminal / New Terminal | Ctrl+Backquote / Ctrl+Shift+Backquote |
 | Toggle Sidebar / Reveal Explorer | Ctrl+B / Ctrl+Shift+E |
 | Command Palette | F1 / Ctrl+Shift+P |
 

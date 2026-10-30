@@ -4,7 +4,7 @@ export interface Layout {
   sidebarVisible: boolean;
   sidebar: "explorer" | "search" | "sourceControl";
   panelVisible: boolean;
-  panel: "problems" | "build";
+  panel: "problems" | "build" | "terminal";
 }
 
 export const defaultLayout: Layout = {
@@ -40,7 +40,11 @@ export function parseLayout(value: unknown): Layout {
     source.sidebar === "sourceControl"
   )
     layout.sidebar = source.sidebar;
-  if (source.panel === "problems" || source.panel === "build")
+  if (
+    source.panel === "problems" ||
+    source.panel === "build" ||
+    source.panel === "terminal"
+  )
     layout.panel = source.panel;
   return layout;
 }

@@ -24,6 +24,8 @@ export interface CommandViews {
   toggleSidebar: () => void;
   togglePanel: () => void;
   resetLayout: () => void;
+  terminal: () => void;
+  newTerminal: () => void;
 }
 
 /** Menus and the palette share command availability and execution. */
@@ -154,7 +156,7 @@ export function createCommands(
     views.quickOpen,
     "Ctrl+P"
   );
-  add("command.problems", true, views.problems, "Ctrl+J");
+  add("command.problems", true, views.problems);
   add(
     "build.command",
     mutable && Boolean(state.root) && !busy,
@@ -164,6 +166,8 @@ export function createCommands(
   add("build.cancel", busy, () => workbench.cancelBuild());
   add("project.title", mutable && Boolean(state.root) && !busy, views.project);
   add("build.output", true, views.buildOutput);
+  add("terminal.toggle", nativeReady, views.terminal, "Ctrl+`");
+  add("terminal.new", nativeReady, views.newTerminal, "Ctrl+Shift+`");
   add("command.focusEditor", active, () => workbench.focusEditor());
   add("command.toggleMinimap", state.ready, () =>
     workbench.settings({ minimap: !state.settings.minimap })
@@ -173,7 +177,7 @@ export function createCommands(
   );
   add("command.palette", state.ready, views.palette, "Ctrl+Shift+P");
   add("layout.toggleSidebar", state.ready, views.toggleSidebar, "Ctrl+B");
-  add("layout.togglePanel", state.ready, views.togglePanel);
+  add("layout.togglePanel", state.ready, views.togglePanel, "Ctrl+J");
   add("layout.reset", state.ready, views.resetLayout);
   return commands;
 }

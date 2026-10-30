@@ -349,6 +349,7 @@ export class Workbench {
               await this.buildPending;
               await this.stopLanguage();
               await this.stopWatching();
+              await native.terminalCloseAll();
               await getCurrentWindow().destroy();
             }
           } catch (error) {
