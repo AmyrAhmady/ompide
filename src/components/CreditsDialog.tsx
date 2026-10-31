@@ -8,6 +8,7 @@ import {
 } from "../lib/project-links";
 import { workbench } from "../app/workbench";
 import { Modal } from "./Modal";
+import { AppLogo } from "./AppLogo";
 
 function CreditLink({
   link,
@@ -42,7 +43,10 @@ export function CreditsDialog({ close }: { close: () => void }) {
       className="credits-dialog"
     >
       <h2>{t("help.credits")}</h2>
-      <p className="credits-name">{t("app.name")}</p>
+      <div className="credits-brand">
+        <AppLogo size={48} decorative />
+        <p className="credits-name">{t("app.name")}</p>
+      </div>
       <p>{t("help.description")}</p>
       <p>{t("help.createdBy", { name: t("help.author") })}</p>
       <p>

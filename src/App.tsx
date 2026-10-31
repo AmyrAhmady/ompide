@@ -1,4 +1,5 @@
 import { WindowControls } from "./components/WindowControls";
+import { AppLogo } from "./components/AppLogo";
 import { TerminalPanel, type TerminalActions } from "./terminal/TerminalPanel";
 import { ActivityBar } from "./components/ActivityBar";
 import { SourceControlPanel } from "./sourceControl/SourceControlPanel";
@@ -721,8 +722,8 @@ function App() {
       }
     >
       <header className="ide-menubar" data-tauri-drag-region>
-        <span className="app-mark" aria-label={t("app.name")}>
-          ♟
+        <span className="app-mark">
+          <AppLogo />
         </span>
         <Menubar label={t("app.name")}>
           <Menu label="menu.file">
@@ -996,6 +997,7 @@ function App() {
             )}
             {!active && !gitDiff && (
               <div className="empty-editor">
+                <AppLogo size={64} decorative />
                 <h1>{t("app.name")}</h1>
                 <p>{t("editor.welcome")}</p>
                 <p className="muted">

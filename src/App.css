@@ -69,9 +69,16 @@ textarea:focus-visible,
   overflow: visible;
 }
 .app-mark {
-  padding: 0 12px;
-  color: var(--focusBorder);
-  font-size: 22px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 10px;
+}
+.app-logo {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  user-select: none;
 }
 .ide-menubar nav {
   display: flex;
@@ -556,6 +563,9 @@ hr {
   font-size: 28px;
   margin: 0 0 8px;
 }
+.empty-editor > .app-logo {
+  margin-bottom: 12px;
+}
 .empty-editor h2 {
   font-size: 13px;
   font-weight: 500;
@@ -719,6 +729,11 @@ dialog::backdrop {
   font-size: 24px;
   font-weight: 600;
   margin: 0;
+}
+.credits-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .credits-dialog a {
   color: var(--textLink-foreground);

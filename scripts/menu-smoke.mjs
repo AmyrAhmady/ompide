@@ -66,6 +66,51 @@ try {
     await page.getByLabel("Color theme", { exact: true }).selectOption(theme);
     await page.getByRole("button", { name: "Dismiss", exact: true }).click();
 
+    await expect(page.locator(".app-mark .app-logo")).toBeVisible();
+    await expect(page.locator(".empty-editor .app-logo")).toBeVisible();
+    expect(await page.locator('link[rel="icon"]').getAttribute("href")).toBe(
+      "/favicon.ico"
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(".app-logo")
+          .evaluateAll((images) =>
+            images.every((image) => image.complete && image.naturalWidth > 0)
+          )
+      )
+      .toBe(true);
+    const alpha = await page
+      .locator(".app-mark .app-logo")
+      .evaluate((image) => {
+        const canvas = image.ownerDocument.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        ).data;
+        return {
+          corner: pixels[3],
+          center:
+            pixels[
+              (Math.floor(canvas.height / 2) * canvas.width +
+                Math.floor(canvas.width / 2)) *
+                4 +
+                3
+            ],
+        };
+      });
+    expect(alpha.corner).toBe(0);
+    expect(alpha.center).toBeGreaterThan(0);
+    await page.screenshot({
+      path: path.join(root, `test-results/branding-${theme}.png`),
+    });
+
     await expect(page.locator(".menu summary")).toHaveText([
       "File",
       "Edit",
@@ -103,6 +148,7 @@ try {
     await page.getByRole("menuitem", { name: "Credits", exact: true }).click();
     const credits = page.getByRole("dialog", { name: "Credits", exact: true });
     await expect(credits).toBeVisible();
+    await expect(credits.locator(".app-logo")).toBeVisible();
     await expect(credits).toContainText("Created by Amyr Ahmady.");
     await expect(
       credits.getByRole("link", { name: "AmyrAhmady on GitHub" })
