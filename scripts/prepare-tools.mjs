@@ -36,6 +36,7 @@ for (const tool of manifest.tools) {
       [
         path.join(root, "scripts/build-pawnlsp.mjs"),
         ...(download ? ["--download"] : []),
+        ...(process.argv.includes("--reproducible") ? ["--reproducible"] : []),
       ],
       { cwd: root, stdio: "inherit", windowsHide: true }
     );

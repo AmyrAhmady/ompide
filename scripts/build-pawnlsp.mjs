@@ -15,6 +15,7 @@ import path from "node:path";
 import { listFiles, removeTemporary } from "./release-support.mjs";
 import { copyPackageNotices } from "./release-notices.mjs";
 import { selectGo } from "./go-toolchain.mjs";
+import { localBuildMatches, buildRecord } from "./lsp-build-record.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const cache = path.join(root, ".tools-cache");
@@ -30,6 +31,7 @@ const licenseDirectory = path.join(root, "src-tauri/binaries/licenses");
 const licenseIndex = path.join(licenseDirectory, "pawnlsp-dependencies.json");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const download = process.argv.includes("--download");
+const reproducible = process.argv.includes("--reproducible");
 if (process.platform !== "win32" || process.arch !== "x64")
   throw new Error("This server build is verified only for Windows x64.");
 if (!process.argv.includes("--rebuild")) {
@@ -39,9 +41,13 @@ if (!process.argv.includes("--rebuild")) {
       await listFiles(path.join(licenseDirectory, "pawnlsp-dependencies"))
     );
     if (
-      sha256(await readFile(destination)) === tool.executableSha256 &&
-      notices.schemaVersion === 1 &&
-      notices.executableSha256 === tool.executableSha256 &&
+      localBuildMatches(
+        notices,
+        pin,
+        tool,
+        sha256(await readFile(destination)),
+        reproducible
+      ) &&
       Array.isArray(notices.dependencies) &&
       notices.dependencies.length > 0 &&
       notices.dependencies.every(
@@ -100,15 +106,20 @@ const environment = {
   GOFLAGS: "",
   GOWORK: "off",
 };
-const { executable: go, source: goSource } = await selectGo({
+const {
+  executable: go,
+  source: goSource,
+  version: goVersion,
+} = await selectGo({
   override: process.env.OMPIDE_GO,
   searchPath: process.env.PATH,
   cached: path.join(cache, `${pin.goVersion}/bin/go.exe`),
-  version: pin.goVersion,
+  version: pin.minimumGoVersion,
+  exactVersion: reproducible ? pin.goVersion : undefined,
   checksum: pin.developmentGoDistribution.executableSha256,
   environment,
 });
-console.log(`Using ${pin.goVersion} from ${goSource}: ${go}`);
+console.log(`Using ${goVersion} from ${goSource}: ${go}`);
 const staging = await mkdtemp(path.join(cache, "pawnlsp-build-"));
 try {
   const prefix = `pawnlsp-${pin.source.commit}`;
@@ -128,6 +139,12 @@ try {
     throw new Error("Unsafe source archive path");
   execFileSync("tar", ["-xf", archive, "-C", staging], { windowsHide: true });
   const source = path.join(staging, prefix);
+  const moduleText = await readFile(path.join(source, "go.mod"), "utf8");
+  if (
+    `go${moduleText.match(/^go\s+(\d+\.\d+\.\d+)\s*$/m)?.[1]}` !==
+    pin.minimumGoVersion
+  )
+    throw new Error("Pinned minimum Go version disagrees with upstream go.mod");
   const directory = path.relative(root, source).replaceAll("\\", "/");
   execFileSync("git", ["apply", "--check", `--directory=${directory}`, patch], {
     cwd: root,
@@ -193,7 +210,10 @@ try {
     "./cmd/pawnlsp",
   ]);
   const builtHash = sha256(await readFile(executable));
-  if (builtHash !== tool.executableSha256) {
+  if (
+    (reproducible || goVersion === pin.goVersion) &&
+    builtHash !== tool.executableSha256
+  ) {
     await copyFile(executable, path.join(cache, "pawnlsp-reproduction.exe"));
     throw new Error(
       `Built server checksum ${builtHash} differs from the pinned artifact ${tool.executableSha256}`
@@ -259,7 +279,8 @@ try {
     JSON.stringify(
       {
         schemaVersion: 1,
-        executableSha256: tool.executableSha256,
+        executableSha256: builtHash,
+        build: buildRecord(pin, goVersion),
         dependencies,
       },
       null,
@@ -268,7 +289,9 @@ try {
   );
   await mkdir(path.dirname(destination), { recursive: true });
   await copyFile(executable, destination);
-  console.log(`Verified pawnlsp ${pin.version}: ${tool.executableSha256}`);
+  console.log(
+    `Verified pawnlsp ${pin.version} built with ${goVersion}: ${builtHash}`
+  );
 } finally {
   await removeTemporary(staging, cache, "pawnlsp-build-");
 }

@@ -39,23 +39,30 @@ correction. Token caching, trivia reuse, debounce and background analysis remain
 enabled. A synchronous workspace-analysis regression fails before this fix;
 real protocol tests cover repeated full-text and full-range valid/invalid edits.
 
-`pawnlsp-build.json` pins source/patch checksums and development compiler provenance.
-`scripts/build-pawnlsp.mjs` extracts a fresh verified source archive, applies the
-patch, runs the upstream tests and builds with Go 1.26.5, CGO disabled, trimmed
-paths and an empty build identifier. The final executable must match the hash in
-`tools.json` before it replaces the prepared sidecar. Fresh source builds reproduce
-the pinned hash. The original prototype differed only in Go's action build IDs;
-those are omitted from the distributed build.
+`pawnlsp-build.json` pins source/patch checksums, the minimum Go version and the
+compiler used for reproducible official releases. The pinned upstream go.mod
+requires **Go 1.26.5 or newer**. Normal local preparation accepts newer stable Go
+versions; Go 1.27.3 passed the upstream tests and our real LSP integration checks.
 
-A cached matching executable requires no Go installation. Rebuilding requires
-Windows x64 Go 1.26.5, Git and tar. Compiler selection checks an explicit
-`OMPIDE_GO` override first, then compatible `go.exe` installations on `PATH`, then
-the checksum-pinned distribution in `.tools-cache/go1.26.5/`. A normal system Go
-installation needs no environment override. Every candidate must report exactly
-`go1.26.5 windows/amd64`; an invalid explicit override fails rather than silently
-selecting another compiler. The cached compiler additionally requires its pinned
-checksum. `GOTOOLCHAIN=local` prevents automatic compiler downloads. Go is a
-development prerequisite and is never bundled or downloaded by preparation.
+`scripts/build-pawnlsp.mjs` verifies source and patch checksums, checks that the
+recorded minimum agrees with upstream go.mod, verifies canonical dependency trees,
+runs upstream tests and builds with CGO disabled, trimmed paths and an empty build
+identifier. Compiler selection checks OMPIDE_GO, compatible installations on PATH,
+then the checksum-verified Go 1.26.5 cache. Explicit invalid overrides fail with a
+useful error. GOTOOLCHAIN=local prevents automatic compiler downloads. Neither
+opening workspaces nor preparation downloads Go itself.
+
+Different compiler versions produce different executables. Local builds record
+the actual checksum, compiler version, source/patch identity and target in the
+pawnlsp dependency-notice index. The application validates that provenance at
+build time and embeds the expected checksum; runtime verification still rejects a
+changed executable. A workspace or runtime-edited metadata file cannot change
+that compiled expectation. A valid prepared binary needs no Go installation.
+
+Official release CI adds `--reproducible`: it retains exactly Go 1.26.5 and the
+pinned executable hash in tools.json. The release ZIP verifier still rejects other
+hashes. To reproduce an official package, use the same flag locally; ordinary
+development builds do not need that compiler version.
 
 `--download` explicitly permits downloading the pinned source and Go module
 dependencies; the default is offline. The two `golang.org/x` dependencies use their
@@ -66,8 +73,10 @@ addition to Go's normal module verification. Versions and sources remain pinned.
 ```powershell
 # Uses compatible Go from PATH; OMPIDE_GO is an optional explicit override.
 npm.cmd run tools:build-lsp -- --download
-# Reproduce from cached source/dependencies, including the full upstream tests:
+# Force a local rebuild with the selected compatible compiler:
 npm.cmd run tools:build-lsp -- --rebuild
+# Reproduce the official pinned binary (requires release compiler):
+npm.cmd run tools:build-lsp -- --rebuild --reproducible
 ```
 
 The shipped notices include PawnKit's MIT license and the Go BSD license.

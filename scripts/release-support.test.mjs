@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
+  chmod,
   cp,
   mkdir,
   mkdtemp,
   readFile,
+  stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -134,6 +136,7 @@ test("dependency notices preserve nested legal files and reject outside paths", 
     const destination = path.join(directory, "notices");
     await mkdir(path.join(source, "vscode"), { recursive: true });
     await writeFile(path.join(source, "LICENSE"), "upstream license\n");
+    await chmod(path.join(source, "LICENSE"), 0o444);
     await writeFile(
       path.join(source, "vscode/ThirdPartyNotices.txt"),
       "upstream notices\n"
@@ -145,6 +148,9 @@ test("dependency notices preserve nested legal files and reject outside paths", 
     };
     const result = await copyPackageNotices(source, destination, info);
     assert.equal(result.notices.length, 2);
+    assert.ok(
+      (await stat(path.join(destination, result.notices[0]))).mode & 0o200
+    );
     assert.equal(
       await readFile(path.join(destination, result.notices[0]), "utf8"),
       "upstream license\n"

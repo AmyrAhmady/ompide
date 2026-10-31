@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { selectGo } from "./go-toolchain.mjs";
+import { selectGo, goAtLeast } from "./go-toolchain.mjs";
 
 async function fixture(t) {
   const directory = await mkdtemp(path.join(tmpdir(), "ompide-go-selection-"));
@@ -43,7 +43,11 @@ test("uses installed Go before an absent cache and prevents implicit toolchain d
     assert.equal(settings.windowsHide, true);
     return "go version go1.26.5 windows/amd64\r\n";
   });
-  assert.deepEqual(result, { executable: system, source: "PATH" });
+  assert.deepEqual(result, {
+    executable: system,
+    source: "PATH",
+    version: "go1.26.5",
+  });
 });
 
 test("explicit override wins and an invalid override does not silently fall back", async (t) => {
@@ -64,10 +68,14 @@ test("falls back from an incompatible system compiler to a checksum-verified cac
   const { system, options } = await fixture(t);
   const result = await selectGo(options, (executable) =>
     executable === system
-      ? "go version go1.26.6 windows/amd64"
+      ? "go version go1.26.4 windows/amd64"
       : "go version go1.26.5 windows/amd64"
   );
-  assert.deepEqual(result, { executable: options.cached, source: "cache" });
+  assert.deepEqual(result, {
+    executable: options.cached,
+    source: "cache",
+    version: "go1.26.5",
+  });
 });
 
 test("rejects a corrupt cache without running it", async (t) => {
@@ -93,7 +101,8 @@ test("reports missing tools and rejects the wrong architecture or version suffix
   options.override = "explicit-go.exe";
   for (const actual of [
     "go version go1.26.5 windows/arm64",
-    "go version go1.26.50 windows/amd64",
+    "go version go1.27rc1 windows/amd64",
+    "go version devel go1.28 windows/amd64",
   ])
     await assert.rejects(
       selectGo(options, () => actual),
@@ -117,4 +126,38 @@ test("finds a compatible compiler after missing and incompatible PATH entries", 
       : "go version go1.25.1 windows/amd64"
   );
   assert.equal(result.executable, system);
+});
+
+test("accepts newer stable Go releases with numeric version comparisons", async (t) => {
+  const { options } = await fixture(t);
+  for (const version of [
+    "go1.26.5",
+    "go1.26.6",
+    "go1.26.50",
+    "go1.27.0",
+    "go1.27.3",
+    "go1.100.0",
+  ]) {
+    assert.equal(goAtLeast(version, "go1.26.5"), true);
+    assert.equal(
+      (
+        await selectGo(
+          { ...options, override: "newer-go.exe" },
+          () => `go version ${version} windows/amd64`
+        )
+      ).version,
+      version
+    );
+  }
+  assert.equal(goAtLeast("go1.9.9", "go1.26.5"), false);
+});
+test("reproducible builds can still require the exact release compiler", async (t) => {
+  const { options } = await fixture(t);
+  await assert.rejects(
+    selectGo(
+      { ...options, exactVersion: "go1.26.5", override: "new-go.exe" },
+      () => "go version go1.27.3 windows/amd64"
+    ),
+    /go1.26.5 exactly/
+  );
 });

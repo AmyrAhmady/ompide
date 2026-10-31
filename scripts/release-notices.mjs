@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  chmod,
   copyFile,
   mkdir,
   readFile,
@@ -65,6 +66,9 @@ export async function copyPackageNotices(
     const target = path.join(destination, identifier, file);
     await mkdir(path.dirname(target), { recursive: true });
     await copyFile(source, target);
+    // Go's module cache is read-only. Generated copies must remain replaceable
+    // when Tauri refreshes resources during the next incremental build.
+    await chmod(target, 0o644);
     notices.push(`${identifier}/${file}`);
   }
   return { ...information, notices };

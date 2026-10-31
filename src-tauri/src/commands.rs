@@ -493,7 +493,7 @@ fn verified_lsp(app: &AppHandle) -> Result<ToolInfo> {
         &path,
         &["--version"],
         &pin.version,
-        (source == "bundled").then_some(pin.executable_sha256.as_str()),
+        (source == "bundled").then_some(env!("OMPIDE_LSP_SHA256")),
     )
     .map_err(|failure| {
         let mut failure = match failure {

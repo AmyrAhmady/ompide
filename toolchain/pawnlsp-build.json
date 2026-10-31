@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "version": "0.33.75-pawnide.2",
   "goVersion": "go1.26.5",
+  "minimumGoVersion": "go1.26.5",
   "source": {
     "commit": "bffabaa538c3b290fe22ccfbb61c3a4558af2a33",
     "url": "https://codeload.github.com/pawnkit/pawnlsp/zip/bffabaa538c3b290fe22ccfbb61c3a4558af2a33",
