@@ -1,6 +1,7 @@
 [package]
 name = "ompide"
 version = "0.1.0"
+license = "MPL-2.0"
 description = "ompide - a desktop IDE for Pawn, open.mp"
 authors = ["you"]
 edition = "2024"

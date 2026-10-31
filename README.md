@@ -92,6 +92,12 @@ For code changes, start with [the build guide](https://github.com/AmyrAhmady/omp
 your change. Keep dependency lockfiles up to date, and include a brief explanation
 of what changed and how you tested it.
 
+## License
+
+ompide's source code is licensed under the [Mozilla Public License 2.0](LICENSE),
+except where otherwise noted. Third-party components retain their own licenses
+and notices.
+
 ## Donations
 
 If you find the project useful and would like to support its development, you can
