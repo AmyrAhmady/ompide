@@ -14,7 +14,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { listFiles, removeTemporary } from "./release-support.mjs";
 import { copyPackageNotices } from "./release-notices.mjs";
-import { selectGo } from "./go-toolchain.mjs";
+import {
+  selectGo,
+  goBuildEnvironment,
+  goModuleDirectory,
+} from "./go-toolchain.mjs";
 import { localBuildMatches, buildRecord } from "./lsp-build-record.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -91,21 +95,7 @@ if (sha256(bytes) !== pin.source.sha256)
 const patch = path.join(root, "toolchain", pin.patch.path);
 if (sha256(await readFile(patch)) !== pin.patch.sha256)
   throw new Error("Source patch checksum mismatch");
-const environment = {
-  ...process.env,
-  GOTOOLCHAIN: "local",
-  CGO_ENABLED: "0",
-  GOTELEMETRY: "off",
-  GOPROXY: download ? "direct" : "off",
-  GOSUMDB: download ? "sum.golang.org" : "off",
-  GOPATH: path.join(cache, "go-work"),
-  GOMODCACHE: path.join(cache, "go-modules"),
-  GOCACHE: path.join(cache, "go-build"),
-  GOOS: "windows",
-  GOARCH: "amd64",
-  GOFLAGS: "",
-  GOWORK: "off",
-};
+const environment = goBuildEnvironment(process.env, download);
 const {
   executable: go,
   source: goSource,
@@ -161,17 +151,12 @@ try {
       stdio: "inherit",
       windowsHide: true,
     });
-  if (download)
-    runGo([
-      "mod",
-      "download",
-      ...pin.dependencyMirrors.map((dep) => `${dep.mirror}@${dep.version}`),
-    ]);
   // Authenticate the official GitHub mirror trees against the original, canonical Go module sums.
   for (const dependency of pin.dependencyMirrors) {
-    const directory = path.join(
-      environment.GOMODCACHE,
-      `${dependency.mirror}@${dependency.version}`
+    const directory = goModuleDirectory(
+      go,
+      `${dependency.mirror}@${dependency.version}`,
+      { cwd: source, env: environment }
     );
     const files = [];
     const walk = async (relative) => {

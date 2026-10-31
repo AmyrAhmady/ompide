@@ -52,6 +52,14 @@ then the checksum-verified Go 1.26.5 cache. Explicit invalid overrides fail with
 useful error. GOTOOLCHAIN=local prevents automatic compiler downloads. Neither
 opening workspaces nor preparation downloads Go itself.
 
+Go uses its normal `GOPATH`, `GOMODCACHE` and `GOCACHE` defaults or your configured
+values; preparation does not redirect these into `.tools-cache`. Module paths
+come from `go mod download -json`, including Go's module-name escaping. With
+`--download`, your Go proxy and checksum-database settings are preserved, including
+settings stored by `go env -w`. Without it, module network access is disabled.
+The project's `.tools-cache` still holds verified source archives and temporary
+source staging, which are separate from Go's own caches.
+
 Different compiler versions produce different executables. Local builds record
 the actual checksum, compiler version, source/patch identity and target in the
 pawnlsp dependency-notice index. The application validates that provenance at

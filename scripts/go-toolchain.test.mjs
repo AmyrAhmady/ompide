@@ -4,7 +4,12 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { selectGo, goAtLeast } from "./go-toolchain.mjs";
+import {
+  selectGo,
+  goAtLeast,
+  goBuildEnvironment,
+  goModuleDirectory,
+} from "./go-toolchain.mjs";
 
 async function fixture(t) {
   const directory = await mkdtemp(path.join(tmpdir(), "ompide-go-selection-"));
@@ -160,4 +165,64 @@ test("reproducible builds can still require the exact release compiler", async (
     ),
     /go1.26.5 exactly/
   );
+});
+
+test("uses standard Go caches and preserves configured cache and proxy settings", () => {
+  const ordinary = goBuildEnvironment({}, true);
+  for (const key of ["GOPATH", "GOMODCACHE", "GOCACHE", "GOPROXY", "GOSUMDB"])
+    assert.equal(Object.hasOwn(ordinary, key), false);
+  const configured = {
+    GOPATH: "user workspace",
+    GOMODCACHE: "user modules",
+    GOCACHE: "user build cache",
+    GOPROXY: "https://proxy.example",
+    GOSUMDB: "custom database",
+    GOENV: "user-go-env",
+  };
+  const result = goBuildEnvironment(configured, true);
+  for (const [key, value] of Object.entries(configured))
+    assert.equal(result[key], value);
+  const offline = goBuildEnvironment(configured, false);
+  assert.equal(offline.GOMODCACHE, configured.GOMODCACHE);
+  assert.equal(offline.GOCACHE, configured.GOCACHE);
+  assert.equal(offline.GOPROXY, "off");
+  assert.equal(offline.GOSUMDB, "off");
+});
+test("uses Go-reported module paths rather than constructing a private cache path", () => {
+  const environment = goBuildEnvironment({ GOMODCACHE: "custom cache" }, false);
+  const directory = path.resolve(
+    "custom cache",
+    "github.com",
+    "!example",
+    "module@v1.0.0"
+  );
+  const resolved = goModuleDirectory(
+    "go.exe",
+    "github.com/Example/module@v1.0.0",
+    { env: environment },
+    (executable, args, options) => {
+      assert.equal(executable, "go.exe");
+      assert.deepEqual(args, [
+        "mod",
+        "download",
+        "-json",
+        "github.com/Example/module@v1.0.0",
+      ]);
+      assert.equal(options.env, environment);
+      return JSON.stringify({ Dir: directory });
+    }
+  );
+  assert.equal(resolved, directory);
+  for (const value of [
+    {},
+    { Dir: "" },
+    { Dir: directory, Error: "not cached" },
+  ])
+    assert.throws(
+      () =>
+        goModuleDirectory("go.exe", "module@v1", {}, () =>
+          JSON.stringify(value)
+        ),
+      /Module source unavailable/
+    );
 });

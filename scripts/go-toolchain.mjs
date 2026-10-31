@@ -3,6 +3,35 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+export function goBuildEnvironment(environment, download) {
+  return {
+    ...environment,
+    GOTOOLCHAIN: "local",
+    CGO_ENABLED: "0",
+    GOTELEMETRY: "off",
+    ...(download ? {} : { GOPROXY: "off", GOSUMDB: "off" }),
+    GOOS: "windows",
+    GOARCH: "amd64",
+    GOFLAGS: "",
+    GOWORK: "off",
+  };
+}
+
+export function goModuleDirectory(go, module, options, run = execFileSync) {
+  const metadata = JSON.parse(
+    run(go, ["mod", "download", "-json", module], {
+      ...options,
+      encoding: "utf8",
+      windowsHide: true,
+    })
+  );
+  if (typeof metadata.Dir !== "string" || !metadata.Dir || metadata.Error)
+    throw new Error(
+      `Module source unavailable for ${module}: ${metadata.Error ?? "Go did not return a source directory"}`
+    );
+  return metadata.Dir;
+}
+
 export function goVersionParts(version) {
   const match = /^go(\d+)\.(\d+)\.(\d+)$/.exec(version);
   return match ? match.slice(1).map(Number) : undefined;
