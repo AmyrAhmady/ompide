@@ -3,12 +3,21 @@
   "name": "Pawn",
   "scopeName": "source.pawn",
   "patterns": [
-    { "include": "#comments" },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#macros"
+    },
     {
       "begin": "^(\\s*)(#)\\s*(include|tryinclude)\\b",
       "beginCaptures": {
-        "2": { "name": "punctuation.definition.directive.pawn" },
-        "3": { "name": "keyword.control.directive.include.pawn" }
+        "2": {
+          "name": "punctuation.definition.directive.pawn"
+        },
+        "3": {
+          "name": "keyword.control.directive.include.pawn"
+        }
       },
       "end": "$",
       "name": "meta.preprocessor.include.pawn",
@@ -17,154 +26,494 @@
           "match": "(<)([^>]+)(>)",
           "name": "string.quoted.other.include.pawn",
           "captures": {
-            "1": { "name": "punctuation.definition.string.begin.pawn" },
-            "3": { "name": "punctuation.definition.string.end.pawn" }
+            "1": {
+              "name": "punctuation.definition.string.begin.pawn"
+            },
+            "3": {
+              "name": "punctuation.definition.string.end.pawn"
+            }
           }
         },
-        { "include": "#strings" },
-        { "include": "#comments" }
-      ]
-    },
-    { "include": "#strings" },
-    {
-      "begin": "^(\\s*)(#)\\s*(define)\\s+([A-Za-z_@][A-Za-z0-9_@]*)\\s*(?=\\()",
-      "beginCaptures": {
-        "2": { "name": "punctuation.definition.directive.pawn" },
-        "3": { "name": "keyword.control.directive.pawn" },
-        "4": { "name": "entity.name.function.preprocessor.pawn" }
-      },
-      "end": "\\)",
-      "endCaptures": {
-        "0": { "name": "punctuation.definition.parameters.end.pawn" }
-      },
-      "patterns": [
         {
-          "match": "\\(",
-          "name": "punctuation.definition.parameters.begin.pawn"
+          "include": "#strings"
         },
         {
-          "match": "%(?:[0-9]+|[A-Za-z_@][A-Za-z0-9_@]*)",
-          "name": "variable.parameter.macro.pawn"
+          "include": "#comments"
         }
       ]
     },
     {
-      "match": "^(\\s*)(#)\\s*(define)\\s+([A-Za-z_@][A-Za-z0-9_@]*)",
+      "begin": "^(\\s*)(#)\\s*(error|warning)\\b",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.directive.pawn"
+        },
+        "3": {
+          "name": "keyword.control.directive.pawn"
+        }
+      },
+      "end": "(?<!\\\\)(?=\\n)",
+      "name": "meta.preprocessor.message.pawn",
+      "contentName": "string.unquoted.preprocessor-message.pawn",
+      "patterns": [
+        {
+          "include": "#continuation"
+        }
+      ]
+    },
+    {
+      "begin": "^(\\s*)(#)\\s*(emit)\\b\\s*([A-Za-z][A-Za-z0-9]*(?:\\.[A-Za-z0-9]+)*)?",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.directive.pawn"
+        },
+        "3": {
+          "name": "keyword.control.directive.pawn"
+        },
+        "4": {
+          "name": "entity.name.function.preprocessor.pawn"
+        }
+      },
+      "end": "(?<!\\\\)(?=\\n)",
+      "name": "meta.preprocessor.emit.pawn",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#continuation"
+        },
+        {
+          "include": "#language"
+        }
+      ]
+    },
+    {
+      "match": "^(\\s*)(#)\\s*(pragma)\\s+(align|amxlimit|amxram|codepage|compress|ctrlchar|deprecated|dynamic|library|overlay|pack|rational|semicolon|tabsize|unused)\\b",
       "captures": {
-        "2": { "name": "punctuation.definition.directive.pawn" },
-        "3": { "name": "keyword.control.directive.pawn" },
-        "4": { "name": "entity.name.constant.preprocessor.pawn" }
+        "2": {
+          "name": "punctuation.definition.directive.pawn"
+        },
+        "3": {
+          "name": "keyword.control.directive.pawn"
+        },
+        "4": {
+          "name": "keyword.other.pragma.pawn"
+        }
       }
     },
     {
-      "match": "^(\\s*)(#)\\s*(if|elseif|else|endif|pragma|error|warning|assert|undef|emit|line|file|endinput)\\b",
-      "captures": {
-        "2": { "name": "punctuation.definition.directive.pawn" },
-        "3": { "name": "keyword.control.directive.pawn" }
-      }
+      "begin": "^(\\s*)(#)\\s*(if|elseif|else|endif|pragma|error|warning|assert|undef|emit|line|file|endinput|endscript|section)\\b",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.directive.pawn"
+        },
+        "3": {
+          "name": "keyword.control.directive.pawn"
+        }
+      },
+      "end": "(?<!\\\\)(?=\\n)",
+      "name": "meta.preprocessor.directive.pawn",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#continuation"
+        },
+        {
+          "include": "#language"
+        }
+      ]
     },
     {
-      "match": "\\b(assert|break|case|continue|default|do|else|exit|for|foreach|goto|if|return|sleep|state|switch|while)\\b",
-      "name": "keyword.control.pawn"
+      "include": "#strings"
     },
     {
-      "match": "\\b(defined)\\s+([A-Za-z_@][A-Za-z0-9_@]*)",
-      "captures": {
-        "1": { "name": "keyword.control.directive.conditional.pawn" },
-        "2": { "name": "entity.name.constant.preprocessor.pawn" }
-      }
-    },
-    {
-      "match": "\\b(defined)\\s*\\(\\s*([A-Za-z_@][A-Za-z0-9_@]*)\\s*\\)",
-      "captures": {
-        "1": { "name": "keyword.control.directive.conditional.pawn" },
-        "2": { "name": "entity.name.constant.preprocessor.pawn" }
-      }
-    },
-    {
-      "match": "\\bdefined\\b",
-      "name": "keyword.control.directive.conditional.pawn"
-    },
-    { "match": "\\b(char|sizeof|tagof)\\b", "name": "keyword.operator.pawn" },
-    {
-      "match": "^(\\s*)(public|stock|static|native|forward|hook|inline|ptask|remote|task|timer)\\s+(?:([A-Za-z_@][A-Za-z0-9_@]*):)?([A-Za-z_@][A-Za-z0-9_@]*)(?=\\s*\\()",
-      "captures": {
-        "2": { "name": "storage.modifier.pawn" },
-        "3": { "name": "entity.name.type.tag.pawn" },
-        "4": { "name": "entity.name.function.definition.pawn" }
-      }
-    },
-    {
-      "match": "^(\\s*)(?:([A-Za-z_@][A-Za-z0-9_@]*):)?(?!(?:assert|for|foreach|if|state|switch|while)\\b)([A-Za-z_@][A-Za-z0-9_@]*)(?=\\s*\\([^;]*\\)\\s*(?:\\{|$))",
-      "captures": {
-        "2": { "name": "entity.name.type.tag.pawn" },
-        "3": { "name": "entity.name.function.definition.pawn" }
-      }
-    },
-    {
-      "match": "\\b(const|forward|hook|inline|native|ptask|public|remote|static|stock|task|timer)\\b",
-      "name": "storage.modifier.pawn"
-    },
-    {
-      "match": "\\b(enum)\\s+([A-Za-z_@][A-Za-z0-9_@]*)",
-      "captures": {
-        "1": { "name": "storage.type.pawn" },
-        "2": { "name": "entity.name.type.enum.pawn" }
-      }
-    },
-    {
-      "match": "\\b(automaton|enum|new|operator)\\b",
-      "name": "storage.type.pawn"
-    },
-    {
-      "match": "\\b[A-Za-z_@][A-Za-z0-9_@]*(?=:(?!:))",
-      "name": "entity.name.type.tag.pawn"
-    },
-    {
-      "match": "\\b[A-Za-z_@][A-Za-z0-9_@]*(?=\\s*\\()",
-      "name": "entity.name.function.pawn"
-    },
-    { "match": "\\b[A-Z][A-Z0-9_]{2,}\\b", "name": "constant.other.pawn" },
-    { "match": "\\b(true|false)\\b", "name": "constant.language.pawn" },
-    {
-      "match": "\\b(0[xX][0-9a-fA-F]+|0[bB][01]+|[0-9]+(?:\\.[0-9]*)?(?:[eE][+-]?[0-9]+)?)\\b",
-      "name": "constant.numeric.pawn"
-    },
-    {
-      "match": "(?:==|!=|<=|>=|&&|\\|\\||<<|>>|\\+\\+|--|[+\\-*/%<>=!&|^~])",
-      "name": "keyword.operator.pawn"
+      "include": "#language"
     }
   ],
   "repository": {
     "comments": {
       "patterns": [
-        { "begin": "/\\*", "end": "\\*/", "name": "comment.block.pawn" },
-        { "match": "//.*$", "name": "comment.line.double-slash.pawn" }
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.pawn",
+          "patterns": [
+            {
+              "include": "#comment-annotations"
+            }
+          ]
+        },
+        {
+          "begin": "//",
+          "end": "(?<!\\\\)(?=\\n)",
+          "name": "comment.line.double-slash.pawn",
+          "patterns": [
+            {
+              "include": "#comment-annotations"
+            },
+            {
+              "include": "#continuation"
+            }
+          ]
+        }
       ]
     },
     "strings": {
       "patterns": [
         {
           "begin": "\"",
-          "end": "\"",
+          "end": "\"|(?<!\\\\)(?=\\n)",
           "name": "string.quoted.double.pawn",
           "patterns": [
             {
-              "match": "(?:\\\\|\\^).",
-              "name": "constant.character.escape.pawn"
+              "include": "#escapes"
+            },
+            {
+              "include": "#continuation"
+            },
+            {
+              "include": "#placeholders"
             }
           ]
         },
         {
           "begin": "'",
-          "end": "'",
+          "end": "'|(?<!\\\\)(?=\\n)",
           "name": "string.quoted.single.pawn",
           "patterns": [
             {
-              "match": "(?:\\\\|\\^).",
-              "name": "constant.character.escape.pawn"
+              "include": "#escapes"
+            },
+            {
+              "include": "#continuation"
             }
           ]
+        }
+      ]
+    },
+    "language": {
+      "patterns": [
+        {
+          "match": "\\b(assert|break|case|continue|default|do|else|exit|for|foreach|goto|if|return|sleep|state|switch|while)\\b",
+          "name": "keyword.control.pawn"
+        },
+        {
+          "match": "\\b(defined)\\s+([A-Za-z_@][A-Za-z0-9_@]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.conditional.pawn"
+            },
+            "2": {
+              "name": "entity.name.constant.preprocessor.pawn"
+            }
+          }
+        },
+        {
+          "match": "\\b(defined)\\s*\\(\\s*([A-Za-z_@][A-Za-z0-9_@]*)\\s*\\)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.conditional.pawn"
+            },
+            "2": {
+              "name": "entity.name.constant.preprocessor.pawn"
+            }
+          }
+        },
+        {
+          "match": "\\bdefined\\b",
+          "name": "keyword.control.directive.conditional.pawn"
+        },
+        {
+          "match": "\\b(char|sizeof|tagof)\\b",
+          "name": "keyword.operator.pawn"
+        },
+        {
+          "match": "^(\\s*)(public|stock|static|native|forward|hook|inline|ptask|remote|task|timer)\\s+(?:([A-Za-z_@][A-Za-z0-9_@]*):)?([A-Za-z_@][A-Za-z0-9_@]*)(?=\\s*\\()",
+          "captures": {
+            "2": {
+              "name": "storage.modifier.pawn"
+            },
+            "3": {
+              "name": "entity.name.type.tag.pawn"
+            },
+            "4": {
+              "name": "entity.name.function.definition.pawn"
+            }
+          }
+        },
+        {
+          "match": "^(\\s*)(?:([A-Za-z_@][A-Za-z0-9_@]*):)?(?!(?:assert|for|foreach|if|state|switch|while)\\b)([A-Za-z_@][A-Za-z0-9_@]*)(?=\\s*\\([^;]*\\)\\s*(?:\\{|$))",
+          "captures": {
+            "2": {
+              "name": "entity.name.type.tag.pawn"
+            },
+            "3": {
+              "name": "entity.name.function.definition.pawn"
+            }
+          }
+        },
+        {
+          "match": "\\b(const|forward|hook|inline|native|ptask|public|remote|static|stock|task|timer)\\b",
+          "name": "storage.modifier.pawn"
+        },
+        {
+          "match": "\\b(enum)\\s+([A-Za-z_@][A-Za-z0-9_@]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.pawn"
+            },
+            "2": {
+              "name": "entity.name.type.enum.pawn"
+            }
+          }
+        },
+        {
+          "match": "\\b(automaton|enum|new|operator)\\b",
+          "name": "storage.type.pawn"
+        },
+        {
+          "match": "\\b[A-Za-z_@][A-Za-z0-9_@]*(?=:(?!:))",
+          "name": "entity.name.type.tag.pawn"
+        },
+        {
+          "match": "\\b[A-Za-z_@][A-Za-z0-9_@]*(?=\\s*\\()",
+          "name": "entity.name.function.pawn"
+        },
+        {
+          "match": "\\b[A-Z][A-Z0-9_]{2,}\\b",
+          "name": "constant.other.pawn"
+        },
+        {
+          "match": "\\b(true|false)\\b",
+          "name": "constant.language.pawn"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#operators"
+        }
+      ]
+    },
+    "macros": {
+      "patterns": [
+        {
+          "begin": "^(\\s*)(#)\\s*(define)\\s+([A-Za-z_@][A-Za-z0-9_@]*)(\\()",
+          "beginCaptures": {
+            "2": {
+              "name": "punctuation.definition.directive.pawn"
+            },
+            "3": {
+              "name": "keyword.control.directive.pawn"
+            },
+            "4": {
+              "name": "entity.name.function.preprocessor.pawn"
+            },
+            "5": {
+              "name": "punctuation.definition.parameters.begin.pawn"
+            }
+          },
+          "end": "(?<!\\\\)(?=\\n)",
+          "name": "meta.preprocessor.macro.pawn",
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#macro-operators"
+            },
+            {
+              "include": "#macro-parameters"
+            },
+            {
+              "include": "#continuation"
+            },
+            {
+              "include": "#language"
+            }
+          ]
+        },
+        {
+          "begin": "^(\\s*)(#)\\s*(define)\\s+([A-Za-z_@][A-Za-z0-9_@]*)",
+          "beginCaptures": {
+            "2": {
+              "name": "punctuation.definition.directive.pawn"
+            },
+            "3": {
+              "name": "keyword.control.directive.pawn"
+            },
+            "4": {
+              "name": "entity.name.constant.preprocessor.pawn"
+            }
+          },
+          "end": "(?<!\\\\)(?=\\n)",
+          "name": "meta.preprocessor.macro.pawn",
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#macro-operators"
+            },
+            {
+              "include": "#macro-parameters"
+            },
+            {
+              "include": "#continuation"
+            },
+            {
+              "include": "#language"
+            }
+          ]
+        }
+      ]
+    },
+    "macro-parameters": {
+      "patterns": [
+        {
+          "match": "%(?:[0-9]+|[A-Za-z_@][A-Za-z0-9_@]*)",
+          "name": "variable.parameter.macro.pawn"
+        }
+      ]
+    },
+    "macro-operators": {
+      "patterns": [
+        {
+          "match": "##|#(?=[A-Za-z_@%])",
+          "name": "keyword.operator.preprocessor.pawn"
+        }
+      ]
+    },
+    "continuation": {
+      "patterns": [
+        {
+          "match": "\\\\$",
+          "name": "keyword.other.line-continuation.pawn"
+        }
+      ]
+    },
+    "comment-annotations": {
+      "patterns": [
+        {
+          "match": "\\b(?:FIXME|XXX|BUG)\\b",
+          "name": "keyword.other.annotation.urgent.pawn"
+        },
+        {
+          "match": "\\bTODO\\b",
+          "name": "keyword.other.annotation.todo.pawn"
+        },
+        {
+          "match": "\\b(?:NOTE|NB|TBD|REVIEW|CHANGED|IDEA|IMPORTANT|HACK)\\b",
+          "name": "keyword.other.annotation.note.pawn"
+        }
+      ]
+    },
+    "escapes": {
+      "patterns": [
+        {
+          "match": "(?:\\\\|\\^).",
+          "name": "constant.character.escape.pawn"
+        }
+      ]
+    },
+    "placeholders": {
+      "patterns": [
+        {
+          "match": "%(?:%|(?:\\d+\\$)?[-+ #0']*(?:\\d+|\\*)?(?:\\.(?:\\d+|\\*))?[bdiouxXDOUeEfFgGaACcSspnq])",
+          "name": "constant.other.placeholder.pawn"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "match": "\\b([0-9](?:_?[0-9])*)(\\.\\.)([0-9](?:_?[0-9])*)\\b",
+          "captures": {
+            "1": {
+              "name": "constant.numeric.integer.decimal.pawn"
+            },
+            "2": {
+              "name": "keyword.operator.switch-range.pawn"
+            },
+            "3": {
+              "name": "constant.numeric.integer.decimal.pawn"
+            }
+          }
+        },
+        {
+          "match": "\\b0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*\\b",
+          "name": "constant.numeric.integer.hexadecimal.pawn"
+        },
+        {
+          "match": "\\b0[bB][01](?:_?[01])*\\b",
+          "name": "constant.numeric.integer.binary.pawn"
+        },
+        {
+          "match": "(?<![\\w.])(?:[0-9](?:_?[0-9])*\\.(?!\\.)(?:[0-9](?:_?[0-9])*)?|\\.[0-9](?:_?[0-9])*)(?:[eE][+-]?[0-9](?:_?[0-9])*)?(?![\\w.])",
+          "name": "constant.numeric.float.pawn"
+        },
+        {
+          "match": "\\b[0-9](?:_?[0-9])*[eE][+-]?[0-9](?:_?[0-9])*\\b",
+          "name": "constant.numeric.float.pawn"
+        },
+        {
+          "match": "\\b[0-9](?:_?[0-9])*\\b",
+          "name": "constant.numeric.integer.decimal.pawn"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "\\.\\.",
+          "name": "keyword.operator.switch-range.pawn"
+        },
+        {
+          "match": "(?:<<|>>|[+\\-*/%&|^])?=(?!=)",
+          "name": "keyword.operator.assignment.pawn"
+        },
+        {
+          "match": "\\+\\+|--",
+          "name": "keyword.operator.increment-decrement.pawn"
+        },
+        {
+          "match": "<<|>>",
+          "name": "keyword.operator.bitwise.pawn"
+        },
+        {
+          "match": "==|!=|<=|>=|<>|<|>",
+          "name": "keyword.operator.comparison.pawn"
+        },
+        {
+          "match": "&&|\\|\\||!",
+          "name": "keyword.operator.logical.pawn"
+        },
+        {
+          "match": "[~&|^]",
+          "name": "keyword.operator.bitwise.pawn"
+        },
+        {
+          "match": "[+\\-*/%]",
+          "name": "keyword.operator.arithmetic.pawn"
+        },
+        {
+          "match": "[?:]",
+          "name": "keyword.operator.ternary.pawn"
         }
       ]
     }

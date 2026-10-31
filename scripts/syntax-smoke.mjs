@@ -75,6 +75,18 @@ try {
     "#define MAX_COUNT 5",
     "// public stock new const",
     'new text[] = "public ^n";',
+    'printf("Player %02d: %s", playerid, name);',
+    "// TODO: check format fields",
+    "/* FIXME: adjust limit */",
+    "#define APPLY(%0) " + "\\",
+    "    %0 = 1_000",
+    "new recovered = 0xFF_FF;",
+    "switch (value) { case 1..10: break; }",
+    "#pragma tabsize 4",
+    "#emit LOAD.pri 12",
+    "#warning Configure include paths",
+    'new broken[] = "unfinished',
+    "new normal = 1;",
   ];
   await evaluate(async (workbench, source) => {
     await workbench.newFile();
@@ -98,6 +110,22 @@ try {
     [9, "public", "comment"],
     [10, "public", "string"],
     [10, "^n", "constant.character.escape"],
+    [11, "%02d", "constant.other"],
+    [11, "%s", "constant.other"],
+    [12, "TODO", "keyword"],
+    [12, "check", "comment"],
+    [13, "FIXME", "keyword"],
+    [14, "APPLY", "entity.name.function"],
+    [14, "%0", "variable.parameter"],
+    [15, "%0", "variable.parameter"],
+    [15, "1_000", "constant.numeric"],
+    [16, "new", "storage"],
+    [16, "0xFF_FF", "constant.numeric"],
+    [17, "..", "keyword"],
+    [18, "tabsize", "keyword"],
+    [19, "LOAD.pri", "entity.name.function"],
+    [20, "Configure", "string"],
+    [22, "new", "storage"],
   ];
   const dark = JSON.parse(
     await readFile(
@@ -181,7 +209,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    "Pawn syntax rendering passed: declaration/storage keywords, type tags, constants, booleans, escapes, protected strings/comments, Light/Dark, partial custom-theme inheritance and storage overrides/reset."
+    "Pawn syntax rendering passed: keywords, tags, constants, escapes, format placeholders, multiline macros, comment annotations, ranges/directives, unterminated-string recovery, Light/Dark, partial custom-theme inheritance and storage overrides/reset."
   );
 } finally {
   await browser?.close();

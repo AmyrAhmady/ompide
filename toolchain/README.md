@@ -141,9 +141,23 @@ VS Code language client 10.1.2. Use the standard MessageTransports reader/writer
 contract over Tauri Channels/commands, without a network listener. Browser
 package alignment and native channel behavior were verified in the desktop smoke
 test. Vite worker imports are owned by `src/editor/workers.ts` to avoid broken
-worker URLs in optimized dependency code. The PawnKit TextMate grammar and
+worker URLs in optimized dependency code. The base PawnKit TextMate grammar and
 configuration come from vscode-pawn commit
 `4a03c390a29a86fdf503be05eabf2fd345caa339`, with its MIT license included.
+
+Selected grammar rules are adapted from
+[openmultiplayer/vscode-pawn](https://github.com/openmultiplayer/vscode-pawn/blob/c9da1136bbdaf643ed5d3b100b40480638aecf76/syntaxes/Pawn.tmLanguage)
+at commit `c9da1136bbdaf643ed5d3b100b40480638aecf76`: format placeholders,
+logical-line macro contexts and parameters, stringification/token pasting,
+comment annotations, numeric separators/ranges, and richer directive handling.
+The adaptations retain Pawn scope names and caret/backslash escapes, recover
+highlighting after unterminated literals, and avoid the old grammar's C/C++
+numeric suffixes and dangling includes. Grammar colors remain theme-controlled;
+these rules do not replace compiler or language-server diagnostics. Upstream
+attributions and MIT terms are retained in `src/editor/pawn/LICENSE.txt`, which is
+included in the release ZIP. Run `npm run test:grammar` for actual TextMate and
+Oniguruma tokenization tests and `node scripts/syntax-smoke.mjs` for rendered
+Light/Dark/custom-theme checks. Both use the editor's existing pinned engines.
 
 ## Compatibility workarounds
 
