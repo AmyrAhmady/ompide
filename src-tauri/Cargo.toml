@@ -2,8 +2,9 @@
 name = "ompide"
 version = "0.1.0"
 license = "MPL-2.0"
-description = "ompide - a desktop IDE for Pawn, open.mp"
-authors = ["you"]
+description = "ompide - a desktop IDE for Pawn and open.mp"
+authors = ["Amyr Ahmady"]
+repository = "https://github.com/AmyrAhmady/ompide"
 edition = "2024"
 
 [workspace]

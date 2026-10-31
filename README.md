@@ -7,8 +7,10 @@ changes without leaving the editor.
 The name combines OMP, from open.mp, with IDE.
 
 The project is still in development. Windows x64 is the current tested platform;
-Linux and macOS support will come later. Installer testing is not finished yet,
-so for now, [build and run it from source](https://github.com/AmyrAhmady/ompide/wiki/Building-from-Source).
+Linux and macOS support will come later. You can
+[build it from source](https://github.com/AmyrAhmady/ompide/wiki/Building-from-Source)
+or use an unsigned Windows ZIP from the [build workflow](packaging/README.md).
+Installer testing is not finished yet.
 
 ## What it does
 
@@ -54,6 +56,8 @@ Press **F1** or **Ctrl+Shift+P** to find commands. **Ctrl+P** finds files,
 
 ## Documentation
 
+- [Windows ZIP builds](packaging/README.md): CI downloads, included binaries,
+  checksums, and local release packaging.
 - [Building from source](https://github.com/AmyrAhmady/ompide/wiki/Building-from-Source): prerequisites, tool preparation, development,
   and packaging commands.
 - [Project wiki](https://github.com/AmyrAhmady/ompide/wiki): user guides for

@@ -1,0 +1,140 @@
+name: Windows build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+    paths-ignore: ["**/*.md", "docs/**", "wiki/**"]
+  pull_request:
+    paths-ignore: ["**/*.md", "docs/**", "wiki/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      GOTOOLCHAIN: local
+      GOTELEMETRY: "off"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.14.0"
+          cache: npm
+
+      - name: Read and validate release versions
+        id: settings
+        run: node scripts/release-support.mjs
+
+      - name: Set up Go for the pinned language server
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ steps.settings.outputs.go }}
+          cache: false
+
+      - name: Set up the pinned Rust toolchain
+        env:
+          RUST_VERSION: ${{ steps.settings.outputs.rust }}
+        run: rustup toolchain install $env:RUST_VERSION --profile minimal --component clippy,rustfmt
+
+      - name: Cache native dependencies and verified tools
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri -> target
+          key: windows-x64-${{ hashFiles('toolchain/tools.json', 'toolchain/pawnlsp-build.json', 'toolchain/patches/**', 'scripts/build-pawnlsp.mjs', 'scripts/prepare-tools.mjs', 'scripts/release-notices.mjs', 'scripts/release-support.mjs') }}
+          cache-directories: |
+            .tools-cache
+            src-tauri/binaries
+          save-if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+
+      - name: Install npm dependencies
+        run: |
+          npm install --global npm@10.9.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci
+
+      - name: Check frontend and packaging code
+        run: |
+          npm run format:check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run audit:localization
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:release
+
+      - name: Prepare checksum-verified bundled tools
+        run: |
+          "OMPIDE_GO=$((Get-Command go).Source)" >> $env:GITHUB_ENV
+          $env:OMPIDE_GO = (Get-Command go).Source
+          npm.cmd run tools:prepare -- --download
+
+      - name: Check native formatting, lint and tests
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri/Cargo.toml -p pawn-core --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri/Cargo.toml -p pawn-core --test compiler_integration --locked -- --ignored
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:tools
+
+      - name: Build the release application
+        run: npm run release:build
+
+      - name: Assemble the Windows ZIP
+        id: package
+        run: npm run release:package
+
+      - name: Verify the extracted ZIP and its bundled tools
+        run: npm run release:verify
+
+      - name: Upload the ZIP directly
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ steps.package.outputs.archive }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the SHA-256 checksum
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ steps.package.outputs.checksum }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize the build
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          ARTIFACT_PATH: ${{ steps.package.outputs.archive }}
+        run: |
+          "## ompide Windows x64" >> $env:GITHUB_STEP_SUMMARY
+          "[Download ZIP]($env:ARTIFACT_URL)" >> $env:GITHUB_STEP_SUMMARY
+          "File: $env:ARTIFACT_PATH" >> $env:GITHUB_STEP_SUMMARY
+          "The ZIP includes the application, pawnlsp, compiler/DLL/runtime and notices. WebView2 and optional Git remain system prerequisites." >> $env:GITHUB_STEP_SUMMARY

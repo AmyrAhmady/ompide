@@ -1,0 +1,14 @@
+Microsoft Visual C++ Runtime
+
+The open.mp compiler requires the x86 vcruntime140.dll runtime. The packaged copy
+is taken from Visual Studio's VC/Redist/MSVC/<version>/x86/Microsoft.VC143.CRT
+directory, verified as Microsoft-signed, and placed beside pawncc.exe/pawnc.dll.
+Its version, signer and SHA-256 are recorded in release-manifest.json.
+
+This runtime remains Microsoft's software and is not covered by ompide's MPL.
+Microsoft's redistribution terms and Visual Studio distributable-code list apply:
+
+https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files
+https://learn.microsoft.com/visualstudio/releases/2022/redistribution
+
+Copyright Microsoft Corporation. All rights reserved.

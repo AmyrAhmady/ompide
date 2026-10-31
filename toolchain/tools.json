@@ -19,6 +19,12 @@
       "executable": "pawnc-3.10.11-windows/bin/pawncc.exe",
       "executableSha256": "0a33aa5d97b29565fe8517dd9df8e07ffceb02ecc2b395566d998a6d2032211d",
       "destination": "compiler/pawnc-3.10.11-windows/bin/pawncc.exe",
+      "companions": [
+        {
+          "name": "pawnc.dll",
+          "sha256": "b5113d056caa2c7dcb5660bce13bad03112450f2cdfa6bdc9a4214e6b5714f29"
+        }
+      ],
       "license": "Zlib; see toolchain/licenses/compiler.txt"
     }
   ],

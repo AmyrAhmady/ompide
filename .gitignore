@@ -30,6 +30,7 @@ dist-ssr
 /src-tauri/binaries/
 /.tools-cache/
 /test-results/
+/release/
 *.amx
 **/target/
 *.tsbuildinfo

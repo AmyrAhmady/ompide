@@ -1,0 +1,251 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
+import test from "node:test";
+import { copyPackageNotices } from "./release-notices.mjs";
+import {
+  listFiles,
+  peInfo,
+  projectRoot,
+  releaseSettings,
+  removeTemporary,
+  sha256,
+  verifyPackage,
+} from "./release-support.mjs";
+
+async function fixture() {
+  const parent = path.join(projectRoot, "test-results");
+  await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(path.join(parent, "release-test-"));
+  return {
+    directory,
+    cleanup: () => removeTemporary(directory, parent, "release-test-"),
+  };
+}
+
+test("release versions agree and reject a mismatched native version", async () => {
+  const { directory, cleanup } = await fixture();
+  try {
+    for (const file of [
+      "package.json",
+      "src-tauri/tauri.conf.json",
+      "src-tauri/Cargo.toml",
+      "rust-toolchain.toml",
+      "toolchain/tools.json",
+      "toolchain/pawnlsp-build.json",
+    ]) {
+      await mkdir(path.dirname(path.join(directory, file)), {
+        recursive: true,
+      });
+      await cp(path.join(projectRoot, file), path.join(directory, file));
+    }
+    assert.equal(
+      (await releaseSettings(directory)).version,
+      (await releaseSettings()).version
+    );
+    const config = JSON.parse(
+      await readFile(path.join(directory, "src-tauri/tauri.conf.json"), "utf8")
+    );
+    config.version = "99.0.0";
+    await writeFile(
+      path.join(directory, "src-tauri/tauri.conf.json"),
+      JSON.stringify(config)
+    );
+    await assert.rejects(releaseSettings(directory), /versions must match/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("release manifests reject corruption and unrecorded files", async () => {
+  const { directory, cleanup } = await fixture();
+  try {
+    const settings = await releaseSettings();
+    await writeFile(path.join(directory, "payload.txt"), "expected");
+    const manifest = {
+      schemaVersion: 1,
+      version: settings.version,
+      target: settings.target,
+      files: [
+        {
+          path: "payload.txt",
+          size: 8,
+          sha256: sha256(Buffer.from("expected")),
+        },
+      ],
+    };
+    await writeFile(
+      path.join(directory, "release-manifest.json"),
+      JSON.stringify(manifest)
+    );
+    await writeFile(path.join(directory, "payload.txt"), "modified");
+    await assert.rejects(
+      verifyPackage(directory, settings),
+      /checksum mismatch/
+    );
+    await writeFile(path.join(directory, "unexpected.txt"), "extra");
+    await assert.rejects(verifyPackage(directory, settings), /unexpected/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("release enumeration rejects a directory junction instead of following it", async () => {
+  const { directory, cleanup } = await fixture();
+  try {
+    const target = path.join(directory, "target");
+    await mkdir(target);
+    await symlink(
+      target,
+      path.join(directory, "link"),
+      process.platform === "win32" ? "junction" : "dir"
+    );
+    await assert.rejects(listFiles(directory), /Links and special files/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("staging cleanup refuses a parent-directory mismatch", async () => {
+  const { directory, cleanup } = await fixture();
+  try {
+    await assert.rejects(
+      removeTemporary(directory, directory, "release-test-"),
+      /Refusing/
+    );
+    assert.ok(await readFile(path.join(projectRoot, "package.json")));
+  } finally {
+    await cleanup();
+  }
+});
+
+test("dependency notices preserve nested legal files and reject outside paths", async () => {
+  const { directory, cleanup } = await fixture();
+  try {
+    const source = path.join(directory, "package");
+    const destination = path.join(directory, "notices");
+    await mkdir(path.join(source, "vscode"), { recursive: true });
+    await writeFile(path.join(source, "LICENSE"), "upstream license\n");
+    await writeFile(
+      path.join(source, "vscode/ThirdPartyNotices.txt"),
+      "upstream notices\n"
+    );
+    const info = {
+      ecosystem: "npm",
+      name: "@example/editor",
+      version: "1.0.0",
+    };
+    const result = await copyPackageNotices(source, destination, info);
+    assert.equal(result.notices.length, 2);
+    assert.equal(
+      await readFile(path.join(destination, result.notices[0]), "utf8"),
+      "upstream license\n"
+    );
+    await assert.rejects(
+      copyPackageNotices(source, destination, info, "../outside.txt"),
+      /outside its package/
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test("PE validation rejects nonexecutables and out-of-bounds headers", () => {
+  assert.throws(() => peInfo(Buffer.alloc(64)), /Not a Windows executable/);
+  const bytes = Buffer.alloc(64);
+  bytes.write("MZ");
+  bytes.writeUInt32LE(0xffffff00, 60);
+  assert.throws(() => peInfo(bytes), /Invalid PE header/);
+});
+
+test(
+  "Windows archives use portable paths, extract intact and reject traversal",
+  {
+    skip: process.platform !== "win32",
+  },
+  async () => {
+    const { directory, cleanup } = await fixture();
+    try {
+      const input = path.join(directory, "input");
+      const extracted = path.join(directory, "extracted");
+      const archive = path.join(directory, "test.zip");
+      await mkdir(path.join(input, "nested"), { recursive: true });
+      await writeFile(
+        path.join(input, "nested/notice.txt"),
+        "preserved text\n"
+      );
+      const run = (mode, target) =>
+        execFileSync(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            path.join(projectRoot, "scripts/release-archive.ps1"),
+            "-Mode",
+            mode,
+            "-Archive",
+            archive,
+            "-Directory",
+            target,
+          ],
+          { windowsHide: true, encoding: "utf8", stdio: "pipe" }
+        );
+      run("Create", input);
+      const bytes = await readFile(archive);
+      assert.ok(bytes.includes(Buffer.from("nested/notice.txt")));
+      assert.ok(!bytes.includes(Buffer.from("nested\\notice.txt")));
+      run("Extract", extracted);
+      assert.equal(
+        await readFile(path.join(extracted, "nested/notice.txt"), "utf8"),
+        "preserved text\n"
+      );
+      const unsafe = Buffer.from(bytes);
+      let index = 0;
+      while ((index = unsafe.indexOf("nested/notice.txt", index)) >= 0) {
+        unsafe.write("../bad/notice.txt", index);
+        index += 17;
+      }
+      await writeFile(archive, unsafe);
+      assert.throws(
+        () => run("Extract", path.join(directory, "unsafe")),
+        /Unsafe release archive entry/
+      );
+    } finally {
+      await cleanup();
+    }
+  }
+);
+
+test("PE imports resolve section-relative addresses and reject an invalid DLL pointer", () => {
+  const bytes = Buffer.alloc(0x600);
+  bytes.write("MZ");
+  bytes.writeUInt32LE(0x80, 60);
+  bytes.write("PE\0\0", 0x80);
+  bytes.writeUInt16LE(0x8664, 0x84);
+  bytes.writeUInt16LE(1, 0x86);
+  bytes.writeUInt16LE(240, 0x94);
+  bytes.writeUInt16LE(0x20b, 0x98);
+  bytes.writeUInt32LE(0x1000, 0x110);
+  bytes.write(".idata", 0x188);
+  bytes.writeUInt32LE(0x200, 0x190);
+  bytes.writeUInt32LE(0x1000, 0x194);
+  bytes.writeUInt32LE(0x200, 0x198);
+  bytes.writeUInt32LE(0x200, 0x19c);
+  bytes.writeUInt32LE(0x1040, 0x20c);
+  bytes.write("VCRUNTIME140.dll\0", 0x240);
+  assert.deepEqual(peInfo(bytes), {
+    machine: 0x8664,
+    imports: ["vcruntime140.dll"],
+  });
+  bytes.writeUInt32LE(0x9000, 0x20c);
+  assert.throws(() => peInfo(bytes), /outside the executable/);
+});

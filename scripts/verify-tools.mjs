@@ -14,14 +14,22 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
+import { removeTemporary } from "./release-support.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const packageArgument = process.argv.indexOf("--package");
+const packaged =
+  packageArgument < 0 ? undefined : process.argv[packageArgument + 1];
+if (packageArgument >= 0 && !packaged)
+  throw new Error("--package requires an extracted release directory");
 const binaries = path.join(root, "src-tauri/binaries");
 const tool = (name) =>
-  path.join(binaries, `${name}-x86_64-pc-windows-msvc.exe`);
+  packaged
+    ? path.join(packaged, `${name}.exe`)
+    : path.join(binaries, `${name}-x86_64-pc-windows-msvc.exe`);
 const compiler = path.join(
-  binaries,
-  "compiler/pawnc-3.10.11-windows/bin/pawncc.exe"
+  packaged ?? binaries,
+  `${packaged ? "binaries/" : ""}compiler/pawnc-3.10.11-windows/bin/pawncc.exe`
 );
 const bridgePath = path.join(
   root,
@@ -388,5 +396,5 @@ try {
   );
   console.log(evidence.checks.join("\n"));
 } finally {
-  await rm(workspace, { recursive: true, force: true });
+  await removeTemporary(workspace, tmpdir(), "ompide ");
 }
