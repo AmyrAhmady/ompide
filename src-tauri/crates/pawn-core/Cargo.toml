@@ -16,6 +16,8 @@ ignore = "=0.4.34"
 regex = "1"
 trash = "=5.2.9"
 portable-pty = "=0.9.0"
+encoding_rs = "=0.8.42"
+chardetng = "=1.0.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "=0.62.2", features = ["Win32_System_Com", "Win32_UI_Shell"] }

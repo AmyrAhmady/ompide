@@ -38,6 +38,7 @@ pub fn run() {
             commands::remember_document,
             commands::recent_document,
             commands::read_document,
+            commands::document_revision,
             commands::save_document,
             commands::save_document_as,
             commands::list_directory,

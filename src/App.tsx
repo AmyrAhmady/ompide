@@ -20,6 +20,8 @@ import { Explorer } from "./explorer/Explorer";
 import { t } from "./lib/i18n";
 import { Menubar, Menu, MenuItem } from "./components/Menubar";
 import { Modal } from "./components/Modal";
+import { EncodingDialog } from "./editor/EncodingDialog";
+import { encodingLabel } from "./editor/text-files";
 import { CommandPalette } from "./components/CommandPalette";
 import { Splitter } from "./components/Splitter";
 import { defaultLayout, parseLayout, type Layout } from "./settings/layout";
@@ -329,6 +331,7 @@ function App() {
   const [gitDiff, setGitDiff] = useState<OpenGitDiff>();
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [encodingTarget, setEncodingTarget] = useState<string>();
   const [symbolsOpen, setSymbolsOpen] = useState<
     "document" | "workspace" | undefined
   >();
@@ -478,6 +481,7 @@ function App() {
   const connected = state.languagePhase === "ready";
   const nativeReady = desktop && state.ready;
   const activeTitle = state.tabs.find((tab) => tab.uri === state.active);
+  const encodingDocument = state.tabs.find((tab) => tab.uri === encodingTarget);
   const windowTitle = [
     activeTitle ? `${activeTitle.dirty ? "● " : ""}${activeTitle.name}` : "",
     state.root?.split(/[\\/]/).at(-1),
@@ -503,6 +507,8 @@ function App() {
   };
   const registeredCommands = createCommands(state, workbench, nativeReady, {
     settings: () => setSettingsOpen(true),
+    encoding: () => setEncodingTarget(state.active),
+    openEncoding: () => setEncodingTarget("open"),
     project: configureProject,
     explorer: showExplorer,
     search: showSearch,
@@ -719,10 +725,12 @@ function App() {
           <Menu label="menu.file">
             <CommandMenuItem command={command("command.newFile")} />
             <CommandMenuItem command={command("command.openFile")} />
+            <CommandMenuItem command={command("command.openWithEncoding")} />
             <CommandMenuItem command={command("command.openFolder")} />
             <hr />
             <CommandMenuItem command={command("command.save")} />
             <CommandMenuItem command={command("command.saveAs")} />
+            <CommandMenuItem command={command("command.encoding")} />
             <CommandMenuItem command={command("command.saveAll")} />
             <hr />
             <CommandMenuItem command={command("command.close")} />
@@ -943,6 +951,11 @@ function App() {
               >
                 {t("command.saveAs")}
               </button>
+            </div>
+          )}
+          {activeTitle?.largeFile && (
+            <div className="external-notice" role="status">
+              {t("editor.largeFile")}
             </div>
           )}
           <div className="editor-area" data-editor-fill="true">
@@ -1233,7 +1246,21 @@ function App() {
         {active && (
           <>
             <span>{t("status.position", state.position)}</span>
-            <span>UTF-8</span>
+            <button
+              type="button"
+              title={t(
+                activeTitle?.encodingGuessed
+                  ? "encoding.detected"
+                  : "command.encoding"
+              )}
+              onClick={() => setEncodingTarget(state.active)}
+              disabled={!nativeReady || state.mutationBusy}
+            >
+              {encodingLabel({
+                encoding: activeTitle?.encoding ?? "utf-8",
+                bom: activeTitle?.bom ?? false,
+              })}
+            </button>
           </>
         )}
       </footer>
@@ -1266,6 +1293,12 @@ function App() {
             </button>
           </footer>
         </Modal>
+      )}
+      {(encodingDocument || encodingTarget === "open") && (
+        <EncodingDialog
+          document={encodingDocument}
+          close={() => setEncodingTarget(undefined)}
+        />
       )}
       {settingsOpen && (
         <SettingsDialog

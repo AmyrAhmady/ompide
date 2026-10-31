@@ -22,6 +22,7 @@ import {
 import { defaults, parseSettings, type Settings } from "../settings/settings";
 import { startLanguageSession, type LanguageSession } from "../language/client";
 import { BufferVersion } from "./documents";
+import { largeFileCharacters, type TextEncoding } from "../editor/text-files";
 import {
   changesWorkingTree,
   type GitAction,
@@ -72,6 +73,7 @@ interface OpenDocument {
   listener: IDisposable;
   view?: editor.ICodeEditorViewState | null;
   external?: "changed" | "deleted";
+  largeFile: boolean;
 }
 
 export interface Tab {
@@ -79,6 +81,10 @@ export interface Tab {
   name: string;
   dirty: boolean;
   external?: "changed" | "deleted";
+  encoding?: string;
+  bom?: boolean;
+  encodingGuessed?: boolean;
+  largeFile?: boolean;
 }
 
 export interface SymbolResult {
@@ -136,6 +142,8 @@ export class Workbench {
   private subscribers = new Set<() => void>();
 
   private documents = new Map<string, OpenDocument>();
+
+  private largeDocuments = new Set<string>();
 
   private opening = new Map<string, Promise<void>>();
 
@@ -272,6 +280,10 @@ export class Workbench {
         name: document.name,
         dirty: document.versions.dirty,
         external: document.external,
+        encoding: document.snapshot?.encoding ?? "utf-8",
+        bom: document.snapshot?.bom ?? false,
+        encodingGuessed: document.snapshot?.encodingGuessed,
+        largeFile: document.largeFile,
       })),
     };
     for (const subscriber of this.subscribers) subscriber();
@@ -372,9 +384,11 @@ export class Workbench {
     };
   }
 
-  async openFile(): Promise<void> {
-    const snapshot = await native.chooseDocument();
-    if (snapshot) await this.openSnapshot(snapshot);
+  async openFile(encoding?: string): Promise<boolean> {
+    const snapshot = await native.chooseDocument(encoding);
+    if (!snapshot) return false;
+    await this.openSnapshot(snapshot);
+    return true;
   }
 
   async recentFile(path: string): Promise<void> {
@@ -446,6 +460,9 @@ export class Workbench {
     snapshot?: FileSnapshot
   ): Promise<void> {
     const resource = Uri.parse(uri);
+    const largeFile =
+      Boolean(snapshot?.largeFile) || text.length >= largeFileCharacters;
+    if (largeFile) this.largeDocuments.add(uri);
     const file =
       resource.scheme === "file" ? files.register(resource, text) : undefined;
     let reference: IReference<ITextFileEditorModel> | undefined;
@@ -454,6 +471,7 @@ export class Workbench {
         reference = await createModelReference(resource);
     } catch (error) {
       file?.dispose();
+      this.largeDocuments.delete(uri);
       throw error;
     }
     const model =
@@ -461,11 +479,24 @@ export class Workbench {
       editor.createModel(text, "pawn", resource);
     editor.setModelLanguage(
       model,
-      /\.(pwn|inc)$/i.test(snapshot?.path ?? uri) ? "pawn" : "plaintext"
+      !largeFile && /\.(pwn|inc)$/i.test(snapshot?.path ?? uri)
+        ? "pawn"
+        : "plaintext"
     );
     const versions = new BufferVersion(model.getAlternativeVersionId());
     const listener = model.onDidChangeContent(() => {
       versions.changed(model.getAlternativeVersionId());
+      const document = this.documents.get(uri);
+      if (
+        document &&
+        !document.largeFile &&
+        model.getValueLength() >= largeFileCharacters
+      ) {
+        document.largeFile = true;
+        this.largeDocuments.add(uri);
+        editor.setModelLanguage(model, "plaintext");
+        if (this.state.active === uri) this.applyFileOptions(document);
+      }
       this.update();
     });
     this.documents.set(uri, {
@@ -477,6 +508,7 @@ export class Workbench {
       reference,
       file,
       listener,
+      largeFile,
     });
     this.activate(uri);
   }
@@ -489,9 +521,23 @@ export class Workbench {
       : undefined;
     if (previous) previous.view = this.codeEditor.saveViewState();
     this.codeEditor.setModel(document.model);
+    this.applyFileOptions(document);
     if (document.view) this.codeEditor.restoreViewState(document.view);
     this.codeEditor.focus();
     this.update({ active: uri });
+  }
+
+  private applyFileOptions(document?: OpenDocument): void {
+    const large = document?.largeFile ?? false;
+    this.codeEditor?.updateOptions({
+      wordWrap: !large && this.state.settings.wordWrap ? "on" : "off",
+      minimap: { enabled: !large && this.state.settings.minimap },
+      folding: !large,
+      matchBrackets: large ? "never" : "always",
+      bracketPairColorization: { enabled: !large },
+      renderValidationDecorations: large ? "off" : "on",
+      stickyScroll: { enabled: !large },
+    });
   }
 
   focusEditor(): void {
@@ -524,11 +570,15 @@ export class Workbench {
 
   entries = (path: string): Promise<Entry[]> => native.entries(path);
 
-  save(uri = this.state.active, saveAs = false): Promise<boolean> {
+  save(
+    uri = this.state.active,
+    saveAs = false,
+    encoding?: TextEncoding
+  ): Promise<boolean> {
     if (!uri) return Promise.resolve(true);
     const saving = this.saving.get(uri);
     if (saving) return saving;
-    const pending = this.saveDocument(uri, saveAs);
+    const pending = this.saveDocument(uri, saveAs, encoding);
     this.saving.set(uri, pending);
     void pending
       .finally(() => {
@@ -544,30 +594,40 @@ export class Workbench {
     return pending;
   }
 
-  private async saveDocument(uri: string, saveAs: boolean): Promise<boolean> {
+  private async saveDocument(
+    uri: string,
+    saveAs: boolean,
+    encoding?: TextEncoding
+  ): Promise<boolean> {
     const document = this.documents.get(uri);
     if (!document) return true;
     if (
       this.state.settings.formatOnSave &&
+      !document.largeFile &&
       this.state.languageFeatures?.formatting
     )
       await this.format(uri);
     const text = document.model.getValue();
     const version = document.model.getAlternativeVersionId();
+    const targetEncoding =
+      encoding?.encoding ?? document.snapshot?.encoding ?? "utf-8";
+    const targetBom = encoding?.bom ?? document.snapshot?.bom ?? false;
     const result =
       !document.snapshot || saveAs
         ? await native.saveAs(
             text,
-            document.snapshot?.bom ?? false,
+            targetBom,
             [...this.documents.values()]
               .filter((other) => other !== document && other.snapshot)
-              .map((other) => other.snapshot!.path)
+              .map((other) => other.snapshot!.path),
+            targetEncoding
           )
         : await native.save(
             document.snapshot.path,
             text,
-            document.snapshot.bom,
-            document.snapshot.revision
+            targetBom,
+            document.snapshot.revision,
+            targetEncoding
           );
     if (!result) return false;
     const snapshot = { ...result, uri: Uri.parse(result.uri).toString() };
@@ -903,11 +963,21 @@ export class Workbench {
     let bytes = 0;
     for (const document of this.documents.values()) {
       if (
+        !options.filesOnly &&
         document.snapshot &&
         document.versions.dirty &&
         document.external !== "deleted" &&
         this.pathKey(document.snapshot.path).startsWith(prefix)
       ) {
+        if (document.largeFile) {
+          overlays.push({
+            path: document.snapshot.path,
+            text: "",
+            version: document.model.getVersionId(),
+            excluded: true,
+          });
+          continue;
+        }
         const text = document.model.getValue();
         bytes += text.length * 2;
         if (bytes > 16 * 1024 * 1024) throw { code: "searchBuffersLarge" };
@@ -1019,6 +1089,7 @@ export class Workbench {
     if (document.model.getAlternativeVersionId() !== version) return false;
     if (this.state.active === uri) this.codeEditor?.setModel(null);
     this.documents.delete(uri);
+    this.largeDocuments.delete(uri);
     document.listener.dispose();
     if (document.reference) document.reference.dispose();
     else document.model.dispose();
@@ -1074,28 +1145,49 @@ export class Workbench {
     if (path) await this.openPath(path);
   }
 
-  async reload(): Promise<void> {
+  async reload(encoding?: string): Promise<boolean> {
     const document = this.state.active
       ? this.documents.get(this.state.active)
       : undefined;
-    if (!document?.snapshot || !(await this.confirmClose(document))) return;
+    if (!document?.snapshot || !(await this.confirmClose(document)))
+      return false;
     const version = document.model.getAlternativeVersionId();
-    const snapshot = await native.read(document.snapshot.path);
+    const snapshot = await native.read(
+      document.snapshot.path,
+      encoding ?? document.snapshot.encoding
+    );
     if (
       this.documents.get(document.uri) !== document ||
       document.model.getAlternativeVersionId() !== version
     ) {
       this.report({ code: "conflict" });
-      return;
+      return false;
     }
     document.model.setValue(snapshot.text);
     document.snapshot = snapshot;
+    this.refreshFileMode(document);
     const reloadedVersion = document.model.getAlternativeVersionId();
     document.external = undefined;
     files.update(document.model.uri, snapshot.text);
     await document.reference?.object.revert({ soft: true });
     document.versions.savedAt(reloadedVersion);
     this.update();
+    return true;
+  }
+
+  private refreshFileMode(document: OpenDocument): void {
+    document.largeFile =
+      document.snapshot?.largeFile === true ||
+      document.model.getValueLength() >= largeFileCharacters;
+    if (document.largeFile) this.largeDocuments.add(document.uri);
+    else this.largeDocuments.delete(document.uri);
+    editor.setModelLanguage(
+      document.model,
+      !document.largeFile && /\.(pwn|inc)$/i.test(document.name)
+        ? "pawn"
+        : "plaintext"
+    );
+    if (document.uri === this.state.active) this.applyFileOptions(document);
   }
 
   async action(id: string): Promise<void> {
@@ -1141,6 +1233,7 @@ export class Workbench {
     const client = this.language?.client;
     if (
       !document?.snapshot ||
+      document.largeFile ||
       !client?.isRunning() ||
       !this.state.languageFeatures?.formatting
     )
@@ -1306,6 +1399,9 @@ export class Workbench {
       .then(async () => {
         if (this.state.settings !== settings) return;
         await applyEditorSettings(settings);
+        this.applyFileOptions(
+          this.state.active ? this.documents.get(this.state.active) : undefined
+        );
         if (desktop) await native.storeSettings(settings);
       });
     return this.settingsQueue;
@@ -1315,6 +1411,8 @@ export class Workbench {
     this.languageQueue = this.languageQueue
       .catch(() => undefined)
       .then(async () => {
+        if (this.largeDocuments.has(this.state.active ?? "") && !this.language)
+          return;
         const document = this.state.active
           ? this.documents.get(this.state.active)?.snapshot
           : undefined;
@@ -1344,7 +1442,8 @@ export class Workbench {
             (message) => {
               if (generation === this.languageGeneration)
                 this.update({ languageProgress: message });
-            }
+            },
+            (uri) => !this.largeDocuments.has(Uri.parse(uri).toString())
           );
           if (generation !== this.languageGeneration || this.closingWindow) {
             await session.stop();
@@ -1517,7 +1616,20 @@ export class Workbench {
     }
     const version = document.model.getAlternativeVersionId();
     try {
-      const snapshot = await native.read(document.snapshot.path);
+      if (
+        (await native.revision(document.snapshot.path)) ===
+        document.snapshot.revision
+      ) {
+        if (document.external) {
+          document.external = undefined;
+          this.update();
+        }
+        return;
+      }
+      const snapshot = await native.read(
+        document.snapshot.path,
+        document.snapshot.encoding
+      );
       if (this.documents.get(document.uri) !== document) return;
       if (snapshot.revision === document.snapshot.revision) {
         if (document.external) {
@@ -1534,6 +1646,7 @@ export class Workbench {
           document.model.setValue(snapshot.text);
         const reloadedVersion = document.model.getAlternativeVersionId();
         document.snapshot = { ...snapshot, uri: document.uri };
+        this.refreshFileMode(document);
         files.update(document.model.uri, snapshot.text);
         await document.reference?.object.revert({ soft: true });
         document.versions.savedAt(reloadedVersion);

@@ -23,6 +23,14 @@ pub struct Output {
     pub stderr: String,
 }
 
+#[derive(Debug)]
+pub struct BytesOutput {
+    pub outcome: Outcome,
+    pub exit_code: Option<i32>,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
 #[cfg(windows)]
 pub(crate) struct Job(windows_sys::Win32::Foundation::HANDLE);
 // This owned kernel handle has no thread affinity and is never borrowed after close.
@@ -100,12 +108,28 @@ pub fn run(
     timeout: Duration,
     limit: u64,
 ) -> io::Result<Output> {
+    let result = run_bytes(command, cancel, timeout, limit)?;
+    Ok(Output {
+        outcome: result.outcome,
+        exit_code: result.exit_code,
+        stdout: String::from_utf8_lossy(&result.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&result.stderr).into_owned(),
+    })
+}
+
+/// Keep blob bytes intact until the caller chooses a disk text encoding.
+pub fn run_bytes(
+    command: &mut Command,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    limit: u64,
+) -> io::Result<BytesOutput> {
     if cancel.load(Ordering::Acquire) {
-        return Ok(Output {
+        return Ok(BytesOutput {
             outcome: Outcome::Cancelled,
             exit_code: None,
-            stdout: String::new(),
-            stderr: String::new(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
         });
     }
     let mut stdout = tempfile::tempfile()?;
@@ -154,13 +178,13 @@ pub fn run(
     } else {
         outcome
     };
-    fn read(file: &mut File, limit: u64) -> io::Result<String> {
+    fn read(file: &mut File, limit: u64) -> io::Result<Vec<u8>> {
         file.seek(SeekFrom::Start(0))?;
         let mut bytes = Vec::new();
         file.take(limit).read_to_end(&mut bytes)?;
-        Ok(String::from_utf8_lossy(&bytes).into_owned())
+        Ok(bytes)
     }
-    Ok(Output {
+    Ok(BytesOutput {
         outcome,
         exit_code: code,
         stdout: read(&mut stdout, limit)?,

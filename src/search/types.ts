@@ -9,6 +9,7 @@ export interface SearchOverlay {
   path: string;
   text: string;
   version: number;
+  excluded?: boolean;
 }
 
 export interface SearchHit {

@@ -7,15 +7,20 @@ use std::{
 };
 use url::Url;
 
-pub const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
+pub const MAX_FILE_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileSnapshot {
     pub path: PathBuf,
     pub uri: String,
     pub text: String,
     pub bom: bool,
     pub revision: String,
+    pub encoding: String,
+    pub encoding_guessed: bool,
+    pub size_bytes: u64,
+    pub large_file: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -38,43 +43,77 @@ pub fn file_uri(path: &Path) -> io::Result<String> {
 }
 
 pub fn read_document(path: &Path) -> io::Result<FileSnapshot> {
+    read_document_with_encoding(path, None)
+}
+
+pub fn read_document_with_encoding(
+    path: &Path,
+    encoding: Option<&str>,
+) -> io::Result<FileSnapshot> {
     let path = canonical(path)?;
-    let file = fs::File::open(&path)?;
-    if !file.metadata()?.is_file() {
+    let bytes = read_bytes(&path)?;
+    let decoded = crate::text::decode(&bytes, encoding)?;
+    check_size(decoded.text.len() as u64)?;
+    Ok(FileSnapshot {
+        uri: file_uri(&path)?,
+        path,
+        large_file: decoded.text.len() >= 8 * 1024 * 1024 || bytes.len() >= 8 * 1024 * 1024,
+        text: decoded.text,
+        bom: decoded.bom,
+        revision: format!("{:x}", Sha256::digest(&bytes)),
+        encoding: decoded.encoding,
+        encoding_guessed: decoded.guessed,
+        size_bytes: bytes.len() as u64,
+    })
+}
+
+fn check_size(size: u64) -> io::Result<()> {
+    if size > MAX_FILE_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            "file exceeds 128 MiB",
+        ));
+    }
+    Ok(())
+}
+
+fn read_bytes(path: &Path) -> io::Result<Vec<u8>> {
+    let file = fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "not a regular file",
         ));
     }
+    check_size(metadata.len())?;
     let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(metadata.len() as usize)
+        .map_err(io::Error::other)?;
     file.take(MAX_FILE_BYTES + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > MAX_FILE_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::FileTooLarge,
-            "file exceeds 8 MiB",
-        ));
+    check_size(bytes.len() as u64)?;
+    Ok(bytes)
+}
+
+/// Hash without decoding or allocating a second large editor buffer.
+pub fn document_revision(path: &Path) -> io::Result<String> {
+    let file = fs::File::open(path)?;
+    check_size(file.metadata()?.len())?;
+    let mut reader = file.take(MAX_FILE_BYTES + 1);
+    let mut hash = Sha256::new();
+    let mut buffer = [0; 64 * 1024];
+    let mut size = 0;
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        size += count as u64;
+        check_size(size)?;
+        hash.update(&buffer[..count]);
     }
-    if bytes.contains(&0) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "binary or UTF-16 file; convert to UTF-8 before opening",
-        ));
-    }
-    let revision = format!("{:x}", Sha256::digest(&bytes));
-    let bom = bytes.starts_with(&[0xef, 0xbb, 0xbf]);
-    let text = String::from_utf8(if bom { bytes[3..].to_vec() } else { bytes }).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unsupported encoding; convert to UTF-8 before opening",
-        )
-    })?;
-    Ok(FileSnapshot {
-        uri: file_uri(&path)?,
-        path,
-        text,
-        bom,
-        revision,
-    })
+    Ok(format!("{:x}", hash.finalize()))
 }
 
 /// Compare against the version the editor opened, then atomically replace in the same directory.
@@ -85,12 +124,24 @@ pub fn write_document(
     bom: bool,
     expected: Option<&str>,
 ) -> io::Result<FileSnapshot> {
-    if text.len() as u64 + if bom { 3 } else { 0 } > MAX_FILE_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::FileTooLarge,
-            "file exceeds 8 MiB",
-        ));
+    write_document_with_encoding(path, text, "utf-8", bom, expected)
+}
+
+pub fn write_document_with_encoding(
+    path: &Path,
+    text: &str,
+    encoding: &str,
+    bom: bool,
+    expected: Option<&str>,
+) -> io::Result<FileSnapshot> {
+    check_size(text.len() as u64)?;
+    if encoding.starts_with("utf-16") {
+        check_size(text.encode_utf16().count() as u64 * 2 + if bom { 2 } else { 0 })?;
+    } else if encoding.starts_with("utf-32") {
+        check_size(text.chars().count() as u64 * 4 + if bom { 4 } else { 0 })?;
     }
+    let bytes = crate::text::encode(text, encoding, bom)?;
+    check_size(bytes.len() as u64)?;
     let parent = canonical(
         path.parent()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing parent"))?,
@@ -99,12 +150,12 @@ pub fn write_document(
         .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing file name"))?;
     let target = parent.join(name);
-    let existing = match read_document(&target) {
-        Ok(snapshot) => Some(snapshot),
+    let existing = match document_revision(&target) {
+        Ok(revision) => Some(revision),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error),
     };
-    if existing.as_ref().map(|snapshot| snapshot.revision.as_str()) != expected {
+    if existing.as_deref() != expected {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
             "file changed on disk; reload or save a copy",
@@ -118,15 +169,12 @@ pub fn write_document(
         ));
     }
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    if let Some(snapshot) = &existing {
+    if existing.is_some() {
         temporary
             .as_file()
-            .set_permissions(fs::metadata(&snapshot.path)?.permissions())?;
+            .set_permissions(fs::metadata(&target)?.permissions())?;
     }
-    if bom {
-        temporary.write_all(&[0xef, 0xbb, 0xbf])?;
-    }
-    temporary.write_all(text.as_bytes())?;
+    temporary.write_all(&bytes)?;
     temporary.as_file().sync_all()?;
     if expected.is_some() {
         temporary.persist(&target).map_err(|error| error.error)?;
@@ -135,8 +183,8 @@ pub fn write_document(
             .persist_noclobber(&target)
             .map_err(|error| error.error)?;
     }
-    let saved = read_document(&target)?;
-    if saved.text != text || saved.bom != bom {
+    let saved = read_document_with_encoding(&target, Some(encoding))?;
+    if saved.text != text || saved.revision != format!("{:x}", Sha256::digest(&bytes)) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
             "file changed immediately after saving",
@@ -613,6 +661,63 @@ mod tests {
             fs::write(&path, bytes).unwrap();
             assert!(read_document(&path).is_err());
         }
+    }
+
+    #[test]
+    fn encoded_saves_preserve_bytes_and_refuse_loss_or_disk_conflicts() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("encoded.pwn");
+        let source = "// سلام دنيا\r\nmain() {}\r\n";
+        let original =
+            write_document_with_encoding(&path, source, "windows-1256", false, None).unwrap();
+        let before = fs::read(&path).unwrap();
+        assert!(
+            write_document_with_encoding(
+                &path,
+                "// 😀",
+                "windows-1256",
+                false,
+                Some(&original.revision)
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(&path).unwrap(), before);
+        let unicode =
+            write_document_with_encoding(&path, source, "utf-16le", true, Some(&original.revision))
+                .unwrap();
+        assert_eq!(unicode.encoding, "utf-16le");
+        assert!(unicode.bom);
+        assert_eq!(unicode.text, source);
+        fs::write(&path, "external").unwrap();
+        assert!(
+            write_document_with_encoding(&path, source, "utf-16le", true, Some(&unicode.revision))
+                .is_err()
+        );
+        assert_eq!(fs::read_to_string(path).unwrap(), "external");
+    }
+
+    #[test]
+    fn large_text_above_eight_mib_opens_and_saves_with_a_bounded_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("large.pwn");
+        let source = "// large file\r\n".repeat(800_000);
+        assert!(source.len() > 8 * 1024 * 1024);
+        let original = write_document(&path, &source, false, None).unwrap();
+        assert!(original.large_file);
+        assert_eq!(original.text, source);
+        assert_eq!(document_revision(&path).unwrap(), original.revision);
+        let changed = format!("{source}// saved\r\n");
+        let saved = write_document(&path, &changed, false, Some(&original.revision)).unwrap();
+        assert_eq!(saved.text, changed);
+        let oversized = directory.path().join("oversized.pwn");
+        fs::File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_FILE_BYTES + 1)
+            .unwrap();
+        assert_eq!(
+            read_document(&oversized).unwrap_err().kind(),
+            io::ErrorKind::FileTooLarge
+        );
     }
 
     #[test]

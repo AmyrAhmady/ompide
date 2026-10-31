@@ -15,6 +15,8 @@ const MAX_MATCHES: usize = 2_000;
 const MAX_FILES: usize = 500;
 const MAX_SCAN_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PREVIEW_BYTES: usize = 16 * 1024 * 1024;
+// Workspace scans have their own bound; opening a larger file does not expand it.
+const MAX_SEARCH_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +34,8 @@ pub struct Overlay {
     pub path: PathBuf,
     pub text: String,
     pub version: u32,
+    #[serde(default)]
+    pub excluded: bool,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,9 +93,7 @@ pub fn search(
     let mut overlay_bytes = 0;
     for overlay in overlays {
         overlay_bytes += overlay.text.len();
-        if overlay_bytes > MAX_PREVIEW_BYTES
-            || overlay.text.len() as u64 > workspace::MAX_FILE_BYTES
-        {
+        if overlay_bytes > MAX_PREVIEW_BYTES || overlay.text.len() as u64 > MAX_SEARCH_FILE_BYTES {
             return Err(io::Error::new(
                 io::ErrorKind::FileTooLarge,
                 "unsaved search buffers exceed limit",
@@ -126,7 +128,6 @@ pub fn search(
         .parents(false)
         .git_global(false)
         .require_git(false)
-        .max_filesize(Some(workspace::MAX_FILE_BYTES))
         .filter_entry(|entry| {
             entry.depth() == 0
                 || !entry.file_type().is_some_and(|kind| kind.is_dir())
@@ -216,6 +217,15 @@ pub fn search(
             });
             continue;
         }
+        if buffers.get(&path).is_some_and(|overlay| overlay.excluded)
+            || entry
+                .metadata()
+                .is_ok_and(|metadata| metadata.len() > MAX_SEARCH_FILE_BYTES)
+        {
+            result.skipped += 1;
+            result.truncated |= replacement.is_some();
+            continue;
+        }
         let snapshot = match workspace::read_document(&path) {
             Ok(snapshot) => snapshot,
             Err(_) => {
@@ -223,6 +233,11 @@ pub fn search(
                 continue;
             }
         };
+        if snapshot.text.len() as u64 > MAX_SEARCH_FILE_BYTES {
+            result.skipped += 1;
+            result.truncated |= replacement.is_some();
+            continue;
+        }
         let overlay = buffers.get(&path);
         let text = overlay
             .map(|overlay| overlay.text.as_str())
@@ -358,6 +373,7 @@ mod tests {
             path: path.clone(),
             text: "unsaved NEEDLE".into(),
             version: 5,
+            excluded: false,
         };
         let result = search(
             &scope,
@@ -406,7 +422,8 @@ mod tests {
                 vec![Overlay {
                     path: outside.path().to_owned(),
                     text: "x".into(),
-                    version: 1
+                    version: 1,
+                    excluded: false,
                 }],
                 None,
                 &AtomicBool::new(false)
@@ -424,5 +441,54 @@ mod tests {
         let result = search(&scope, &query, vec![], None, &AtomicBool::new(false)).unwrap();
         assert_eq!(result.files.len(), 1);
         assert!(result.files[0].hits.is_empty());
+    }
+
+    #[test]
+    fn large_files_are_findable_and_skipped_content_cannot_apply_partial_replacements() {
+        let directory = tempfile::tempdir().unwrap();
+        let scope = Workspace::open(directory.path()).unwrap();
+        let path = scope.root().join("large.pwn");
+        fs::File::create(&path)
+            .unwrap()
+            .set_len(MAX_SEARCH_FILE_BYTES + 1)
+            .unwrap();
+        fs::write(scope.root().join("small.pwn"), "needle").unwrap();
+        let cancel = AtomicBool::new(false);
+        let result = search(&scope, &options("needle"), vec![], Some("changed"), &cancel).unwrap();
+        assert!(result.truncated);
+        assert_eq!(result.skipped, 1);
+        assert!(
+            result.files.is_empty(),
+            "a skipped large file prevents a partial replacement preview"
+        );
+        let mut query = options("large");
+        query.files_only = true;
+        assert_eq!(
+            search(&scope, &query, vec![], None, &cancel)
+                .unwrap()
+                .files
+                .len(),
+            1
+        );
+        fs::write(&path, "needle on disk").unwrap();
+        let result = search(
+            &scope,
+            &options("needle"),
+            vec![Overlay {
+                path,
+                text: String::new(),
+                version: 2,
+                excluded: true,
+            }],
+            None,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(result.skipped, 1);
+        assert_eq!(
+            result.files.len(),
+            1,
+            "never search stale disk text behind an excluded dirty buffer"
+        );
     }
 }

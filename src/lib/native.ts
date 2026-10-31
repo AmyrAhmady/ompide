@@ -26,6 +26,10 @@ export interface FileSnapshot {
   text: string;
   bom: boolean;
   revision: string;
+  encoding: string;
+  encodingGuessed: boolean;
+  sizeBytes: number;
+  largeFile: boolean;
 }
 
 export interface Entry {
@@ -97,20 +101,41 @@ export const native = {
     invoke<string>("activate_workspace", { path }),
   recentWorkspace: (path: string) =>
     invoke<string>("recent_workspace", { path }),
-  chooseDocument: () => invoke<FileSnapshot | null>("choose_document"),
+  chooseDocument: (encoding?: string) =>
+    invoke<FileSnapshot | null>("choose_document", { encoding }),
   rememberDocument: (path: string) =>
     invoke<string[]>("remember_document", { path }),
   recentDocument: (path: string) =>
     invoke<FileSnapshot>("recent_document", { path }),
   chooseLanguageServer: () => invoke<string | null>("choose_language_server"),
-  read: (path: string) => invoke<FileSnapshot>("read_document", { path }),
-  save: (path: string, text: string, bom: boolean, revision: string) =>
-    invoke<FileSnapshot>("save_document", { path, text, bom, revision }),
-  saveAs: (text: string, bom: boolean, protectedPaths: string[]) =>
+  read: (path: string, encoding?: string) =>
+    invoke<FileSnapshot>("read_document", { path, encoding }),
+  revision: (path: string) => invoke<string>("document_revision", { path }),
+  save: (
+    path: string,
+    text: string,
+    bom: boolean,
+    revision: string,
+    encoding = "utf-8"
+  ) =>
+    invoke<FileSnapshot>("save_document", {
+      path,
+      text,
+      bom,
+      revision,
+      encoding,
+    }),
+  saveAs: (
+    text: string,
+    bom: boolean,
+    protectedPaths: string[],
+    encoding = "utf-8"
+  ) =>
     invoke<FileSnapshot | null>("save_document_as", {
       text,
       bom,
       protectedPaths,
+      encoding,
     }),
   entries: (path: string) => invoke<Entry[]>("list_directory", { path }),
   watch: (paths: string[], receive: (event: WatchEvent) => void) =>

@@ -7,6 +7,7 @@ pub mod process;
 pub mod project;
 pub mod search;
 pub mod terminal;
+pub mod text;
 pub mod tools;
 pub mod watch;
 pub mod workspace;

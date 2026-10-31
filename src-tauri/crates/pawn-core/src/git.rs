@@ -291,16 +291,31 @@ impl Repository {
         Ok(path)
     }
 
-    fn blob(&self, reference: &str, path: &str, cancel: &AtomicBool) -> Result<String> {
-        self.run(
-            &[
+    fn blob(&self, reference: &str, path: &str, cancel: &AtomicBool) -> Result<Option<String>> {
+        let output = process::run_bytes(
+            self.command().args([
                 "show",
                 "--no-ext-diff",
                 "--no-textconv",
                 &format!("{reference}:{path}"),
-            ],
+            ]),
             cancel,
-        )
+            Duration::from_secs(300),
+            LIMIT,
+        )?;
+        let code = match output.outcome {
+            process::Outcome::Exited if output.exit_code == Some(0) => None,
+            process::Outcome::Exited => Some("gitFailed"),
+            process::Outcome::Cancelled => Some("gitCancelled"),
+            process::Outcome::Timeout => Some("gitTimeout"),
+            process::Outcome::OutputLimit => Some("gitOutputLimit"),
+        };
+        if let Some(code) = code {
+            return Err(fail(code, String::from_utf8_lossy(&output.stderr)));
+        }
+        Ok(crate::text::decode(&output.stdout, None)
+            .ok()
+            .map(|decoded| decoded.text))
     }
 
     pub fn diff(&self, path: &str, staged: bool, cancel: &AtomicBool) -> Result<Diff> {
@@ -322,36 +337,46 @@ impl Repository {
         self.path(original)?;
         let (before, after) = if staged {
             let before = if change.index == 'A' {
-                String::new()
+                Some(String::new())
             } else {
                 self.blob("HEAD", original, cancel)?
             };
             let after = if change.index == 'D' {
-                String::new()
+                Some(String::new())
             } else {
                 self.blob("", path, cancel)?
             };
             (before, after)
         } else {
             let before = if change.index == '?' {
-                String::new()
+                Some(String::new())
             } else {
                 self.blob("", path, cancel)?
             };
             let after = if change.working == 'D' {
-                String::new()
+                Some(String::new())
             } else {
                 if fs::metadata(&target)?.len() > LIMIT {
                     return Err(fail("gitOutputLimit", "file too large"));
                 }
-                String::from_utf8_lossy(&fs::read(target)?).into_owned()
+                crate::text::decode(&fs::read(target)?, None)
+                    .ok()
+                    .map(|decoded| decoded.text)
             };
             (before, after)
         };
-        let unsupported = before.contains(['\0', '\u{fffd}']) || after.contains(['\0', '\u{fffd}']);
+        let unsupported = before.is_none() || after.is_none();
         Ok(Diff {
-            before: if unsupported { String::new() } else { before },
-            after: if unsupported { String::new() } else { after },
+            before: if unsupported {
+                String::new()
+            } else {
+                before.unwrap()
+            },
+            after: if unsupported {
+                String::new()
+            } else {
+                after.unwrap()
+            },
             unsupported,
         })
     }
@@ -803,6 +828,37 @@ mod tests {
             paths: vec![path.into(), "renamed.pwn".into()],
         });
         assert!(f.status().changes.iter().any(|c| c.working == 'D'));
+    }
+
+    #[test]
+    fn working_and_index_diffs_decode_unicode_files_before_comparing() {
+        let f = Fixture::new();
+        let name = "unicode.pwn";
+        let before = "// λ😀\r\nmain() { return 1; }\r\n";
+        fs::write(
+            f.directory.path().join(name),
+            crate::text::encode(before, "utf-16le", true).unwrap(),
+        )
+        .unwrap();
+        f.repo.run(&["add", "--", name], &f.cancel).unwrap();
+        f.repo
+            .run(&["commit", "-m", "Initial Unicode source"], &f.cancel)
+            .unwrap();
+        let after = before.replace("return 1", "return 2");
+        fs::write(
+            f.directory.path().join(name),
+            crate::text::encode(&after, "utf-16le", true).unwrap(),
+        )
+        .unwrap();
+        let working = f.repo.diff(name, false, &f.cancel).unwrap();
+        assert!(!working.unsupported);
+        assert_eq!(working.before, before);
+        assert_eq!(working.after, after);
+        f.repo.run(&["add", "--", name], &f.cancel).unwrap();
+        let staged = f.repo.diff(name, true, &f.cancel).unwrap();
+        assert!(!staged.unsupported);
+        assert_eq!(staged.before, before);
+        assert_eq!(staged.after, after);
     }
 
     #[test]

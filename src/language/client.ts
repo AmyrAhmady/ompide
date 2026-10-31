@@ -22,7 +22,8 @@ export async function startLanguageSession(
   root: string,
   document: string | undefined,
   onClosed: () => void,
-  onProgress: (message?: string) => void
+  onProgress: (message?: string) => void,
+  synchronizeDocument: (uri: string) => boolean = () => true
 ): Promise<LanguageSession> {
   let stopping = false;
   const lifecycle = new DocumentLifecycle();
@@ -89,18 +90,22 @@ export async function startLanguageSession(
       textSynchronization: { delayOpenNotifications: false },
       middleware: {
         didOpen: (document, next) =>
-          lifecycle.open(protocolUri(document.uri), () => next(document)),
+          synchronizeDocument(document.uri.toString())
+            ? lifecycle.open(protocolUri(document.uri), () => next(document))
+            : Promise.resolve(),
         didChange: (event, next) =>
-          lifecycle.change(
-            protocolUri(event.document.uri),
-            async () => {
-              await client
-                .getFeature("textDocument/didOpen")
-                .getProvider(event.document)
-                ?.send(event.document);
-            },
-            () => next(event)
-          ),
+          synchronizeDocument(event.document.uri.toString())
+            ? lifecycle.change(
+                protocolUri(event.document.uri),
+                async () => {
+                  await client
+                    .getFeature("textDocument/didOpen")
+                    .getProvider(event.document)
+                    ?.send(event.document);
+                },
+                () => next(event)
+              )
+            : Promise.resolve(),
         didClose: (document, next) =>
           lifecycle.close(protocolUri(document.uri), () => next(document)),
         sendRequest: async (type, params, token, next) => {
@@ -154,7 +159,11 @@ export async function startLanguageSession(
     if (!stopping) onClosed();
   });
   for (const document of workspace.textDocuments)
-    if (document.uri.scheme === "file" && document.languageId === "pawn")
+    if (
+      document.uri.scheme === "file" &&
+      document.languageId === "pawn" &&
+      synchronizeDocument(document.uri.toString())
+    )
       lifecycle.track(protocolUri(document.uri));
   try {
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -172,10 +181,11 @@ export async function startLanguageSession(
       clearTimeout(timeout);
     }
     for (const document of workspace.textDocuments)
-      await client
-        .getFeature("textDocument/didOpen")
-        .getProvider(document)
-        ?.send(document);
+      if (synchronizeDocument(document.uri.toString()))
+        await client
+          .getFeature("textDocument/didOpen")
+          .getProvider(document)
+          ?.send(document);
   } catch (error) {
     stopping = true;
     lifecycle.dispose();

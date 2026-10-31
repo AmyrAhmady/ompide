@@ -26,6 +26,8 @@ export interface CommandViews {
   resetLayout: () => void;
   terminal: () => void;
   newTerminal: () => void;
+  encoding?: () => void;
+  openEncoding?: () => void;
 }
 
 /** Menus and the palette share command availability and execution. */
@@ -39,6 +41,7 @@ export function createCommands(
   const fileActive = Boolean(state.active?.startsWith("file:"));
   const pawnActive =
     fileActive &&
+    !state.tabs.find((tab) => tab.uri === state.active)?.largeFile &&
     /\.(pwn|inc)$/i.test(
       state.tabs.find((tab) => tab.uri === state.active)?.name ?? ""
     );
@@ -56,6 +59,9 @@ export function createCommands(
   };
   add("command.newFile", mutable, () => workbench.newFile(), "Ctrl+N");
   add("command.openFile", mutable, () => workbench.openFile(), "Ctrl+O");
+  add("command.openWithEncoding", mutable && Boolean(views.openEncoding), () =>
+    views.openEncoding?.()
+  );
   add(
     "command.openFolder",
     mutable && !busy,
@@ -88,6 +94,9 @@ export function createCommands(
     "Ctrl+Shift+T"
   );
   add("command.reload", fileActive && mutable, () => workbench.reload());
+  add("command.encoding", active && mutable && Boolean(views.encoding), () =>
+    views.encoding?.()
+  );
   add("command.quit", mutable, () => workbench.quit());
   for (const [label, id, shortcut] of [
     ["command.undo", "undo", "Ctrl+Z"],

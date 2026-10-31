@@ -57,15 +57,21 @@ pub struct AppError {
 }
 impl From<io::Error> for AppError {
     fn from(error: io::Error) -> Self {
+        let codec_error = error
+            .get_ref()
+            .and_then(|detail| detail.downcast_ref::<pawn_core::text::TextError>());
         Self {
-            code: match error.kind() {
-                io::ErrorKind::NotFound => "notFound",
-                io::ErrorKind::PermissionDenied => "permissionDenied",
-                io::ErrorKind::AlreadyExists => "conflict",
-                io::ErrorKind::InvalidData => "encoding",
-                io::ErrorKind::FileTooLarge => "fileTooLarge",
-                _ => "operationFailed",
-            },
+            code: codec_error.map_or_else(
+                || match error.kind() {
+                    io::ErrorKind::NotFound => "notFound",
+                    io::ErrorKind::PermissionDenied => "permissionDenied",
+                    io::ErrorKind::AlreadyExists => "conflict",
+                    io::ErrorKind::InvalidData => "encoding",
+                    io::ErrorKind::FileTooLarge => "fileTooLarge",
+                    _ => "operationFailed",
+                },
+                |failure| failure.0,
+            ),
             detail: error.to_string(),
             parameters: serde_json::Value::Null,
         }
@@ -223,6 +229,7 @@ pub fn recent_workspace(
 pub async fn choose_document(
     app: AppHandle,
     state: State<'_, NativeState>,
+    encoding: Option<String>,
 ) -> Result<Option<FileSnapshot>> {
     let selected = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -232,16 +239,16 @@ pub async fn choose_document(
     })
     .await
     .map_err(|e| error("operationFailed", e.to_string()))?;
-    selected
-        .map(|file| {
-            let path = file
-                .into_path()
-                .map_err(|e| error("operationFailed", e.to_string()))?;
-            let snapshot = workspace::read_document(&path)?;
-            lock(&state.allowed)?.insert(snapshot.path.clone());
-            Ok(snapshot)
-        })
-        .transpose()
+    let Some(file) = selected else {
+        return Ok(None);
+    };
+    let path = workspace::canonical(
+        &file
+            .into_path()
+            .map_err(|e| error("operationFailed", e.to_string()))?,
+    )?;
+    lock(&state.allowed)?.insert(path.clone());
+    Ok(Some(read_document(state, path, encoding).await?))
 }
 fn permitted(state: &NativeState, path: &Path) -> Result<PathBuf> {
     let canonical = workspace::canonical(path)?;
@@ -280,13 +287,31 @@ pub async fn recent_document(
     if !load_preferences(app)?.recent_files.contains(&path) {
         return Err(error("permissionDenied", "file is not in recent history"));
     }
-    let snapshot = workspace::read_document(&path)?;
-    lock(&state.allowed)?.insert(snapshot.path.clone());
-    Ok(snapshot)
+    let path = workspace::canonical(&path)?;
+    lock(&state.allowed)?.insert(path.clone());
+    read_document(state, path, None).await
 }
 #[tauri::command]
-pub async fn read_document(state: State<'_, NativeState>, path: PathBuf) -> Result<FileSnapshot> {
-    Ok(workspace::read_document(&permitted(&state, &path)?)?)
+pub async fn read_document(
+    state: State<'_, NativeState>,
+    path: PathBuf,
+    encoding: Option<String>,
+) -> Result<FileSnapshot> {
+    let path = permitted(&state, &path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        workspace::read_document_with_encoding(&path, encoding.as_deref())
+    })
+    .await
+    .map_err(|e| error("operationFailed", e.to_string()))?
+    .map_err(Into::into)
+}
+#[tauri::command]
+pub async fn document_revision(state: State<'_, NativeState>, path: PathBuf) -> Result<String> {
+    let path = permitted(&state, &path)?;
+    tauri::async_runtime::spawn_blocking(move || workspace::document_revision(&path))
+        .await
+        .map_err(|e| error("operationFailed", e.to_string()))?
+        .map_err(Into::into)
 }
 #[tauri::command]
 pub async fn save_document(
@@ -295,13 +320,21 @@ pub async fn save_document(
     text: String,
     bom: bool,
     revision: String,
+    encoding: Option<String>,
 ) -> Result<FileSnapshot> {
-    Ok(workspace::write_document(
-        &permitted(&state, &path)?,
-        &text,
-        bom,
-        Some(&revision),
-    )?)
+    let path = permitted(&state, &path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        workspace::write_document_with_encoding(
+            &path,
+            &text,
+            encoding.as_deref().unwrap_or("utf-8"),
+            bom,
+            Some(&revision),
+        )
+    })
+    .await
+    .map_err(|e| error("operationFailed", e.to_string()))?
+    .map_err(Into::into)
 }
 #[tauri::command]
 pub async fn save_document_as(
@@ -310,6 +343,7 @@ pub async fn save_document_as(
     text: String,
     bom: bool,
     protected_paths: Vec<PathBuf>,
+    encoding: Option<String>,
 ) -> Result<Option<FileSnapshot>> {
     let selected = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -320,32 +354,41 @@ pub async fn save_document_as(
     })
     .await
     .map_err(|e| error("operationFailed", e.to_string()))?;
-    selected
-        .map(|file| {
-            let path = file
-                .into_path()
-                .map_err(|e| error("operationFailed", e.to_string()))?;
-            // Native Save dialog supplies overwrite confirmation. Capture current disk version.
-            if let Ok(canonical) = workspace::canonical(&path)
-                && protected_paths
-                    .iter()
-                    .any(|other| workspace::canonical(other).is_ok_and(|other| other == canonical))
-            {
-                return Err(error(
-                    "alreadyOpen",
-                    "destination is open in another editor",
-                ));
-            }
-            let expected = match workspace::read_document(&path) {
-                Ok(snapshot) => Some(snapshot.revision),
-                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-                Err(e) => return Err(e.into()),
-            };
-            let snapshot = workspace::write_document(&path, &text, bom, expected.as_deref())?;
-            lock(&state.allowed)?.insert(snapshot.path.clone());
-            Ok(snapshot)
-        })
-        .transpose()
+    let Some(file) = selected else {
+        return Ok(None);
+    };
+    let snapshot = tauri::async_runtime::spawn_blocking(move || -> Result<FileSnapshot> {
+        let path = file
+            .into_path()
+            .map_err(|e| error("operationFailed", e.to_string()))?;
+        // Native Save dialog supplies overwrite confirmation. Capture current disk version.
+        if let Ok(canonical) = workspace::canonical(&path)
+            && protected_paths
+                .iter()
+                .any(|other| workspace::canonical(other).is_ok_and(|other| other == canonical))
+        {
+            return Err(error(
+                "alreadyOpen",
+                "destination is open in another editor",
+            ));
+        }
+        let expected = match workspace::document_revision(&path) {
+            Ok(revision) => Some(revision),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        };
+        Ok(workspace::write_document_with_encoding(
+            &path,
+            &text,
+            encoding.as_deref().unwrap_or("utf-8"),
+            bom,
+            expected.as_deref(),
+        )?)
+    })
+    .await
+    .map_err(|e| error("operationFailed", e.to_string()))??;
+    lock(&state.allowed)?.insert(snapshot.path.clone());
+    Ok(Some(snapshot))
 }
 #[tauri::command]
 pub async fn list_directory(state: State<'_, NativeState>, path: PathBuf) -> Result<Vec<Entry>> {

@@ -4,10 +4,12 @@ export function Modal({
   children,
   label,
   onCancel,
+  className,
 }: {
   children: ReactNode;
   label: string;
   onCancel: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -33,6 +35,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
+      className={className}
       aria-label={label}
       onCancel={(event) => {
         event.preventDefault();
