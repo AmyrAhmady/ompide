@@ -57,8 +57,7 @@ Press **F1** or **Ctrl+Shift+P** to find commands. **Ctrl+P** finds files,
 - [Building from source](https://github.com/AmyrAhmady/ompide/wiki/Building-from-Source): prerequisites, tool preparation, development,
   and packaging commands.
 - [Project wiki](https://github.com/AmyrAhmady/ompide/wiki): user guides for
-  projects, editing, Git, terminals, themes, and workspace trust. The pages are being prepared and
-  have not been published yet.
+  projects, editing, Git, terminals, themes, and workspace trust.
 - [Toolchain notes](toolchain/README.md): pinned versions, checksums, licenses,
   and compatibility details.
 
