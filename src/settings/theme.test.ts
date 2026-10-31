@@ -9,6 +9,39 @@ import {
   themeVariables,
 } from "./theme";
 import { defaults, parseSettings } from "./settings";
+import pawnGrammar from "../editor/pawn/pawn.tmLanguage.json";
+
+it("colors the Pawn grammar's token families in both default themes", () => {
+  const scopes = new Set<string>();
+
+  const visit = (value: unknown): void => {
+    if (typeof value !== "object" || value === null) return;
+    for (const [key, child] of Object.entries(value)) {
+      if (
+        key === "name" &&
+        typeof child === "string" &&
+        /^(comment|keyword|storage|entity|constant|variable)\./.test(child)
+      )
+        scopes.add(child);
+      visit(child);
+    }
+  };
+  visit(pawnGrammar);
+  for (const theme of Object.values(defaultThemes))
+    for (const scope of scopes) {
+      const rules = theme.tokenColors.filter(
+        (rule) => scope === rule.scope || scope.startsWith(`${rule.scope}.`)
+      );
+      expect(rules.length, `${theme.name}: missing ${scope}`).toBeGreaterThan(
+        0
+      );
+      for (const rule of rules)
+        expect(
+          rule.settings.foreground,
+          `${theme.name}: uncolored ${scope}`
+        ).not.toBe(theme.colors["editor.foreground"]);
+    }
+});
 
 it("provides complete light/dark defaults and custom overrides with fallback", () => {
   for (const theme of Object.values(defaultThemes))
