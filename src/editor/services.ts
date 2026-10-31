@@ -6,7 +6,7 @@ import { registerFileSystemOverlay } from "@codingame/monaco-vscode-files-servic
 import { MonacoVscodeApiWrapper } from "monaco-languageclient/vscodeApiWrapper";
 import { configureWorkers } from "./workers";
 import type { Settings } from "../settings/settings";
-import { defaultThemes, selectedTheme } from "../settings/theme";
+import { defaultThemes, selectedTheme, themeBase } from "../settings/theme";
 import grammar from "./pawn/pawn.tmLanguage.json?raw";
 import languageConfiguration from "./pawn/language-configuration.json?raw";
 import "monaco-editor/esm/vs/editor/edcore.main";
@@ -24,10 +24,19 @@ function configuration(settings: Settings) {
   const theme = selectedTheme(settings);
   const custom = settings.theme === "custom";
   return {
-    "workbench.colorTheme": defaultThemes[theme.base].name,
+    "workbench.colorTheme": custom
+      ? `ompide Imported ${theme.type}`
+      : defaultThemes[themeBase(theme)].name,
     "workbench.colorCustomizations": custom ? theme.colors : {},
     "editor.tokenColorCustomizations": custom
       ? { textMateRules: theme.tokenColors }
+      : {},
+    "editor.semanticHighlighting.enabled": theme.semanticHighlighting ?? true,
+    "editor.semanticTokenColorCustomizations": custom
+      ? {
+          enabled: theme.semanticHighlighting ?? true,
+          rules: theme.semanticTokenColors ?? {},
+        }
       : {},
     "telemetry.telemetryLevel": "off",
     "workbench.enableExperiments": false,
@@ -52,6 +61,17 @@ export function initializeEditor(
 ): Promise<void> {
   return (started ??= (async () => {
     const themeFiles = new Map<string, string | URL>();
+    const importedTypes = ["light", "dark", "hcLight", "hcDark"] as const;
+    for (const type of importedTypes)
+      themeFiles.set(
+        `/import-${type}.json`,
+        JSON.stringify({
+          name: `ompide Imported ${type}`,
+          type,
+          colors: defaultThemes[themeBase({ type })].colors,
+          tokenColors: [],
+        })
+      );
     for (const [id, theme] of Object.entries(defaultThemes))
       themeFiles.set(
         `/${id}.json`,
@@ -118,12 +138,30 @@ export function initializeEditor(
             version: "0.1.0",
             engines: { vscode: "*" },
             contributes: {
-              themes: Object.entries(defaultThemes).map(([id, theme]) => ({
-                id: theme.name,
-                label: theme.name,
-                uiTheme: theme.base === "dark" ? "vs-dark" : "vs",
-                path: `./${id}.json`,
-              })),
+              themes: [
+                ...Object.entries(defaultThemes).map(([id, theme]) => ({
+                  id: theme.name,
+                  label: theme.name,
+                  uiTheme:
+                    themeBase(theme) === "dark"
+                      ? ("vs-dark" as const)
+                      : ("vs" as const),
+                  path: `./${id}.json`,
+                })),
+                ...importedTypes.map((type) => ({
+                  id: `ompide Imported ${type}`,
+                  label: `ompide Imported ${type}`,
+                  uiTheme:
+                    type === "hcDark"
+                      ? ("hc-black" as const)
+                      : type === "hcLight"
+                        ? ("hc-light" as const)
+                        : type === "dark"
+                          ? ("vs-dark" as const)
+                          : ("vs" as const),
+                  path: `./import-${type}.json`,
+                })),
+              ],
             },
           },
           filesOrContents: themeFiles,

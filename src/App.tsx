@@ -43,7 +43,8 @@ import {
   QuickOpen,
   initialSearchFields,
 } from "./search/SearchPanel";
-import { selectedTheme, themeVariables } from "./settings/theme";
+import { selectedTheme, themeVariables, themeBase } from "./settings/theme";
+import { ThemePicker } from "./settings/ThemePicker";
 import { ThemeSettings } from "./settings/ThemeSettings";
 import type { Settings } from "./settings/settings";
 import toolPins from "../toolchain/tools.json";
@@ -68,9 +69,11 @@ function SettingsDialog({
   settings,
   tool,
   close,
+  themes,
 }: {
   settings: Settings;
   tool?: { path: string; version: string };
+  themes: () => void;
   close: () => void;
 }) {
   const update = (patch: Partial<Settings>) =>
@@ -79,31 +82,9 @@ function SettingsDialog({
     <Modal label={t("settings.title")} onCancel={close}>
       <h2>{t("settings.title")}</h2>
       <div className="settings-fields">
-        <label>
-          {t("settings.theme")}
-          <select
-            aria-label={t("settings.theme")}
-            value={settings.theme}
-            onChange={(event) =>
-              update({
-                theme:
-                  event.target.value === "custom" && settings.customTheme
-                    ? "custom"
-                    : event.target.value === "light"
-                      ? "light"
-                      : "dark",
-              })
-            }
-          >
-            <option value="dark">{t("settings.dark")}</option>
-            <option value="light">{t("settings.light")}</option>
-            {settings.customTheme && (
-              <option value="custom">
-                {t("theme.customOption", { name: settings.customTheme.name })}
-              </option>
-            )}
-          </select>
-        </label>
+        <button type="button" onClick={themes}>
+          {t("theme.select")}: {selectedTheme(settings).name}
+        </button>
         <ThemeSettings settings={settings} />
         <label>
           {t("settings.fontFamily")}
@@ -335,6 +316,10 @@ function App() {
   const [gitDiff, setGitDiff] = useState<OpenGitDiff>();
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themesOpen, setThemesOpen] = useState(false);
+  const displaySettings: Settings = state.themePreview
+    ? { ...state.settings, theme: "custom", customTheme: state.themePreview }
+    : state.settings;
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [encodingTarget, setEncodingTarget] = useState<string>();
   const [symbolsOpen, setSymbolsOpen] = useState<
@@ -547,6 +532,7 @@ function App() {
   };
   const registeredCommands = createCommands(state, workbench, nativeReady, {
     settings: () => setSettingsOpen(true),
+    themes: () => setThemesOpen(true),
     encoding: () => setEncodingTarget(state.active),
     openEncoding: () => setEncodingTarget("open"),
     project: configureProject,
@@ -663,6 +649,13 @@ function App() {
         event.stopImmediatePropagation();
         return;
       }
+      if (Date.now() < chordUntil && key === "t") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        chordUntil = 0;
+        setThemesOpen(true);
+        return;
+      }
       if (Date.now() < chordUntil && key === "o")
         operation = () => workbench.chooseFolder();
       else if (modifier && key === "p") {
@@ -763,8 +756,8 @@ function App() {
       className="workbench"
       style={
         {
-          ...themeVariables(selectedTheme(state.settings)),
-          colorScheme: selectedTheme(state.settings).base,
+          ...themeVariables(selectedTheme(displaySettings)),
+          colorScheme: themeBase(selectedTheme(displaySettings)),
           "--sidebar-width": `${layout.sidebarWidth}px`,
           "--panel-height": `${layout.panelHeight}px`,
         } as CSSProperties
@@ -834,6 +827,7 @@ function App() {
             <CommandMenuItem command={command("explorer.title")} />
             <CommandMenuItem command={command("command.problems")} />
             <CommandMenuItem command={command("command.settings")} />
+            <CommandMenuItem command={command("command.colorTheme")} />
             <CommandMenuItem command={command("search.title")} />
             <CommandMenuItem command={command("scm.title")} />
             <CommandMenuItem command={command("terminal.toggle")} />
@@ -1301,7 +1295,7 @@ function App() {
                   root={state.root}
                   visible={terminalOpen}
                   controls={terminalControls}
-                  settings={state.settings}
+                  settings={displaySettings}
                 />
               </div>
             </div>
@@ -1393,11 +1387,16 @@ function App() {
       )}
       {settingsOpen && (
         <SettingsDialog
-          settings={state.settings}
+          settings={displaySettings}
+          themes={() => {
+            setSettingsOpen(false);
+            setThemesOpen(true);
+          }}
           tool={state.languageTool}
           close={() => setSettingsOpen(false)}
         />
       )}
+      {themesOpen && <ThemePicker close={() => setThemesOpen(false)} />}
       {creditsOpen && <CreditsDialog close={() => setCreditsOpen(false)} />}
       {symbolsOpen && (
         <SymbolsDialog

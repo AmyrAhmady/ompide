@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
   "name": "Ocean",
-  "base": "dark",
   "colors": {
     "editor.background": "#10232a",
     "editor.foreground": "#e0f0f2",
@@ -15,6 +13,12 @@
     "list.activeSelectionBackground": "#275763"
   },
   "tokenColors": [
-    { "scope": "constant.numeric", "settings": { "foreground": "#ff9e65" } }
-  ]
+    {
+      "scope": "constant.numeric",
+      "settings": {
+        "foreground": "#ff9e65"
+      }
+    }
+  ],
+  "type": "dark"
 }

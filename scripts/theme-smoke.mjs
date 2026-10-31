@@ -26,10 +26,32 @@ const preferences = path.join(
 );
 const settingsDialog = () =>
   page.getByRole("dialog", { name: "Settings", exact: true });
-const selector = () =>
-  settingsDialog().getByLabel("Color theme", { exact: true });
+const selector = () => ({
+  selectOption: async (choice) => {
+    const current = await settings();
+    const name =
+      choice === "custom"
+        ? current.customTheme.name
+        : choice === "light"
+          ? "ompide Light"
+          : "ompide Dark";
+    await settingsDialog()
+      .getByRole("button", { name: /^Select Color Theme:/ })
+      .click();
+    const picker = page.getByRole("dialog", {
+      name: "Select Color Theme",
+      exact: true,
+    });
+    await picker.getByRole("combobox").fill(name);
+    await picker.getByRole("option").filter({ hasText: name }).first().click();
+    await page.keyboard.press("Control+,");
+    await expect(settingsDialog()).toBeVisible();
+  },
+});
 const input = () =>
-  settingsDialog().getByLabel("Local JSON theme file", { exact: true });
+  settingsDialog().getByLabel("VS Code color theme JSON or VSIX file", {
+    exact: true,
+  });
 const draft = () => settingsDialog().getByLabel("Theme JSON", { exact: true });
 const errors = [];
 const remoteRequests = [];
@@ -144,15 +166,15 @@ try {
 
   for (const [text, message] of [
     ["{ trailing, }", "not valid JSON"],
-    [JSON.stringify({ ...ocean, schemaVersion: 2 }), "schemaVersion 1"],
+    [JSON.stringify({ ...ocean, type: "invalid" }), "type:"],
     [
       JSON.stringify({
         ...ocean,
         colors: { "editor.background": "url(https://example.com/payload)" },
       }),
-      "Invalid color token",
+      "Theme colors must be hex",
     ],
-    [" ".repeat(256 * 1024 + 1), "no larger than 256 KiB"],
+    [" ".repeat(2 * 1024 * 1024 + 1), "up to 2 MiB"],
   ]) {
     await importText(text);
     await expect(settingsDialog().getByRole("alert")).toContainText(message);
@@ -173,7 +195,7 @@ try {
     .click();
   await expect(draft()).toHaveCount(0);
   await background("rgb(16, 35, 42)");
-  await expect(selector()).toHaveValue("custom");
+  assert.equal((await settings()).theme, "custom");
   await expect(page.locator(".explorer")).toHaveCSS(
     "background-color",
     "rgb(22, 51, 61)"
@@ -191,13 +213,11 @@ try {
   await settingsDialog()
     .getByRole("button", { name: "Customize Theme…", exact: true })
     .click();
-  await draft().fill("{}");
+  await draft().fill('{"type":"invalid"}');
   await settingsDialog()
     .getByRole("button", { name: "Apply Custom Theme", exact: true })
     .click();
-  await expect(settingsDialog().getByRole("alert")).toContainText(
-    "schemaVersion 1"
-  );
+  await expect(settingsDialog().getByRole("alert")).toContainText("type:");
   await background("rgb(16, 35, 42)");
   await draft().fill(JSON.stringify({ ...ocean, name: "Unsaved theme" }));
   await settingsDialog()
@@ -268,9 +288,8 @@ try {
     .getByRole("button", { name: "Customize Theme…", exact: true })
     .click();
   const daylight = {
-    schemaVersion: 1,
     name: "Paper",
-    base: "light",
+    type: "light",
     colors: {
       "editor.background": "#f1f7f2",
       "tab.activeBackground": "#f1f7f2",
@@ -375,9 +394,7 @@ try {
         .getByRole("button", { name: "Dismiss", exact: true })
         .click();
       await page.keyboard.press("Control+n");
-      await page
-        .getByRole("textbox", { name: "ompide", exact: true })
-        .focus();
+      await page.getByRole("textbox", { name: "ompide", exact: true }).focus();
       await page.keyboard.type("// unsaved theme audit");
       await page.keyboard.press("Control+w");
       const prompt = page.getByRole("dialog", { name: /^Save changes to/ });

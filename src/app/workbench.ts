@@ -20,6 +20,7 @@ import {
   initializeEditor,
 } from "../editor/services";
 import { defaults, parseSettings, type Settings } from "../settings/settings";
+import type { Theme } from "../settings/theme";
 import { startLanguageSession, type LanguageSession } from "../language/client";
 import { BufferVersion } from "./documents";
 import { NavigationHistory, type NavigationDirection } from "./navigation";
@@ -105,6 +106,7 @@ export interface WorkbenchState {
   tabs: Tab[];
   active?: string;
   settings: Settings;
+  themePreview?: Theme;
   status: string;
   error?: string;
   problems: editor.IMarker[];
@@ -1472,6 +1474,24 @@ export class Workbench {
     }
   }
 
+  private editorSettings(): Settings {
+    return this.state.themePreview
+      ? {
+          ...this.state.settings,
+          theme: "custom",
+          customTheme: this.state.themePreview,
+        }
+      : this.state.settings;
+  }
+
+  previewTheme(theme?: Theme): Promise<void> {
+    this.update({ themePreview: theme });
+    this.settingsQueue = this.settingsQueue
+      .catch(() => undefined)
+      .then(() => applyEditorSettings(this.editorSettings()));
+    return this.settingsQueue;
+  }
+
   settings(patch: Partial<Settings>): Promise<void> {
     const settings = { ...this.state.settings, ...patch };
     this.update({ settings });
@@ -1490,7 +1510,7 @@ export class Workbench {
       .catch(() => undefined)
       .then(async () => {
         if (this.state.settings !== settings) return;
-        await applyEditorSettings(settings);
+        await applyEditorSettings(this.editorSettings());
         this.applyFileOptions(
           this.state.active ? this.documents.get(this.state.active) : undefined
         );

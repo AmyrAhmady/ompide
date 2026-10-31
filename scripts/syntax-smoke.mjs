@@ -171,13 +171,16 @@ try {
           customTheme: customTheme ? parseTheme(customTheme) : null,
         });
       },
-      { base: base.base, customTheme }
+      { base: base.type, customTheme }
     );
     for (const [row, word, scope] of samples) {
-      const rule =
-        customTheme?.tokenColors.find((rule) => rule.scope === scope) ??
-        base.tokenColors.find((rule) => rule.scope === scope);
-      assert.ok(rule, `No expected color for ${name} ${scope}`);
+      const rule = (customTheme ?? base).tokenColors.find(
+        (rule) => rule.scope === scope
+      );
+      const expectedColor =
+        rule?.settings.foreground ??
+        customTheme?.colors["editor.foreground"] ??
+        base.colors["editor.foreground"];
       const offset = lines[row].indexOf(word);
       await expect
         .poll(
@@ -198,7 +201,7 @@ try {
               }, offset),
           { message: `${name}: ${word} (${scope})`, timeout: 15_000 }
         )
-        .toBe(rgb(rule.settings.foreground));
+        .toBe(rgb(expectedColor));
     }
     if (["dark", "light", "storage-custom"].includes(name)) {
       await mkdir(path.join(projectRoot, "test-results"), { recursive: true });

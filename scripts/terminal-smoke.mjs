@@ -337,9 +337,8 @@ try {
     await w.settings({
       theme: "custom",
       customTheme: parseTheme({
-        schemaVersion: 1,
         name: "Terminal fixture",
-        base: "dark",
+        type: "dark",
         colors: {
           "terminal.background": "#102030",
           "terminal.foreground": "#ddeeff",

@@ -223,3 +223,34 @@ linting remain available through pawnlsp and its internal pawnfmt/pawnlint,
 analysis/parser/API/project/core libraries. Project dependency management and
 server tools are excluded. Pawndebug is planned for a future release after the
 first release; no DAP implementation is currently included.
+
+## VS Code color themes
+
+Theme files now use VS Code JSON/JSONC rather than an ompide schema. The parser
+accepts standard UI color identifiers, TextMate scope arrays and font styles,
+semantic selectors and high-contrast types. Existing saved base/schemaVersion
+preferences are migrated when read. Light/Dark and the Ocean example use the
+standard format. Shell surfaces derive from VS Code tokens; unsupported UI
+surfaces have no effect. Neutral editor bases keep imported token rules separate
+from ompide's built-in Pawn colors.
+
+The picker supports local JSON, extension folders and VSIX packages. Includes
+resolve against supplied files only. jsonc-parser 3.3.1 parses comments/trailing
+commas; fflate 0.8.2 extracts bounded theme resources without registering or
+executing extensions. The installed library is saved with ordinary preferences.
+Preview is separate transient state and never changes persisted selection.
+
+Online search uses the documented Open VSX API, category Themes, limited to
+30 results. Search and download require explicit actions, omit credentials and
+referrers, enforce response/time limits and check the downloaded package against
+the registry SHA-256. Production CSP permits only open-vsx.org and its content
+host openvsx.eclipsecontent.org in addition to existing local connections. No
+Microsoft Marketplace API is used; see Microsoft's VS Code FAQ and the Open VSX
+Registry API documentation. There is no automatic theme update or general
+extension marketplace.
+
+Run npm test for parsing/include/package/registry regressions,
+node scripts/vscode-theme-smoke.mjs for picker rendering and a live registry
+round trip, and node scripts/vscode-theme-native-smoke.mjs after a debug packaged
+build for real WebView CSP and preferences/reload. The latter owns a temporary
+application instance and restores the user's preferences.

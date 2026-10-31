@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
   "name": "ompide Dark",
-  "base": "dark",
   "colors": {
     "editor.background": "#1e1e1e",
     "editor.foreground": "#d4d4d4",
@@ -42,8 +40,6 @@
     "titleBar.activeForeground": "#d4d4d4",
     "titleBar.inactiveBackground": "#2d2d2d",
     "titleBar.inactiveForeground": "#aaaaaa",
-    "windowControl.closeBackground": "#c42b1c",
-    "windowControl.closeForeground": "#ffffff",
     "terminal.ansiBlack": "#000000",
     "terminal.ansiRed": "#cd3131",
     "terminal.ansiGreen": "#0dbc79",
@@ -60,11 +56,11 @@
     "terminal.ansiBrightMagenta": "#d670d6",
     "terminal.ansiBrightCyan": "#29b8db",
     "terminal.ansiBrightWhite": "#ffffff",
-    "panelTab.activeBackground": "#363b43",
-    "panelTab.activeForeground": "#d4d4d4",
-    "toolbar.buttonBackground": "#2b2d31",
-    "toolbar.buttonHoverBackground": "#3c4046",
-    "toolbar.buttonBorder": "#555961"
+    "button.hoverBackground": "#c42b1c",
+    "panelTitle.activeForeground": "#d4d4d4",
+    "button.secondaryBackground": "#2b2d31",
+    "toolbar.hoverBackground": "#3c4046",
+    "widget.border": "#555961"
   },
   "tokenColors": [
     {
@@ -99,31 +95,46 @@
     },
     {
       "scope": "storage",
-      "settings": { "foreground": "#569cd6" }
+      "settings": {
+        "foreground": "#569cd6"
+      }
     },
     {
       "scope": "entity.name.type",
-      "settings": { "foreground": "#4ec9b0" }
+      "settings": {
+        "foreground": "#4ec9b0"
+      }
     },
     {
       "scope": "constant.language",
-      "settings": { "foreground": "#569cd6" }
+      "settings": {
+        "foreground": "#569cd6"
+      }
     },
     {
       "scope": "constant.other",
-      "settings": { "foreground": "#4fc1ff" }
+      "settings": {
+        "foreground": "#4fc1ff"
+      }
     },
     {
       "scope": "entity.name.constant",
-      "settings": { "foreground": "#4fc1ff" }
+      "settings": {
+        "foreground": "#4fc1ff"
+      }
     },
     {
       "scope": "variable.parameter",
-      "settings": { "foreground": "#9cdcfe" }
+      "settings": {
+        "foreground": "#9cdcfe"
+      }
     },
     {
       "scope": "constant.character.escape",
-      "settings": { "foreground": "#d7ba7d" }
+      "settings": {
+        "foreground": "#d7ba7d"
+      }
     }
-  ]
+  ],
+  "type": "dark"
 }

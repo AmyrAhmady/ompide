@@ -11,6 +11,7 @@ export interface AppCommand {
 
 export interface CommandViews {
   settings: () => void;
+  themes?: () => void;
   project: () => void;
   explorer: () => void;
   search: () => void;
@@ -164,6 +165,8 @@ export function createCommands(
     () => workbench.restartLanguage()
   );
   add("command.settings", state.ready, views.settings, "Ctrl+,");
+  if (views.themes)
+    add("command.colorTheme", state.ready, views.themes, "Ctrl+K Ctrl+T");
   add(
     "explorer.title",
     nativeReady && Boolean(state.root),

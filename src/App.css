@@ -1290,3 +1290,84 @@ dialog footer button.primary {
   flex: 1;
   min-height: 0;
 }
+
+.theme-picker-dialog {
+  width: min(660px, 85vw);
+  margin-top: 55px;
+}
+.theme-options {
+  max-height: 45vh;
+  min-height: 100px;
+  overflow: auto;
+  margin: 12px 0;
+}
+.theme-options button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  border-radius: var(--radius-small, 4px);
+}
+.theme-options button[aria-selected="true"],
+.theme-options button:hover {
+  background: var(--list-activeSelectionBackground);
+}
+.theme-options button > span:nth-child(2),
+.theme-options button > span:first-child:not(.theme-swatch) {
+  flex: 1;
+}
+.theme-options small {
+  display: block;
+  color: var(--descriptionForeground);
+  margin-top: 3px;
+}
+.theme-swatch {
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+}
+
+/* Standard VS Code UI tokens, with fallbacks for themes that omit a surface. */
+.menu [role="menu"],
+.explorer-context {
+  background: var(--menu-background, var(--editorWidget-background));
+  color: var(--menu-foreground, var(--editor-foreground));
+  border-color: var(--menu-border, var(--editorWidget-border));
+}
+.menu button:hover:enabled,
+.menu button:focus-visible,
+.explorer-context button:hover:enabled {
+  background: var(
+    --menu-selectionBackground,
+    var(--list-activeSelectionBackground)
+  );
+  color: var(--menu-selectionForeground, var(--editor-foreground));
+}
+.tab {
+  color: var(--tab-inactiveForeground, var(--editor-foreground));
+}
+.tab.active {
+  color: var(--tab-activeForeground, var(--editor-foreground));
+}
+.activity-bar {
+  color: var(--activityBar-inactiveForeground, var(--editor-foreground));
+}
+.activity-bar button[aria-pressed="true"] {
+  color: var(--activityBar-foreground, var(--editor-foreground));
+  background: var(
+    --activityBar-activeBackground,
+    var(--list-activeSelectionBackground)
+  );
+}
+.tree-row.selected,
+.theme-options button[aria-selected="true"] {
+  color: var(--list-activeSelectionForeground, var(--editor-foreground));
+}
+.theme-picker-dialog {
+  background: var(--quickInput-background, var(--editorWidget-background));
+  color: var(--quickInput-foreground, var(--editor-foreground));
+}

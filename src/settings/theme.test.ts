@@ -30,7 +30,9 @@ it("colors the Pawn grammar's token families in both default themes", () => {
   for (const theme of Object.values(defaultThemes))
     for (const scope of scopes) {
       const rules = theme.tokenColors.filter(
-        (rule) => scope === rule.scope || scope.startsWith(`${rule.scope}.`)
+        (rule) =>
+          scope === rule.scope ||
+          (typeof rule.scope === "string" && scope.startsWith(`${rule.scope}.`))
       );
       expect(rules.length, `${theme.name}: missing ${scope}`).toBeGreaterThan(
         0
@@ -47,9 +49,8 @@ it("provides complete light/dark defaults and custom overrides with fallback", (
   for (const theme of Object.values(defaultThemes))
     expect(parseTheme(theme)).toEqual(theme);
   const theme = parseTheme({
-    schemaVersion: 1,
     name: "Custom",
-    base: "dark",
+    type: "dark",
     colors: { "editor.background": "#123456" },
   });
   expect(theme.colors["editor.background"]).toBe("#123456");
@@ -63,9 +64,8 @@ it("persists validated custom themes and clears overrides when a default is sele
   const customTheme = parseThemeText(
     "\uFEFF" +
       JSON.stringify({
-        schemaVersion: 1,
         name: "Ocean",
-        base: "light",
+        type: "light",
         colors: { "editor.background": "#eaf7ff" },
       })
   );
@@ -77,8 +77,7 @@ it("persists validated custom themes and clears overrides when a default is sele
     defaultThemes.dark
   );
   expect(
-    parseSettings({ theme: "custom", customTheme: { schemaVersion: 999 } })
-      .theme
+    parseSettings({ theme: "custom", customTheme: { type: "invalid" } }).theme
   ).toBe("dark");
   expect(parseSettings({ theme: "custom" }).theme).toBe("dark");
 });
@@ -93,35 +92,32 @@ it("rejects oversized or executable color content with actionable error codes", 
   for (const colors of [
     { "editor.background": "url(https://example.com)" },
     { constructor: "#ffffff" },
-    { "unknown.token": "#ffffff" },
   ]) {
-    expect(() =>
-      parseTheme({ schemaVersion: 1, name: "Bad", base: "dark", colors })
-    ).toThrow(ThemeError);
+    expect(() => parseTheme({ name: "Bad", type: "dark", colors })).toThrow(
+      ThemeError
+    );
   }
   expect(() =>
     parseTheme({
-      schemaVersion: 1,
       name: "Bad",
-      base: "dark",
-      tokenColors: Array(501).fill({
+      type: "dark",
+      tokenColors: Array(10001).fill({
         scope: "keyword",
         settings: { foreground: "#ffffff" },
       }),
     })
   ).toThrowError(expect.objectContaining({ code: "themeSyntax" }));
 });
-it("rejects unsupported schemas, arbitrary CSS, and malformed syntax colors", () => {
+it("rejects unsupported theme types, arbitrary CSS, and malformed syntax colors", () => {
   for (const value of [
     null,
-    { schemaVersion: 2 },
+    { type: "unknown" },
     {
-      schemaVersion: 1,
       name: "Bad",
-      base: "dark",
+      type: "dark",
       colors: { "editor.background": "url(https://example.com)" },
     },
-    { schemaVersion: 1, name: "Bad", base: "light", tokenColors: [{}] },
+    { name: "Bad", type: "light", tokenColors: [{}] },
   ])
     expect(() => parseTheme(value)).toThrow();
 });
