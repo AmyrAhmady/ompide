@@ -88,7 +88,7 @@ try {
   }
   await mkdir(repository);
   git("init", "-b", "main");
-  git("config", "user.name", "Pawn IDE fixture");
+  git("config", "user.name", "ompide fixture");
   git("config", "user.email", "fixture@example.invalid");
   git("config", "commit.gpgsign", "false");
   git("config", "core.autocrlf", "false");

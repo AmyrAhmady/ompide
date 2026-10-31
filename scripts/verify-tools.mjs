@@ -27,7 +27,7 @@ const bridgePath = path.join(
   root,
   "src-tauri/target/debug/pawn-lsp-bridge.exe"
 );
-const workspace = await mkdtemp(path.join(tmpdir(), "pawn ide "));
+const workspace = await mkdtemp(path.join(tmpdir(), "ompide "));
 const pins = JSON.parse(
   await readFile(path.join(root, "toolchain/tools.json"), "utf8")
 );

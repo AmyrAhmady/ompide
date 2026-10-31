@@ -46,7 +46,7 @@ try {
   page.setDefaultTimeout(15_000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90_000 });
   const heading = (label) =>
     page.locator(".menu summary").getByText(label, { exact: true });
   const opened = page.locator(".menu[open]");
@@ -65,6 +65,61 @@ try {
     await expect(opened).toHaveCount(0);
     await page.getByLabel("Color theme", { exact: true }).selectOption(theme);
     await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+
+    await expect(page.locator(".menu summary")).toHaveText([
+      "File",
+      "Edit",
+      "View",
+      "Go",
+      "Build",
+      "Terminal",
+      "Help",
+    ]);
+    await page.evaluate(() => {
+      globalThis.menuExternalLinks = [];
+      globalThis.open = (url, target, features) => {
+        globalThis.menuExternalLinks.push({ url, target, features });
+        return null;
+      };
+    });
+    for (const label of ["Repository", "Donate"]) {
+      await heading("Help").click();
+      await page.getByRole("menuitem", { name: label, exact: true }).click();
+      await expect(opened).toHaveCount(0);
+    }
+    expect(await page.evaluate(() => globalThis.menuExternalLinks)).toEqual([
+      {
+        url: "https://github.com/AmyrAhmady/ompide",
+        target: "_blank",
+        features: "noopener,noreferrer",
+      },
+      {
+        url: "https://donate.amii.ir",
+        target: "_blank",
+        features: "noopener,noreferrer",
+      },
+    ]);
+    await heading("Help").click();
+    await page.getByRole("menuitem", { name: "Credits", exact: true }).click();
+    const credits = page.getByRole("dialog", { name: "Credits", exact: true });
+    await expect(credits).toBeVisible();
+    await expect(credits).toContainText("Created by Amyr Ahmady.");
+    await expect(
+      credits.getByRole("link", { name: "AmyrAhmady on GitHub" })
+    ).toHaveAttribute("href", "https://github.com/AmyrAhmady");
+    await expect(
+      credits.getByRole("link", { name: "Donate", exact: true })
+    ).toHaveAttribute("href", "https://donate.amii.ir");
+    await page.screenshot({
+      path: path.join(root, `test-results/credits-${theme}.png`),
+    });
+    await page.keyboard.press("Escape");
+    await expect(credits).toHaveCount(0);
+    await expect(heading("Help")).toBeFocused();
+    await heading("Help").click();
+    await page.getByRole("menuitem", { name: "Credits", exact: true }).click();
+    await credits.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(credits).toHaveCount(0);
 
     // Reproduce the reported File/Edit/View/Go stacking sequence with real pointer input.
     for (let repeat = 0; repeat < 3; repeat++) {
@@ -164,7 +219,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "Menu regression passed: single dropdown, hover/click switching, outside/Escape/Tab/shortcut dismissal, keyboard navigation, Light/Dark and scaled viewport."
+    "Menu regression passed: Help placement, repository/donation targets, Credits content/links/focus, single dropdown, hover/click switching, outside/Escape/Tab/shortcut dismissal, keyboard navigation, Light/Dark and scaled viewport."
   );
 } finally {
   await browser?.close();

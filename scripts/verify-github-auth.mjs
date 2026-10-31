@@ -59,7 +59,7 @@ async function verify() {
   report.cachedCredential = true;
   const headers = {
     Authorization: `Bearer ${password}`,
-    "User-Agent": "Pawn-IDE-auth-verification",
+    "User-Agent": "ompide-auth-verification",
     Accept: "application/vnd.github+json",
   };
   const user = await fetch("https://api.github.com/user", {

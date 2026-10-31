@@ -63,7 +63,7 @@ public static class PawnWindowProbe {
 '@
 [void][PawnWindowProbe]::SetProcessDpiAwarenessContext([IntPtr](-4))
 $testProcess = Get-Process -Id $ProcessId
-if ($testProcess.ProcessName -ne 'omp-pawn-editor') { throw 'Select only the Pawn IDE test application.' }
+if ($testProcess.ProcessName -ne 'ompide') { throw 'Select only the ompide test application.' }
 $testWindow = [PawnWindowProbe]::Window($ProcessId)
 if ($testWindow -eq [IntPtr]::Zero) { throw 'Test window is unavailable.' }
 $overlay = [PawnWindowProbe]::Overlay($testWindow)

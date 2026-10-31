@@ -200,7 +200,7 @@ mod tests {
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
             .args(["--exact", "process::tests::child_fixture", "--nocapture"])
-            .env("PAWN_IDE_PROCESS_FIXTURE", mode);
+            .env("OMPIDE_PROCESS_FIXTURE", mode);
         command
     }
     #[test]
@@ -273,7 +273,7 @@ mod tests {
             signal.store(true, Ordering::Release);
         });
         let output = run(
-            fixture("tree").env("PAWN_IDE_CHILD_MARKER", &marker),
+            fixture("tree").env("OMPIDE_CHILD_MARKER", &marker),
             &cancel,
             Duration::from_secs(10),
             4096,
@@ -301,13 +301,13 @@ mod tests {
     }
     #[test]
     fn child_fixture() {
-        match std::env::var("PAWN_IDE_PROCESS_FIXTURE").as_deref() {
+        match std::env::var("OMPIDE_PROCESS_FIXTURE").as_deref() {
             Ok("sleep") => thread::sleep(Duration::from_secs(20)),
             Ok("large") => print!("{}", "x".repeat(32 * 1024)),
             Ok("tree") => {
                 let mut child = fixture("sleep").spawn().unwrap();
                 std::fs::write(
-                    std::env::var("PAWN_IDE_CHILD_MARKER").unwrap(),
+                    std::env::var("OMPIDE_CHILD_MARKER").unwrap(),
                     child.id().to_string(),
                 )
                 .unwrap();

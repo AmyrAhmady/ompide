@@ -78,6 +78,30 @@ impl From<io::Error> for AppError {
     }
 }
 type Result<T> = std::result::Result<T, AppError>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HelpLink {
+    Repository,
+    Author,
+    Donate,
+}
+
+#[tauri::command]
+pub async fn open_help_link(app: AppHandle, link: HelpLink) -> Result<()> {
+    use tauri_plugin_opener::OpenerExt;
+
+    let url = match link {
+        HelpLink::Repository => "https://github.com/AmyrAhmady/ompide",
+        HelpLink::Author => "https://github.com/AmyrAhmady",
+        HelpLink::Donate => "https://donate.amii.ir",
+    };
+    tauri::async_runtime::spawn_blocking(move || app.opener().open_url(url, None::<&str>))
+        .await
+        .map_err(|failure| error("openLinkFailed", failure.to_string()))?
+        .map_err(|failure| error("openLinkFailed", failure.to_string()))
+}
+
 fn error(code: &'static str, detail: impl Into<String>) -> AppError {
     AppError {
         code,

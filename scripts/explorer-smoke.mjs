@@ -35,7 +35,7 @@ async function evaluate(operation, argument) {
 function restoreRecycledFixtures() {
   execFileSync('cargo', ['test', '--offline', '--manifest-path', 'src-tauri/Cargo.toml', '-p', 'pawn-core', 'restore_explorer_smoke_items', '--', '--ignored'], {
     cwd: project,
-    env: { ...process.env, PAWN_IDE_EXPLORER_SMOKE_ROOT: directory },
+    env: { ...process.env, OMPIDE_EXPLORER_SMOKE_ROOT: directory },
     stdio: 'inherit',
   });
 }
@@ -72,7 +72,7 @@ try {
   await create(false, 'nested.inc');
   assert.equal((await stat(path.join(directory, 'scripts/nested.inc'))).isFile(), true);
   await expect(page.getByRole('tab', { name: 'nested.inc', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('textbox', { name: 'Pawn IDE', exact: true })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: 'ompide', exact: true })).toBeFocused();
   await append('// readable source\n');
   await page.keyboard.press('Control+s');
   await expect.poll(() => readFile(path.join(directory, 'scripts/nested.inc'), 'utf8')).toContain('readable source');

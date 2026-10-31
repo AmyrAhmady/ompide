@@ -138,7 +138,7 @@ mod tests {
             "tools::tests::probe_child_fixture",
             "--nocapture",
         ]);
-        command.env("PAWN_IDE_TEST_PROBE", mode);
+        command.env("OMPIDE_TEST_PROBE", mode);
         command
     }
     #[test]
@@ -160,7 +160,7 @@ mod tests {
     // Invoked as a child by the probe test; its ordinary test-suite invocation is a no-op.
     #[test]
     fn probe_child_fixture() {
-        match std::env::var("PAWN_IDE_TEST_PROBE").as_deref() {
+        match std::env::var("OMPIDE_TEST_PROBE").as_deref() {
             Ok("sleep") => thread::sleep(Duration::from_secs(10)),
             Ok("large") => print!("{}", "x".repeat(32 * 1024)),
             Ok("version") => println!("fixture version"),

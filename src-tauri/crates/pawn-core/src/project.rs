@@ -195,7 +195,6 @@ pub fn profile(configuration: &Value) -> io::Result<String> {
         return Ok(extension.to_owned());
     }
     Ok(match text(configuration, "preset")? {
-        "samp" => "samp-037",
         "" | "openmp" => "openmp",
         other => other,
     }
@@ -312,7 +311,7 @@ pub fn preview(
     preset: &str,
     includes: &[String],
 ) -> io::Result<String> {
-    if !matches!(preset, "openmp" | "samp") || includes.len() > 64 {
+    if preset != "openmp" || includes.len() > 64 {
         return Err(invalid("invalid project setup"));
     }
     let entry = scope.resolve(entry)?;
@@ -335,7 +334,7 @@ pub fn preview(
         .collect::<io::Result<_>>()?;
     let configuration = serde_json::json!({
         "entry": relative(&entry)?, "preset": preset, "experimental": {"build_file": false},
-        "pawnkit": {"schemaVersion": 1, "profile": if preset == "samp" { "samp-037" } else { "openmp" }, "includePaths": paths}
+        "pawnkit": {"schemaVersion": 1, "profile": "openmp", "includePaths": paths}
     });
     build_configuration(scope, &configuration, "")?;
     Ok(serde_json::to_string_pretty(&configuration)? + "\n")
@@ -409,13 +408,13 @@ mod tests {
         let text = preview(
             &scope,
             &root.path().join("main.pwn"),
-            "samp",
+            "openmp",
             &["include".into()],
         )
         .unwrap();
         let configuration: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(configuration["entry"], "main.pwn");
-        assert_eq!(profile(&configuration).unwrap(), "samp-037");
+        assert_eq!(profile(&configuration).unwrap(), "openmp");
         assert!(!root.path().join("pawn.json").exists());
         let outside = tempfile::tempdir().unwrap();
         fs::write(outside.path().join("outside.pwn"), "main() {}").unwrap();

@@ -131,7 +131,7 @@ try {
     )
     .toBe(false);
   await expect(
-    page.getByRole("textbox", { name: "Pawn IDE", exact: true })
+    page.getByRole("textbox", { name: "ompide", exact: true })
   ).toBeFocused();
   evidence.push(
     "Ctrl+Shift+P searches by unordered words and executes real Save All against a dirty editor and disk."
@@ -145,7 +145,7 @@ try {
   await expect(palette()).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("textbox", { name: "Pawn IDE", exact: true })
+    page.getByRole("textbox", { name: "ompide", exact: true })
   ).toBeFocused();
   evidence.push(
     "No-match and Escape behavior preserves the editor and restores typing focus."

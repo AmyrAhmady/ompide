@@ -85,7 +85,7 @@ export function initializeEditor(
         {
           config: {
             name: "pawn-language",
-            publisher: "pawn-ide",
+            publisher: "ompide",
             version: "0.1.0",
             engines: { vscode: "*" },
             contributes: {
@@ -114,7 +114,7 @@ export function initializeEditor(
         {
           config: {
             name: "pawn-themes",
-            publisher: "pawn-ide",
+            publisher: "ompide",
             version: "0.1.0",
             engines: { vscode: "*" },
             contributes: {

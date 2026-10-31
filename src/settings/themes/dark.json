@@ -1,10 +1,12 @@
 {
   "schemaVersion": 1,
-  "name": "Pawn Dark",
+  "name": "ompide Dark",
   "base": "dark",
   "colors": {
     "editor.background": "#1e1e1e",
     "editor.foreground": "#d4d4d4",
+    "textLink.foreground": "#4daafc",
+    "textLink.activeForeground": "#75beff",
     "editor.selectionBackground": "#264f78",
     "editor.lineHighlightBackground": "#ffffff09",
     "editorLineNumber.foreground": "#858585",

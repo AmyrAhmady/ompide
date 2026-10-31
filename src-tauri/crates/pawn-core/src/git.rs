@@ -684,7 +684,7 @@ mod tests {
             assert!(init.status.success());
             let repo =
                 Repository::open(Workspace::open(directory.path()).unwrap(), &cancel).unwrap();
-            repo.run(&["config", "user.name", "Pawn IDE tests"], &cancel)
+            repo.run(&["config", "user.name", "ompide tests"], &cancel)
                 .unwrap();
             repo.run(
                 &["config", "user.email", "fixture@example.invalid"],

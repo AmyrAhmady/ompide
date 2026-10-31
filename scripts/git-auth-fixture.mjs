@@ -160,7 +160,7 @@ export async function gitAuthFixture() {
         if (mode === "deny" || !authenticated) {
           ++counts.challenges;
           response.writeHead(401, {
-            "WWW-Authenticate": 'Basic realm="Pawn IDE regression"',
+            "WWW-Authenticate": 'Basic realm="ompide regression"',
           });
           response.end("Authentication required");
           return;

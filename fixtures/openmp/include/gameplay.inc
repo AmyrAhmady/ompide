@@ -1,11 +1,11 @@
-#if defined _pawn_ide_gameplay
+#if defined _ompide_gameplay
     #endinput
 #endif
-#define _pawn_ide_gameplay
+#define _ompide_gameplay
 #include "config.inc"
 
 stock WelcomePlayer(playerid)
 {
-    SendClientMessage(playerid, WELCOME_COLOUR, "Welcome to the Pawn IDE integration fixture.");
+    SendClientMessage(playerid, WELCOME_COLOUR, "Welcome to the ompide integration fixture.");
     return 1;
 }

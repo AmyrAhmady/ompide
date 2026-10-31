@@ -20,6 +20,8 @@ import { Explorer } from "./explorer/Explorer";
 import { t } from "./lib/i18n";
 import { Menubar, Menu, MenuItem } from "./components/Menubar";
 import { Modal } from "./components/Modal";
+import { CreditsDialog } from "./components/CreditsDialog";
+import { openProjectLink } from "./lib/project-links";
 import { EncodingDialog } from "./editor/EncodingDialog";
 import { encodingLabel } from "./editor/text-files";
 import { CommandPalette } from "./components/CommandPalette";
@@ -331,6 +333,7 @@ function App() {
   const [gitDiff, setGitDiff] = useState<OpenGitDiff>();
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
   const [encodingTarget, setEncodingTarget] = useState<string>();
   const [symbolsOpen, setSymbolsOpen] = useState<
     "document" | "workspace" | undefined
@@ -812,6 +815,24 @@ function App() {
           <Menu label="menu.terminal">
             <CommandMenuItem command={command("terminal.new")} />
             <CommandMenuItem command={command("terminal.toggle")} />
+          </Menu>
+          <Menu label="menu.help">
+            <MenuItem
+              label="help.repository"
+              action={() =>
+                void openProjectLink("repository").catch(workbench.report)
+              }
+            />
+            <MenuItem
+              label="help.credits"
+              action={() => setCreditsOpen(true)}
+            />
+            <MenuItem
+              label="help.donate"
+              action={() =>
+                void openProjectLink("donate").catch(workbench.report)
+              }
+            />
           </Menu>
         </Menubar>
         <span className="window-title" data-tauri-drag-region>
@@ -1307,6 +1328,7 @@ function App() {
           close={() => setSettingsOpen(false)}
         />
       )}
+      {creditsOpen && <CreditsDialog close={() => setCreditsOpen(false)} />}
       {symbolsOpen && (
         <SymbolsDialog
           mode={symbolsOpen}

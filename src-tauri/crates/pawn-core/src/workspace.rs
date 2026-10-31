@@ -603,7 +603,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let workspace = Workspace::open(root.path()).unwrap();
         let file = workspace
-            .create(root.path(), "pawn-ide-trash-🦀.inc", false)
+            .create(root.path(), "ompide-trash-🦀.inc", false)
             .unwrap();
         fs::write(&file, "recoverable fixture").unwrap();
         workspace.trash(&file).unwrap();
@@ -625,7 +625,7 @@ mod tests {
     #[ignore = "requires the disposable workspace created by explorer-smoke.mjs"]
     fn restore_explorer_smoke_items() {
         let root = canonical(Path::new(
-            &std::env::var("PAWN_IDE_EXPLORER_SMOKE_ROOT").expect("smoke workspace required"),
+            &std::env::var("OMPIDE_EXPLORER_SMOKE_ROOT").expect("smoke workspace required"),
         ))
         .unwrap();
         assert_eq!(

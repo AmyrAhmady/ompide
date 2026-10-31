@@ -160,7 +160,7 @@ mod tests {
                 "lsp::tests::blocked_reader_fixture",
                 "--nocapture",
             ])
-            .env("PAWN_IDE_LSP_BLOCKED_FIXTURE", "1");
+            .env("OMPIDE_LSP_BLOCKED_FIXTURE", "1");
         let mut session = LspSession::spawn(command, |_| {}).unwrap();
         let writer = session.writer();
         let (done, completed) = mpsc::channel();
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn blocked_reader_fixture() {
-        if std::env::var_os("PAWN_IDE_LSP_BLOCKED_FIXTURE").is_some() {
+        if std::env::var_os("OMPIDE_LSP_BLOCKED_FIXTURE").is_some() {
             thread::sleep(Duration::from_secs(5));
         }
     }

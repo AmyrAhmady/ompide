@@ -1,10 +1,12 @@
 {
   "schemaVersion": 1,
-  "name": "Pawn Light",
+  "name": "ompide Light",
   "base": "light",
   "colors": {
     "editor.background": "#ffffff",
     "editor.foreground": "#333333",
+    "textLink.foreground": "#005fb8",
+    "textLink.activeForeground": "#003f7d",
     "editor.selectionBackground": "#add6ff",
     "editor.lineHighlightBackground": "#00000008",
     "editorLineNumber.foreground": "#687687",

@@ -337,7 +337,7 @@ try {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      "$app = @(Get-CimInstance Win32_Process -Filter \"Name = 'omp-pawn-editor.exe'\" | Where-Object { $_.ExecutablePath -eq $env:PAWN_IDE_TEST_EXECUTABLE }); if ($app.Count -ne 1) { throw 'Expected one test app' }; $child = @(Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $app[0].ProcessId -and $_.Name -like 'pawnlsp*.exe' }); if ($child.Count -ne 1) { throw 'Expected one owned language server' }; Stop-Process -Id $child[0].ProcessId; $child[0].ProcessId",
+      "$app = @(Get-CimInstance Win32_Process -Filter \"Name = 'ompide.exe'\" | Where-Object { $_.ExecutablePath -eq $env:OMPIDE_TEST_EXECUTABLE }); if ($app.Count -ne 1) { throw 'Expected one test app' }; $child = @(Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $app[0].ProcessId -and $_.Name -like 'pawnlsp*.exe' }); if ($child.Count -ne 1) { throw 'Expected one owned language server' }; Stop-Process -Id $child[0].ProcessId; $child[0].ProcessId",
     ],
     {
       encoding: "utf8",
@@ -345,9 +345,9 @@ try {
       windowsHide: true,
       env: {
         ...process.env,
-        PAWN_IDE_TEST_EXECUTABLE: path.join(
+        OMPIDE_TEST_EXECUTABLE: path.join(
           root,
-          "src-tauri/target/debug/omp-pawn-editor.exe"
+          "src-tauri/target/debug/ompide.exe"
         ),
       },
     }

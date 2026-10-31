@@ -710,6 +710,28 @@ dialog::backdrop {
   background: var(--editor-background);
   opacity: 0.65;
 }
+.credits-dialog {
+  width: min(460px, 90vw);
+  min-width: 0;
+  line-height: 1.6;
+}
+.credits-name {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+.credits-dialog a {
+  color: var(--textLink-foreground);
+  text-underline-offset: 3px;
+}
+.credits-dialog a:hover {
+  color: var(--textLink-activeForeground);
+}
+.credits-dialog a:focus-visible {
+  outline: 1px solid var(--focusBorder);
+  outline-offset: 3px;
+  border-radius: var(--radius-control);
+}
 .encoding-dialog {
   width: min(560px, 90vw);
   min-width: 0;

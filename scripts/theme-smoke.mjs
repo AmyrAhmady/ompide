@@ -376,7 +376,7 @@ try {
         .click();
       await page.keyboard.press("Control+n");
       await page
-        .getByRole("textbox", { name: "Pawn IDE", exact: true })
+        .getByRole("textbox", { name: "ompide", exact: true })
         .focus();
       await page.keyboard.type("// unsaved theme audit");
       await page.keyboard.press("Control+w");

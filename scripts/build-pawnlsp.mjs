@@ -38,15 +38,15 @@ if (!bytes) {
 if (sha256(bytes) !== pin.source.sha256) throw new Error('Source archive checksum mismatch');
 const patch = path.join(root, 'toolchain', pin.patch.path);
 if (sha256(await readFile(patch)) !== pin.patch.sha256) throw new Error('Source patch checksum mismatch');
-const go = process.env.PAWN_IDE_GO || path.join(cache, 'go1.26.5/bin/go.exe');
-if (!process.env.PAWN_IDE_GO && sha256(await readFile(go)) !== pin.developmentGoDistribution.executableSha256) throw new Error('Cached Go executable checksum mismatch');
+const go = process.env.OMPIDE_GO || path.join(cache, 'go1.26.5/bin/go.exe');
+if (!process.env.OMPIDE_GO && sha256(await readFile(go)) !== pin.developmentGoDistribution.executableSha256) throw new Error('Cached Go executable checksum mismatch');
 const environment = {
   ...process.env, GOTOOLCHAIN: 'local', CGO_ENABLED: '0', GOTELEMETRY: 'off',
   GOPROXY: download ? 'direct' : 'off', GOSUMDB: download ? 'sum.golang.org' : 'off',
   GOPATH: path.join(cache, 'go-work'), GOMODCACHE: path.join(cache, 'go-modules'), GOCACHE: path.join(cache, 'go-build'),
   GOOS: 'windows', GOARCH: 'amd64', GOFLAGS: '', GOWORK: 'off',
 };
-if (!execFileSync(go, ['version'], { encoding: 'utf8', env: environment, windowsHide: true }).startsWith(`go version ${pin.goVersion} windows/amd64`)) throw new Error(`Build requires ${pin.goVersion} Windows x64. Set PAWN_IDE_GO to its go.exe; Go is not downloaded automatically.`);
+if (!execFileSync(go, ['version'], { encoding: 'utf8', env: environment, windowsHide: true }).startsWith(`go version ${pin.goVersion} windows/amd64`)) throw new Error(`Build requires ${pin.goVersion} Windows x64. Set OMPIDE_GO to its go.exe; Go is not downloaded automatically.`);
 const staging = await mkdtemp(path.join(cache, 'pawnlsp-build-'));
 try {
   const prefix = `pawnlsp-${pin.source.commit}`;

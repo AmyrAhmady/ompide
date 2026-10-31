@@ -48,7 +48,7 @@ the pinned hash. The original prototype differed only in Go's action build IDs;
 those are omitted from the distributed build.
 
 A cached matching executable requires no Go installation. Rebuilding requires
-Windows x64 Go 1.26.5, Git and tar. Set `PAWN_IDE_GO` to an explicitly selected
+Windows x64 Go 1.26.5, Git and tar. Set `OMPIDE_GO` to an explicitly selected
 `go.exe`, or extract the checksum-pinned GitHub Actions Go distribution identified
 in `pawnlsp-build.json` into `.tools-cache/go1.26.5/`. The cached compiler executable
 is checked before use. Go is a development prerequisite and is never bundled with
@@ -61,7 +61,7 @@ complete source trees must match the original canonical module checksums, in
 addition to Go's normal module verification. Versions and sources remain pinned.
 
 ```powershell
-$env:PAWN_IDE_GO = 'C:\Go\bin\go.exe'
+$env:OMPIDE_GO = 'C:\Go\bin\go.exe'
 npm.cmd run tools:build-lsp -- --download
 # Reproduce from cached source/dependencies, including the full upstream tests:
 npm.cmd run tools:build-lsp -- --rebuild

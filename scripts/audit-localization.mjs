@@ -18,7 +18,6 @@ const identifiers = new Set([
   "Delete",
   "UTF-8",
   "open.mp",
-  "SA-MP",
   "Aa",
 ]);
 const copyAttributes = new Set(["aria-label", "title", "placeholder", "alt"]);

@@ -20,7 +20,7 @@ export function ProjectDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [entry, setEntry] = useState("");
-  const [profile, setProfile] = useState("openmp");
+  const profile = "openmp";
   const [includes, setIncludes] = useState(".");
   const [preview, setPreview] = useState<{ key: string; text: string }>();
   const key = JSON.stringify([entry, profile, includes]);
@@ -143,14 +143,7 @@ export function ProjectDialog({
                 </label>
                 <label>
                   {t("project.profile")}
-                  <select
-                    value={profile}
-                    onChange={(event) => setProfile(event.target.value)}
-                    disabled={busy}
-                  >
-                    <option value="openmp">open.mp</option>
-                    <option value="samp">SA-MP</option>
-                  </select>
+                  <span>open.mp</span>
                 </label>
                 <label>
                   {t("project.includes")}

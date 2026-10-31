@@ -193,7 +193,7 @@ try {
   await command("toggle bottom panel");
   await expect(panel()).toBeHidden();
   await expect(
-    page.getByRole("textbox", { name: "Pawn IDE", exact: true })
+    page.getByRole("textbox", { name: "ompide", exact: true })
   ).toBeFocused();
   await command("toggle bottom panel");
   await expect(page.locator(".build-panel")).toBeVisible();
@@ -209,7 +209,7 @@ try {
   await page.keyboard.press("Control+b");
   await expect(sidebar()).toBeHidden();
   await expect(
-    page.getByRole("textbox", { name: "Pawn IDE", exact: true })
+    page.getByRole("textbox", { name: "ompide", exact: true })
   ).toBeFocused();
   await page.keyboard.press("Control+b");
   await expect(

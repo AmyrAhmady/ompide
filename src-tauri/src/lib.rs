@@ -6,6 +6,11 @@ mod windows_chrome;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .manage(commands::NativeState::default())
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
@@ -31,6 +36,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::open_help_link,
             commands::choose_workspace,
             commands::activate_workspace,
             commands::recent_workspace,
@@ -74,7 +80,7 @@ pub fn run() {
             commands::terminal_close_all,
         ])
         .build(tauri::generate_context!())
-        .expect("could not initialize Pawn IDE")
+        .expect("could not initialize ompide")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 use tauri::Manager;
