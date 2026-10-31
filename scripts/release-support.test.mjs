@@ -167,6 +167,56 @@ test("PE validation rejects nonexecutables and out-of-bounds headers", () => {
 });
 
 test(
+  "compiler runtime discovery supports numeric and alias v143/v145 layouts",
+  {
+    skip: process.platform !== "win32",
+  },
+  async () => {
+    const { directory, cleanup } = await fixture();
+    try {
+      const locate = (installation) =>
+        JSON.parse(
+          execFileSync(
+            "powershell.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-File",
+              path.join(projectRoot, "scripts/find-vc-runtime.ps1"),
+              ...(installation ? ["-InstallationPath", installation] : []),
+            ],
+            { windowsHide: true, encoding: "utf8", stdio: "pipe" }
+          )
+        );
+      const installed = locate();
+      for (const [version, crt] of [
+        ["14.42.34433", "Microsoft.VC143.CRT"],
+        ["v143", "Microsoft.VC143.CRT"],
+        ["14.50.35717", "Microsoft.VC145.CRT"],
+        ["v145", "Microsoft.VC145.CRT"],
+      ]) {
+        const installation = path.join(directory, version);
+        const redist = path.join(installation, "VC/Redist/MSVC");
+        const wrongFolder = path.join(redist, "debug_nonredist/x86", crt);
+        await mkdir(wrongFolder, { recursive: true });
+        await cp(installed.path, path.join(wrongFolder, "vcruntime140.dll"));
+        assert.throws(() => locate(installation), /runtime was not found/);
+        const correctFolder = path.join(redist, version, "x86", crt);
+        await mkdir(correctFolder, { recursive: true });
+        const expected = path.join(correctFolder, "vcruntime140.dll");
+        await cp(installed.path, expected);
+        const found = locate(installation);
+        assert.equal(found.path, expected);
+        assert.equal(found.version, installed.version);
+        assert.match(found.signer, /O=Microsoft Corporation/);
+      }
+    } finally {
+      await cleanup();
+    }
+  }
+);
+
+test(
   "Windows archives use portable paths, extract intact and reject traversal",
   {
     skip: process.platform !== "win32",

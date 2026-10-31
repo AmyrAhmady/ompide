@@ -43,6 +43,9 @@ jobs:
         id: settings
         run: node scripts/release-support.mjs
 
+      - name: Check compiler runtime prerequisites
+        run: powershell.exe -NoProfile -NonInteractive -File scripts/find-vc-runtime.ps1
+
       - name: Set up Go for the pinned language server
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

@@ -31,9 +31,14 @@ this is an extract-and-run package, not a separate portable-settings mode.
 
 Follow the [source build guide](https://github.com/AmyrAhmady/ompide/wiki/Building-from-Source)
 to install prerequisites and prepare the pinned tools. Packaging also needs the
-x86 Visual C++ v143 redistributable files supplied with Visual Studio C++ Build
-Tools; the packaging script locates them with `vswhere` and verifies Microsoft's
-signature before copying the required runtime.
+x86 Visual C++ v14 redistributable files supplied with Visual Studio 2022 or 2026
+C++ Build Tools; the packaging script locates them with `vswhere` and verifies
+Microsoft's signature before copying the required runtime.
+
+CI checks for the compiler runtime before compiling Rust. Discovery supports
+the v143 and v145 CRT layouts and both numeric and alias version directories;
+it selects the newest installed x86 runtime and requires a valid Microsoft
+signature.
 
 ```powershell
 npm ci

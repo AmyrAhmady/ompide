@@ -9,6 +9,7 @@ import {
   writeFile,
   mkdir,
   rename,
+  realpath,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -75,6 +76,11 @@ function position(text, offset) {
   return { line: before.length - 1, character: before.at(-1).length };
 }
 
+function fileUri(file) {
+  // Match the frontend's protocolUri and Go's spelling of this unreserved character.
+  return pathToFileURL(file).href.replaceAll("%7E", "~");
+}
+
 async function verifyLsp(workspace) {
   const child = spawn(bridgePath, [tool("pawnlsp"), workspace], {
     windowsHide: true,
@@ -135,15 +141,15 @@ async function verifyLsp(workspace) {
       send({ jsonrpc: "2.0", id: requestId, method, params });
     });
   try {
-    const uri = pathToFileURL(path.join(workspace, "main.pwn")).href;
+    const uri = fileUri(path.join(workspace, "main.pwn"));
     let source = (await readFile(path.join(workspace, "main.pwn"), "utf8"))
       .replace("new result", "/* 🦀 */ new result")
       .replace(/\r?\n/g, "\r\n");
     const initialized = await request("initialize", {
       processId: process.pid,
-      rootUri: pathToFileURL(workspace).href,
+      rootUri: fileUri(workspace),
       workspaceFolders: [
-        { uri: pathToFileURL(workspace).href, name: path.basename(workspace) },
+        { uri: fileUri(workspace), name: path.basename(workspace) },
       ],
       capabilities: {
         general: { positionEncodings: ["utf-16"] },
@@ -175,20 +181,27 @@ async function verifyLsp(workspace) {
       textDocument: { uri },
       position: at,
     });
+    // Node escapes '~' as %7E; Go leaves it literal. Compare the actual files,
+    // including Windows short-path aliases, rather than serialized URI spelling.
+    const definitionPaths = await Promise.all(
+      (Array.isArray(definitions) ? definitions : [definitions]).map(
+        async (location) => {
+          const target = location?.uri ?? location?.targetUri;
+          return target ? realpath(fileURLToPath(target)) : undefined;
+        }
+      )
+    );
+    const expectedDefinition = await realpath(path.join(workspace, "math.inc"));
     assert.ok(
-      (Array.isArray(definitions) ? definitions : [definitions]).some(
-        (location) =>
-          (location?.uri ?? location?.targetUri) ===
-          pathToFileURL(path.join(workspace, "math.inc")).href
-      ),
-      JSON.stringify(definitions)
+      definitionPaths.includes(expectedDefinition),
+      JSON.stringify({ expectedDefinition, definitions })
     );
     const formatting = await request("textDocument/formatting", {
       textDocument: { uri },
       options: { tabSize: 4, insertSpaces: true },
     });
     assert.ok(Array.isArray(formatting));
-    const includeUri = pathToFileURL(path.join(workspace, "math.inc")).href;
+    const includeUri = fileUri(path.join(workspace, "math.inc"));
     notify("textDocument/didOpen", {
       textDocument: {
         uri: includeUri,
@@ -369,7 +382,7 @@ try {
   evidence.checks.push(
     "Direct pinned open.mp compiler emits a real 32-bit AMX with no CLI wrapper"
   );
-  const lspWorkspace = path.join(workspace, "LSP 🦀 #");
+  const lspWorkspace = path.join(workspace, "LSP 🦀 # ~ %");
   await cp(path.join(root, "fixtures/minimal"), lspWorkspace, {
     recursive: true,
     filter: (file) => !file.includes(`${path.sep}output`),
