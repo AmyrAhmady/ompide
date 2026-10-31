@@ -48,11 +48,14 @@ the pinned hash. The original prototype differed only in Go's action build IDs;
 those are omitted from the distributed build.
 
 A cached matching executable requires no Go installation. Rebuilding requires
-Windows x64 Go 1.26.5, Git and tar. Set `OMPIDE_GO` to an explicitly selected
-`go.exe`, or extract the checksum-pinned GitHub Actions Go distribution identified
-in `pawnlsp-build.json` into `.tools-cache/go1.26.5/`. The cached compiler executable
-is checked before use. Go is a development prerequisite and is never bundled with
-the application or downloaded by the preparation script.
+Windows x64 Go 1.26.5, Git and tar. Compiler selection checks an explicit
+`OMPIDE_GO` override first, then compatible `go.exe` installations on `PATH`, then
+the checksum-pinned distribution in `.tools-cache/go1.26.5/`. A normal system Go
+installation needs no environment override. Every candidate must report exactly
+`go1.26.5 windows/amd64`; an invalid explicit override fails rather than silently
+selecting another compiler. The cached compiler additionally requires its pinned
+checksum. `GOTOOLCHAIN=local` prevents automatic compiler downloads. Go is a
+development prerequisite and is never bundled or downloaded by preparation.
 
 `--download` explicitly permits downloading the pinned source and Go module
 dependencies; the default is offline. The two `golang.org/x` dependencies use their
@@ -61,7 +64,7 @@ complete source trees must match the original canonical module checksums, in
 addition to Go's normal module verification. Versions and sources remain pinned.
 
 ```powershell
-$env:OMPIDE_GO = 'C:\Go\bin\go.exe'
+# Uses compatible Go from PATH; OMPIDE_GO is an optional explicit override.
 npm.cmd run tools:build-lsp -- --download
 # Reproduce from cached source/dependencies, including the full upstream tests:
 npm.cmd run tools:build-lsp -- --rebuild

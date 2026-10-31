@@ -18,7 +18,7 @@
     "release:package": "node scripts/package-release.mjs",
     "release:verify": "node scripts/verify-release.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
-    "test:release": "node --test scripts/release-support.test.mjs",
+    "test:release": "node --test scripts/release-support.test.mjs scripts/go-toolchain.test.mjs",
     "test:grammar": "node --test scripts/pawn-grammar.test.mjs",
     "audit:localization": "node scripts/audit-localization.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",

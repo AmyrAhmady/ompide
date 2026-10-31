@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { listFiles, removeTemporary } from "./release-support.mjs";
 import { copyPackageNotices } from "./release-notices.mjs";
+import { selectGo } from "./go-toolchain.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const cache = path.join(root, ".tools-cache");
@@ -84,12 +85,6 @@ if (sha256(bytes) !== pin.source.sha256)
 const patch = path.join(root, "toolchain", pin.patch.path);
 if (sha256(await readFile(patch)) !== pin.patch.sha256)
   throw new Error("Source patch checksum mismatch");
-const go = process.env.OMPIDE_GO || path.join(cache, "go1.26.5/bin/go.exe");
-if (
-  !process.env.OMPIDE_GO &&
-  sha256(await readFile(go)) !== pin.developmentGoDistribution.executableSha256
-)
-  throw new Error("Cached Go executable checksum mismatch");
 const environment = {
   ...process.env,
   GOTOOLCHAIN: "local",
@@ -105,16 +100,15 @@ const environment = {
   GOFLAGS: "",
   GOWORK: "off",
 };
-if (
-  !execFileSync(go, ["version"], {
-    encoding: "utf8",
-    env: environment,
-    windowsHide: true,
-  }).startsWith(`go version ${pin.goVersion} windows/amd64`)
-)
-  throw new Error(
-    `Build requires ${pin.goVersion} Windows x64. Set OMPIDE_GO to its go.exe; Go is not downloaded automatically.`
-  );
+const { executable: go, source: goSource } = await selectGo({
+  override: process.env.OMPIDE_GO,
+  searchPath: process.env.PATH,
+  cached: path.join(cache, `${pin.goVersion}/bin/go.exe`),
+  version: pin.goVersion,
+  checksum: pin.developmentGoDistribution.executableSha256,
+  environment,
+});
+console.log(`Using ${pin.goVersion} from ${goSource}: ${go}`);
 const staging = await mkdtemp(path.join(cache, "pawnlsp-build-"));
 try {
   const prefix = `pawnlsp-${pin.source.commit}`;
