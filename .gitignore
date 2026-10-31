@@ -24,6 +24,7 @@ dist-ssr
 
 /AGENTS.md
 /docs/
+/wiki/
 
 # Prepared tools and local integration artifacts (see toolchain/tools.json)
 /src-tauri/binaries/
