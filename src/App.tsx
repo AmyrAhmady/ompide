@@ -15,6 +15,7 @@ import {
 } from "react";
 import { Uri } from "monaco-editor";
 import { workbench, type SymbolResult } from "./app/workbench";
+import type { NavigationDirection } from "./app/navigation";
 import { desktop } from "./lib/native";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Explorer } from "./explorer/Explorer";
@@ -500,6 +501,41 @@ function App() {
   }, [windowTitle]);
   const buildBusy = building(state.build);
 
+  const navigate = useCallback((direction: NavigationDirection) => {
+    const current = workbench.getSnapshot();
+    if (
+      current.prompt ||
+      current.mutationBusy ||
+      document.querySelector("dialog[open]") ||
+      !(direction === -1 ? current.canGoBack : current.canGoForward)
+    )
+      return;
+    setGitDiff(undefined);
+    run(() => workbench.navigate(direction));
+  }, []);
+
+  useEffect(() => {
+    const mouse = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      // Consume both press and release so WebView2 never treats this as page history.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.type === "pointerup") navigate(event.button === 3 ? -1 : 1);
+    };
+    window.addEventListener("pointerdown", mouse, true);
+    window.addEventListener("pointerup", mouse, true);
+    window.addEventListener("mousedown", mouse, true);
+    window.addEventListener("mouseup", mouse, true);
+    window.addEventListener("auxclick", mouse, true);
+    return () => {
+      window.removeEventListener("pointerdown", mouse, true);
+      window.removeEventListener("pointerup", mouse, true);
+      window.removeEventListener("mousedown", mouse, true);
+      window.removeEventListener("mouseup", mouse, true);
+      window.removeEventListener("auxclick", mouse, true);
+    };
+  }, [navigate]);
+
   const startBuild = () => {
     if (!state.project) {
       setProjectOpen(true);
@@ -534,6 +570,7 @@ function App() {
       else showTerminal();
     },
     newTerminal,
+    navigate,
   });
 
   const command = (label: TranslationKey) =>
@@ -609,6 +646,17 @@ function App() {
         event.target.closest(".terminal-panel")
       )
         return;
+      if (
+        event.altKey &&
+        !modifier &&
+        !event.shiftKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        navigate(event.key === "ArrowLeft" ? -1 : 1);
+        return;
+      }
       if (modifier && key === "k") {
         chordUntil = Date.now() + 1500;
         event.preventDefault();
@@ -680,6 +728,7 @@ function App() {
     return () => window.removeEventListener("keydown", handle, true);
   }, [
     state.active,
+    navigate,
     state.ready,
     commandOpen,
     state.prompt,
@@ -794,6 +843,9 @@ function App() {
             <CommandMenuItem command={command("layout.reset")} />
           </Menu>
           <Menu label="menu.go">
+            <CommandMenuItem command={command("command.goBack")} />
+            <CommandMenuItem command={command("command.goForward")} />
+            <hr />
             {(
               [
                 "command.definition",
@@ -923,6 +975,22 @@ function App() {
               <div
                 className={`tab ${tab.uri === state.active ? "active" : ""}`}
                 key={tab.uri}
+                onMouseDown={(event) => {
+                  if (event.button === 1) event.preventDefault();
+                }}
+                onAuxClick={(event) => {
+                  if (event.button !== 1) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const current = workbench.getSnapshot();
+                  if (
+                    current.prompt ||
+                    current.mutationBusy ||
+                    document.querySelector("dialog[open]")
+                  )
+                    return;
+                  run(() => workbench.close(tab.uri));
+                }}
               >
                 <button
                   type="button"

@@ -22,6 +22,7 @@ import {
 import { defaults, parseSettings, type Settings } from "../settings/settings";
 import { startLanguageSession, type LanguageSession } from "../language/client";
 import { BufferVersion } from "./documents";
+import { NavigationHistory, type NavigationDirection } from "./navigation";
 import { largeFileCharacters, type TextEncoding } from "../editor/text-files";
 import {
   changesWorkingTree,
@@ -119,6 +120,8 @@ export interface WorkbenchState {
   build: BuildState;
   mutationBusy: boolean;
   canReopen: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
 }
 
 export class Workbench {
@@ -137,6 +140,8 @@ export class Workbench {
     build: { phase: "idle" },
     mutationBusy: false,
     canReopen: false,
+    canGoBack: false,
+    canGoForward: false,
   };
 
   private subscribers = new Set<() => void>();
@@ -160,6 +165,14 @@ export class Workbench {
   private untitled = 0;
 
   private closed: string[] = [];
+
+  private navigation = new NavigationHistory();
+
+  private navigationMuted = 0;
+
+  private navigating = false;
+
+  private navigationQueue: Promise<void> = Promise.resolve();
 
   private answer?: (choice: Choice) => void;
 
@@ -275,6 +288,8 @@ export class Workbench {
       ...this.state,
       ...patch,
       canReopen: this.closed.length > 0,
+      canGoBack: this.navigation.canGoBack,
+      canGoForward: this.navigation.canGoForward,
       tabs: [...this.documents.values()].map((document) => ({
         uri: document.uri,
         name: document.name,
@@ -330,14 +345,17 @@ export class Workbench {
       minimap: { enabled: settings.minimap },
       scrollBeyondLastLine: false,
     });
-    const cursor = this.codeEditor.onDidChangeCursorPosition((event) =>
+    const cursor = this.codeEditor.onDidChangeCursorPosition((event) => {
+      this.rememberLocation(
+        event.reason === editor.CursorChangeReason.Explicit ? "move" : "edit"
+      );
       this.update({
         position: {
           line: event.position.lineNumber,
           column: event.position.column,
         },
-      })
-    );
+      });
+    });
     const markers = editor.onDidChangeMarkers(() =>
       this.update({
         problems: editor
@@ -400,14 +418,59 @@ export class Workbench {
   }
 
   async openUri(uri: string, line?: number, column?: number): Promise<void> {
-    uri = Uri.parse(uri).toString();
-    if (!this.documents.has(uri)) await this.openPath(Uri.parse(uri).fsPath);
-    this.activate(uri);
-    if (line) {
-      this.codeEditor?.setPosition({ lineNumber: line, column: column ?? 1 });
-      this.codeEditor?.revealLineInCenter(line);
+    this.rememberLocation("edit");
+    this.navigationMuted++;
+    try {
+      uri = Uri.parse(uri).toString();
+      if (!this.documents.has(uri)) await this.openPath(Uri.parse(uri).fsPath);
+      this.activate(uri);
+      if (line) {
+        this.codeEditor?.setPosition({ lineNumber: line, column: column ?? 1 });
+        this.codeEditor?.revealLineInCenter(line);
+      }
+      this.codeEditor?.focus();
+    } finally {
+      this.navigationMuted--;
+      this.rememberLocation("jump");
+      this.update();
     }
-    this.codeEditor?.focus();
+  }
+
+  private rememberLocation(kind: "move" | "edit" | "jump"): void {
+    if (this.navigationMuted || this.navigating) return;
+    const uri = this.codeEditor?.getModel()?.uri.toString();
+    const position = this.codeEditor?.getPosition();
+    if (uri && position && this.documents.has(uri))
+      this.navigation.record(
+        { uri, line: position.lineNumber, column: position.column },
+        kind
+      );
+  }
+
+  navigate(direction: NavigationDirection): Promise<void> {
+    const pending = this.navigationQueue.then(() =>
+      this.restoreLocation(direction)
+    );
+    this.navigationQueue = pending.catch(() => undefined);
+    return pending;
+  }
+
+  private async restoreLocation(direction: NavigationDirection): Promise<void> {
+    if (this.navigating || this.state.prompt || this.state.mutationBusy) return;
+    this.rememberLocation("edit");
+    const location = this.navigation.peek(direction);
+    if (!location) return;
+    this.navigating = true;
+    try {
+      await this.openUri(location.uri, location.line, location.column);
+      this.navigation.move(direction);
+    } catch (error) {
+      this.navigation.removeWhere((entry) => entry.uri === location.uri);
+      throw error;
+    } finally {
+      this.navigating = false;
+      this.update();
+    }
   }
 
   private async openSnapshot(snapshot: FileSnapshot): Promise<void> {
@@ -516,15 +579,30 @@ export class Workbench {
   activate(uri: string): void {
     const document = this.documents.get(uri);
     if (!document || !this.codeEditor) return;
+    this.rememberLocation("edit");
+    const changed = this.state.active !== uri;
     const previous = this.state.active
       ? this.documents.get(this.state.active)
       : undefined;
     if (previous) previous.view = this.codeEditor.saveViewState();
-    this.codeEditor.setModel(document.model);
-    this.applyFileOptions(document);
-    if (document.view) this.codeEditor.restoreViewState(document.view);
+    this.navigationMuted++;
+    try {
+      this.codeEditor.setModel(document.model);
+      this.applyFileOptions(document);
+      if (document.view) this.codeEditor.restoreViewState(document.view);
+    } finally {
+      this.navigationMuted--;
+    }
     this.codeEditor.focus();
-    this.update({ active: uri });
+    this.rememberLocation(changed ? "jump" : "edit");
+    const position = this.codeEditor.getPosition();
+    this.update({
+      active: uri,
+      position: {
+        line: position?.lineNumber ?? 1,
+        column: position?.column ?? 1,
+      },
+    });
   }
 
   private applyFileOptions(document?: OpenDocument): void {
@@ -556,6 +634,7 @@ export class Workbench {
       : await native.activateWorkspace(selected);
     const preferences = await native.preferences();
     ++this.projectGeneration;
+    this.navigation.clear();
     this.update({
       root,
       recent: preferences.recentWorkspaces,
@@ -636,6 +715,7 @@ export class Workbench {
       const current = document.model.getValue();
       const removed = await this.removeDocument(uri);
       await this.openSnapshot(snapshot);
+      this.navigation.replaceUri(uri, snapshot.uri);
       const renamed = this.documents.get(snapshot.uri);
       if (removed && renamed && current !== text)
         renamed.model.setValue(current);
@@ -916,6 +996,13 @@ export class Workbench {
           }
         }
       }
+      this.navigation.removeWhere((location) => {
+        const resource = Uri.parse(location.uri);
+        return (
+          resource.scheme === "file" &&
+          withinPath(resource.fsPath, mutation.source)
+        );
+      });
       if (nextActive && this.documents.has(nextActive))
         this.activate(nextActive);
       if (retained) this.report({ code: "fileOperationRetained" });
@@ -1084,11 +1171,14 @@ export class Workbench {
   private async removeDocument(uri: string): Promise<boolean> {
     const document = this.documents.get(uri);
     if (!document) return true;
+    this.rememberLocation("edit");
     const version = document.model.getAlternativeVersionId();
     await document.reference?.object.revert({ soft: true });
     if (document.model.getAlternativeVersionId() !== version) return false;
     if (this.state.active === uri) this.codeEditor?.setModel(null);
     this.documents.delete(uri);
+    if (Uri.parse(uri).scheme !== "file")
+      this.navigation.removeWhere((location) => location.uri === uri);
     this.largeDocuments.delete(uri);
     document.listener.dispose();
     if (document.reference) document.reference.dispose();
@@ -1205,6 +1295,7 @@ export class Workbench {
   }
 
   private async prepareWorkspaceEdits(uris: string[]): Promise<void> {
+    this.navigationMuted++;
     const original = this.state.active;
     const versions = new Map(
       [...this.documents.values()].map((document) => [
@@ -1225,6 +1316,7 @@ export class Workbench {
       throw error;
     } finally {
       if (original) this.activate(original);
+      this.navigationMuted--;
     }
   }
 

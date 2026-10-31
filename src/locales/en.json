@@ -116,6 +116,8 @@
   "command.format": "Format Document",
   "command.codeActions": "Quick Fix…",
   "command.definition": "Go to Definition",
+  "command.goBack": "Go Back",
+  "command.goForward": "Go Forward",
   "command.references": "Find References",
   "command.rename": "Rename Symbol",
   "command.symbols": "Go to Symbol in Editor…",

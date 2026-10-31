@@ -26,6 +26,7 @@ export interface CommandViews {
   resetLayout: () => void;
   terminal: () => void;
   newTerminal: () => void;
+  navigate: (direction: -1 | 1) => void;
   encoding?: () => void;
   openEncoding?: () => void;
 }
@@ -98,6 +99,18 @@ export function createCommands(
     views.encoding?.()
   );
   add("command.quit", mutable, () => workbench.quit());
+  add(
+    "command.goBack",
+    state.ready && state.canGoBack && !state.mutationBusy,
+    () => views.navigate(-1),
+    "Alt+Left"
+  );
+  add(
+    "command.goForward",
+    state.ready && state.canGoForward && !state.mutationBusy,
+    () => views.navigate(1),
+    "Alt+Right"
+  );
   for (const [label, id, shortcut] of [
     ["command.undo", "undo", "Ctrl+Z"],
     ["command.redo", "redo", "Ctrl+Y"],
