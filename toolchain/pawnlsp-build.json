@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "version": "0.33.75-pawnide.2",
-  "goVersion": "go1.26.5",
+  "version": "0.33.75-pawnide.3",
+  "goVersion": "go1.27.3",
   "minimumGoVersion": "go1.26.5",
   "source": {
     "commit": "bffabaa538c3b290fe22ccfbb61c3a4558af2a33",
@@ -11,6 +11,6 @@
   },
   "patch": {
     "path": "patches/pawnlsp-open-overlays.patch",
-    "sha256": "96f688dcbc63a0c5f3c9a8b5a4e4263d0e47c434cb58b2f49da6ff1cebddee5a"
+    "sha256": "a6b060325e73490027a049e05e4f4e2d02634d3b12aa45bc768ed68f4b1ed14d"
   }
 }

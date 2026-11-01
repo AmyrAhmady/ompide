@@ -337,6 +337,44 @@ async function verifyLsp(workspace) {
     evidence.checks.push(
       "Repeated full-text and full-range entry edits publish and clear real argument-count diagnostics with both project files open."
     );
+    const validStyleSource = source;
+    for (const invalid of [true, false]) {
+      source = invalid
+        ? validStyleSource.replace(
+            "ApplyStyle(Text:0, STYLE:2)",
+            "ApplyStyle(Text:0)"
+          )
+        : validStyleSource;
+      notify("textDocument/didChange", {
+        textDocument: { uri, version: ++version },
+        contentChanges: [{ text: source }],
+      });
+      const deadline = Date.now() + 5000;
+      do {
+        diagnostics = await request("textDocument/diagnostic", {
+          textDocument: { uri },
+        });
+        if (
+          diagnostics.items.some(
+            (item) => item.code === "pawn-analysis:sema/argument-count"
+          ) === invalid
+        )
+          break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } while (Date.now() < deadline);
+      const arity = diagnostics.items.filter(
+        (item) => item.code === "pawn-analysis:sema/argument-count"
+      );
+      assert.equal(arity.length, invalid ? 1 : 0, JSON.stringify(diagnostics));
+      if (invalid)
+        assert.equal(
+          arity[0].message,
+          '"ApplyStyle" expects 2 arguments, got 1'
+        );
+    }
+    evidence.checks.push(
+      "Macro-tagged native signatures accept valid arguments, report the correct count for invalid calls, and clear the diagnostic after correction."
+    );
     notify("textDocument/didSave", { textDocument: { uri }, text: source });
     notify("textDocument/didClose", { textDocument: { uri } });
     await request("shutdown", null);
@@ -388,6 +426,24 @@ try {
     recursive: true,
     filter: (file) => !file.includes(`${path.sep}output`),
   });
+  // The real server must expand tag-pattern macros before checking native arity.
+  // Keep this in the LSP-only copy; the compiler fixture stays independent.
+  const include = path.join(lspWorkspace, "math.inc");
+  await writeFile(
+    include,
+    (await readFile(include, "utf8")) +
+      "\n#define STYLE_TAG(%0) t_%0\n" +
+      "#define STYLE: STYLE_TAG(STYLE):\n" +
+      "native bool:ApplyStyle(Text:textid, STYLE:style);\n"
+  );
+  const entry = path.join(lspWorkspace, "main.pwn");
+  await writeFile(
+    entry,
+    (await readFile(entry, "utf8")).replace(
+      "new result",
+      "ApplyStyle(Text:0, STYLE:2);\n    new result"
+    )
+  );
   await verifyLsp(lspWorkspace);
   await writeFile(
     path.join(workspace, "main.pwn"),

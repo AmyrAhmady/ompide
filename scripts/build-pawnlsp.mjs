@@ -194,6 +194,15 @@ try {
         ecosystem: "go",
         name: dependency.Path,
         version: dependency.Version,
+        ...(dependency.Replace
+          ? {
+              replacement: {
+                name: module.Path,
+                version: module.Version,
+                checksum: module.Sum,
+              },
+            }
+          : {}),
       })
     );
   }

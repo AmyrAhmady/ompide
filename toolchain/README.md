@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.2`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.3`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -38,6 +38,17 @@ no argument-count diagnostic after an invalid edit, or retain an error after a
 correction. Token caching, trivia reuse, debounce and background analysis remain
 enabled. A synchronous workspace-analysis regression fails before this fix;
 real protocol tests cover repeated full-text and full-range valid/invalid edits.
+
+Version `.3` also pins the macro-expansion fix from
+[`AmyrAhmady/pawn-analysis`](https://github.com/AmyrAhmady/pawn-analysis/commit/e928673f7577cb4e93a197a6cd3bfb87f0809998),
+commit `e928673f7577cb4e93a197a6cd3bfb87f0809998`, through Go replacement version
+`v0.0.0-20261101092659-e928673f7577`. Its module checksums and the required
+`pawn-parser` v1.5.11 update are included in the verified source patch. This
+corrects punctuation-bearing macro patterns and adjacent token substitution,
+which otherwise inflate native parameter counts in the open.mp includes. All
+existing overlay and lifecycle fixes remain. Builds fetch the immutable module
+through normal Go resolution; a local fork checkout is unnecessary. Switch back
+to an upstream dependency release once it includes the fix.
 
 `pawnlsp-build.json` pins source/patch checksums, the minimum Go version and the
 compiler used for reproducible official releases. The pinned upstream go.mod
@@ -67,7 +78,7 @@ build time and embeds the expected checksum; runtime verification still rejects 
 changed executable. A workspace or runtime-edited metadata file cannot change
 that compiled expectation. A valid prepared binary needs no Go installation.
 
-Official release CI adds `--reproducible`: it retains exactly Go 1.26.5 and the
+Official release CI adds `--reproducible`: it retains exactly Go 1.27.3 and the
 pinned executable hash in tools.json. The release ZIP verifier still rejects other
 hashes. To reproduce an official package, use the same flag locally; ordinary
 development builds do not need that compiler version.
