@@ -16,6 +16,19 @@ use std::{
     time::Duration,
 };
 
+/// Read the selected executable's own banner rather than substituting a tool pin.
+pub fn reported_version(output: &str) -> Option<&str> {
+    let banner = output.lines().next()?.trim();
+    let version = banner
+        .strip_prefix("Pawn compiler ")?
+        .split_whitespace()
+        .next()?;
+    Regex::new(r"^\d+\.\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?$")
+        .unwrap()
+        .is_match(version)
+        .then_some(version)
+}
+
 /// Configure only the selected compiler process's bundled shared-library path.
 /// The upstream Linux distribution has an absolute build-machine RUNPATH.
 pub fn command(executable: &Path) -> io::Result<Command> {
@@ -338,6 +351,30 @@ mod tests {
     use super::*;
     use crate::project;
     use serde_json::json;
+
+    #[test]
+    fn detects_selected_compiler_versions_without_requiring_the_bundled_version() {
+        for version in [
+            "3.10.11",
+            "3.10.10",
+            "3.2.3664",
+            "3.10.11.1",
+            "3.11.0-beta.1",
+        ] {
+            let banner =
+                format!("Pawn compiler {version}\tCopyright (c) contributors\r\nUsage: pawncc\r\n");
+            assert_eq!(reported_version(&banner), Some(version));
+        }
+        for banner in [
+            "",
+            "unrelated tool 3.10.11",
+            "Pawn compiler unknown",
+            "Pawn compiler 3",
+            "error\nPawn compiler 3.10.11",
+        ] {
+            assert_eq!(reported_version(banner), None);
+        }
+    }
 
     fn fixture() -> tempfile::TempDir {
         let root = tempfile::tempdir().unwrap();

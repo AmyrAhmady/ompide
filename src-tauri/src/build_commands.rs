@@ -110,22 +110,27 @@ fn verify_tools(app: &AppHandle) -> Result<BuildTools> {
         Duration::from_secs(3),
         16384,
     )?;
-    let expected = format!("Pawn compiler {}", pin.version);
-    if output.outcome != Outcome::Exited
-        || !output
-            .stdout
-            .lines()
-            .next()
-            .is_some_and(|line| line.trim() == expected || line.starts_with(&(expected + "\t")))
-    {
-        let mut failure = error("buildToolVersion", "unsupported compiler");
-        failure.parameters = serde_json::json!({ "tool": "pawncc", "expected": pin.version });
-        return Err(failure);
-    }
+    let version = (output.outcome == Outcome::Exited)
+        .then(|| compiler::reported_version(&output.stdout))
+        .flatten()
+        .filter(|version| source != "bundled" || *version == pin.version.as_str())
+        .ok_or_else(|| {
+            if source == "bundled" {
+                let mut failure = error("buildToolVersion", "unsupported bundled compiler");
+                failure.parameters =
+                    serde_json::json!({ "tool": "pawncc", "expected": pin.version });
+                failure
+            } else {
+                error(
+                    "compilerVersionUnknown",
+                    "missing Pawn compiler version banner",
+                )
+            }
+        })?;
     Ok(BuildTools {
         compiler: ToolInfo {
             path,
-            version: pin.version,
+            version: version.to_owned(),
             source,
         },
     })
