@@ -4,8 +4,8 @@
   "tools": [
     {
       "name": "pawnlsp",
-      "version": "0.33.75-pawnide.3",
-      "executableSha256": "c8a7cfbd718d579e86e66cdaf55f1160d9072a9fce62ce5edf9f8118e1b25a3a",
+      "version": "0.33.75-pawnide.4",
+      "executableSha256": "0d173ea6fbf7982b420ac8030361b41e60b15f9f1efca8715c8cf0f8b7e384c7",
       "destination": "pawnlsp-x86_64-pc-windows-msvc.exe",
       "license": "MIT",
       "sourceBuild": "pawnlsp-build.json",

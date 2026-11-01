@@ -76,6 +76,7 @@ fn main() {
                         && build["sourceCommit"] == pin["source"]["commit"]
                         && build["sourceSha256"] == pin["source"]["sha256"]
                         && build["patchSha256"] == pin["patch"]["sha256"]
+                        && build["modulePatchSha256"] == pin["modulePatch"]["sha256"]
                         && build["target"] == go_target
                         && go_version(&build["goVersion"])
                             .is_some_and(|version| version >= minimum),

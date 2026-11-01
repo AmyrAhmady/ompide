@@ -89,7 +89,7 @@ function fileUri(file) {
   return pathToFileURL(file).href.replaceAll("%7E", "~");
 }
 
-async function verifyLsp(workspace) {
+async function verifyLsp(workspace, includeDirectory = workspace) {
   const child = spawn(bridgePath, [tool("pawnlsp"), workspace], {
     windowsHide: true,
     stdio: ["pipe", "pipe", "pipe"],
@@ -199,7 +199,9 @@ async function verifyLsp(workspace) {
         }
       )
     );
-    const expectedDefinition = await realpath(path.join(workspace, "math.inc"));
+    const expectedDefinition = await realpath(
+      path.join(includeDirectory, "math.inc")
+    );
     assert.ok(
       definitionPaths.includes(expectedDefinition),
       JSON.stringify({ expectedDefinition, definitions })
@@ -209,13 +211,13 @@ async function verifyLsp(workspace) {
       options: { tabSize: 4, insertSpaces: true },
     });
     assert.ok(Array.isArray(formatting));
-    const includeUri = fileUri(path.join(workspace, "math.inc"));
+    const includeUri = fileUri(path.join(includeDirectory, "math.inc"));
     notify("textDocument/didOpen", {
       textDocument: {
         uri: includeUri,
         languageId: "pawn",
         version: 1,
-        text: await readFile(path.join(workspace, "math.inc"), "utf8"),
+        text: await readFile(path.join(includeDirectory, "math.inc"), "utf8"),
       },
     });
     notify("workspace/didChangeWatchedFiles", { changes: [{ uri, type: 2 }] });
@@ -452,6 +454,23 @@ try {
     )
   );
   await verifyLsp(lspWorkspace);
+  const externalProject = path.join(workspace, "external SDK project");
+  const sdk = path.join(workspace, "shared SDK");
+  await cp(lspWorkspace, externalProject, { recursive: true });
+  await mkdir(sdk);
+  await rename(
+    path.join(externalProject, "math.inc"),
+    path.join(sdk, "math.inc")
+  );
+  const manifestPath = path.join(externalProject, "pawn.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.pawnkit.includePaths = ["../shared SDK"];
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await verifyLsp(externalProject, sdk);
+  evidence.checks.push(
+    "Shared external SDK: real LSP completion, definition target, diagnostics and formatting across a sibling include directory."
+  );
+
   await writeFile(
     path.join(workspace, "main.pwn"),
     "main() { MissingFunction(); }\n"

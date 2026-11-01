@@ -148,10 +148,7 @@ pub fn arguments(
             .strip_prefix("-i")
             .filter(|value| !value.is_empty())
         {
-            let include = scope.resolve(Path::new(include))?;
-            if !include.is_dir() {
-                return Err(invalid("compiler include path is not a directory"));
-            }
+            let include = crate::project::include_directory(scope, Path::new(include))?;
             result.push(format!("-i{}", include.display()));
         } else if safe.is_match(argument) || define(argument) {
             result.push(argument.clone());
@@ -174,7 +171,12 @@ pub fn arguments(
     Ok(result)
 }
 
-pub fn diagnostics(scope: &Workspace, stdout: &str, stderr: &str) -> Vec<Diagnostic> {
+pub fn diagnostics(
+    scope: &Workspace,
+    includes: &[PathBuf],
+    stdout: &str,
+    stderr: &str,
+) -> Vec<Diagnostic> {
     let pattern = Regex::new(r"^(.+)\(([0-9]+)(?:\s*--\s*[0-9]+)?\)\s*:\s*(fatal error|error|warning)\s+([0-9]+):\s*(.+)$").unwrap();
     let mut result = vec![];
     let mut seen = HashSet::new();
@@ -185,9 +187,20 @@ pub fn diagnostics(scope: &Workspace, stdout: &str, stderr: &str) -> Vec<Diagnos
         let Ok(number) = parts[2].parse::<u32>() else {
             continue;
         };
-        let Ok(path) = scope.resolve(Path::new(&parts[1])) else {
+        let reported = Path::new(&parts[1]);
+        let candidate = if reported.is_absolute() {
+            reported.to_path_buf()
+        } else {
+            scope.root().join(reported)
+        };
+        let Ok(path) = workspace::canonical(&candidate) else {
             continue;
         };
+        if !path.starts_with(scope.root())
+            && !includes.iter().any(|include| path.starts_with(include))
+        {
+            continue;
+        }
         let Ok(uri) = workspace::file_uri(&path) else {
             continue;
         };
@@ -292,7 +305,12 @@ pub fn build(
             exit_code: result.exit_code,
         });
     }
-    let diagnostics = diagnostics(scope, &result.stdout, &result.stderr);
+    let diagnostics = diagnostics(
+        scope,
+        &configuration.includes,
+        &result.stdout,
+        &result.stderr,
+    );
     let passed =
         result.exit_code == Some(0) && !diagnostics.iter().any(|item| item.severity == "error");
     let mut artifacts = vec![];
@@ -388,7 +406,7 @@ mod tests {
         fs::write(root.path().join("🦀 header.inc"), "// fixture").unwrap();
         let scope = Workspace::open(root.path()).unwrap();
         let text = "main.pwn(2) : error 017: undefined symbol \"MissingFunction\"\n🦀 header.inc(7 -- 9) : warning 213: tag mismatch\n../../outside.pwn(1) : error 001: outside\n";
-        let items = diagnostics(&scope, text, text);
+        let items = diagnostics(&scope, &[], text, text);
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].code, "pawncc-017");
         assert_eq!(items[0].severity, "error");

@@ -1,5 +1,6 @@
 use pawn_core::{
     lsp::{LspEvent, LspSession},
+    project,
     tools::{self, ToolError},
     watch::{FileWatch, WatchEvent},
     workspace::{self, Entry, FileSnapshot, Workspace},
@@ -321,7 +322,27 @@ pub async fn read_document(
     path: PathBuf,
     encoding: Option<String>,
 ) -> Result<FileSnapshot> {
-    let path = permitted(&state, &path)?;
+    let path = match permitted(&state, &path) {
+        Ok(path) => path,
+        Err(failure) if failure.code == "permissionDenied" => {
+            let root = lock(&state.workspace)?
+                .as_ref()
+                .ok_or_else(|| error("noWorkspace", "no workspace selected"))?
+                .root()
+                .to_path_buf();
+            let path = tauri::async_runtime::spawn_blocking(move || {
+                let scope = Workspace::open(&root)?;
+                project::include_document(&scope, &path)
+            })
+            .await
+            .map_err(|failure| error("operationFailed", failure.to_string()))??;
+            // Match explicit file opening: permit this document for editing and
+            // watching, never the containing directory or an entire SDK tree.
+            lock(&state.allowed)?.insert(path.clone());
+            path
+        }
+        Err(failure) => return Err(failure),
+    };
     tauri::async_runtime::spawn_blocking(move || {
         workspace::read_document_with_encoding(&path, encoding.as_deref())
     })

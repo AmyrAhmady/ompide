@@ -147,12 +147,27 @@ try {
       stdio: "inherit",
       windowsHide: true,
     });
-  runGo(["test", "-mod=readonly", "./..."]);
+  // Vendor only in this disposable source tree; never edit the user's Go cache.
+  const modulePatch = path.join(root, "toolchain", pin.modulePatch.path);
+  if (sha256(await readFile(modulePatch)) !== pin.modulePatch.sha256)
+    throw new Error("Project-library patch checksum mismatch");
+  runGo(["mod", "vendor"]);
+  execFileSync(
+    "git",
+    ["apply", "--check", `--directory=${directory}`, modulePatch],
+    { cwd: root, windowsHide: true }
+  );
+  execFileSync("git", ["apply", `--directory=${directory}`, modulePatch], {
+    cwd: root,
+    windowsHide: true,
+  });
+  runGo(["test", "-mod=vendor", "github.com/pawnkit/pawn-project/paths"]);
+  runGo(["test", "-mod=vendor", "./..."]);
   runGo(["mod", "verify"]);
   const executable = path.join(staging, `pawnlsp${host.suffix}`);
   runGo([
     "build",
-    "-mod=readonly",
+    "-mod=vendor",
     "-trimpath",
     "-buildvcs=false",
     `-ldflags=-s -w -buildid= -X main.version=${pin.version}`,
@@ -191,6 +206,17 @@ try {
       version: pin.version,
     }),
   ];
+  // Vendored binaries omit sums from Go's executable build information. Keep
+  // replacement provenance from the already verified, patched module lockfile.
+  const moduleSums = new Map(
+    (await readFile(path.join(source, "go.sum"), "utf8"))
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => {
+        const [name, version, checksum] = line.split(" ");
+        return [`${name} ${version}`, checksum];
+      })
+  );
   for (const dependency of buildInfo.Deps) {
     const module = dependency.Replace || dependency;
     const directory = goModuleDirectory(
@@ -203,12 +229,17 @@ try {
         ecosystem: "go",
         name: dependency.Path,
         version: dependency.Version,
+        ...(dependency.Path === "github.com/pawnkit/pawn-project"
+          ? { patchSha256: pin.modulePatch.sha256 }
+          : {}),
         ...(dependency.Replace
           ? {
               replacement: {
                 name: module.Path,
                 version: module.Version,
-                checksum: module.Sum,
+                checksum:
+                  module.Sum ||
+                  moduleSums.get(`${module.Path} ${module.Version}`),
               },
             }
           : {}),

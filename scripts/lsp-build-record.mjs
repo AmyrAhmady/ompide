@@ -18,6 +18,7 @@ export function localBuildMatches(
     build.sourceCommit === pin.source.commit &&
     build.sourceSha256 === pin.source.sha256 &&
     build.patchSha256 === pin.patch.sha256 &&
+    build.modulePatchSha256 === pin.modulePatch?.sha256 &&
     goAtLeast(build.goVersion, pin.minimumGoVersion) &&
     build.target === target &&
     (!reproducible || build.goVersion === pin.goVersion)
@@ -30,6 +31,7 @@ export function buildRecord(pin, goVersion, target = "windows/amd64") {
     sourceCommit: pin.source.commit,
     sourceSha256: pin.source.sha256,
     patchSha256: pin.patch.sha256,
+    modulePatchSha256: pin.modulePatch?.sha256,
     goVersion,
     target,
   };

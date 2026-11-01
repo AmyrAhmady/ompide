@@ -4,7 +4,7 @@
   "tools": [
     {
       "name": "pawnlsp",
-      "version": "0.33.75-pawnide.3",
+      "version": "0.33.75-pawnide.4",
       "executableSha256": null,
       "destination": "pawnlsp-x86_64-unknown-linux-gnu",
       "license": "MIT",

@@ -201,6 +201,60 @@ pub fn profile(configuration: &Value) -> io::Result<String> {
     .to_owned())
 }
 
+/// Include directories are compiler inputs and may belong to a shared SDK.
+/// Keep this separate from Workspace::resolve, which scopes project mutations.
+pub fn include_directory(scope: &Workspace, path: &std::path::Path) -> io::Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        scope.root().join(path)
+    };
+    let path = workspace::canonical(&path)?;
+    if !path.is_dir() {
+        return Err(invalid("include path must be an existing directory"));
+    }
+    Ok(path)
+}
+
+/// Authorize a navigation target only through declared include roots, without
+/// broadening workspace file operations. Callers grant access to this file only.
+pub fn include_document(scope: &Workspace, path: &std::path::Path) -> io::Result<PathBuf> {
+    let path = workspace::canonical(path)?;
+    if !path.is_file() {
+        return Err(invalid("include document must be a regular file"));
+    }
+    for manifest in discover(scope)?.manifests {
+        let project = Workspace::open(manifest.parent().unwrap())?;
+        let Ok(info) = inspect(&project) else {
+            continue;
+        };
+        let mut names = vec![""];
+        if let Some(builds) = info.configuration.get("builds").and_then(Value::as_array) {
+            names.extend(
+                builds
+                    .iter()
+                    .filter_map(|build| build.get("name").and_then(Value::as_str)),
+            );
+        }
+        for name in names {
+            let Ok(build) = build_configuration(&project, &info.configuration, name) else {
+                continue;
+            };
+            if build
+                .includes
+                .iter()
+                .any(|include| path.starts_with(include))
+            {
+                return Ok(path);
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        "file is outside the workspace and configured include directories",
+    ))
+}
+
 pub fn build_configuration(
     scope: &Workspace,
     configuration: &Value,
@@ -236,11 +290,15 @@ pub fn build_configuration(
     };
     declared.extend(strings(&configuration["pawnkit"], "includePaths")?);
     declared.extend(strings(&chosen, "includes")?);
+    let arguments = strings(&chosen, "args")?;
+    declared.extend(arguments.iter().filter_map(|argument| {
+        argument
+            .strip_prefix("-i")
+            .filter(|path| !path.is_empty())
+            .map(str::to_owned)
+    }));
     for path in declared {
-        let path = scope.resolve(std::path::Path::new(&path))?;
-        if !path.is_dir() {
-            return Err(invalid("include path must be an existing directory"));
-        }
+        let path = include_directory(scope, std::path::Path::new(&path))?;
         if !includes.contains(&path) {
             includes.push(path);
         }
@@ -265,7 +323,7 @@ pub fn build_configuration(
     Ok(BuildConfiguration {
         entry,
         includes,
-        arguments: strings(&chosen, "args")?,
+        arguments,
         defines,
     })
 }
@@ -330,7 +388,19 @@ pub fn preview(
     };
     let paths: Vec<_> = includes
         .iter()
-        .map(|path| relative(std::path::Path::new(path)))
+        .map(|path| {
+            let path = include_directory(scope, std::path::Path::new(path))?;
+            let value = path
+                .strip_prefix(scope.root())
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            Ok(if value.is_empty() {
+                ".".to_owned()
+            } else {
+                value
+            })
+        })
         .collect::<io::Result<_>>()?;
     let configuration = serde_json::json!({
         "entry": relative(&entry)?, "preset": preset, "experimental": {"build_file": false},
@@ -419,13 +489,30 @@ mod tests {
         let outside = tempfile::tempdir().unwrap();
         fs::write(outside.path().join("outside.pwn"), "main() {}").unwrap();
         assert!(preview(&scope, &outside.path().join("outside.pwn"), "openmp", &[]).is_err());
+        let configuration = build_configuration(
+            &scope,
+            &json!({"entry": "main.pwn", "include_path": outside.path()}),
+            "",
+        )
+        .unwrap();
         assert!(
-            build_configuration(
+            configuration
+                .includes
+                .contains(&workspace::canonical(outside.path()).unwrap())
+        );
+        let preview: Value = serde_json::from_str(
+            &preview(
                 &scope,
-                &json!({"entry": "main.pwn", "include_path": outside.path()}),
-                ""
+                &root.path().join("main.pwn"),
+                "openmp",
+                &[outside.path().to_string_lossy().into_owned()],
             )
-            .is_err()
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            std::path::Path::new(preview["pawnkit"]["includePaths"][0].as_str().unwrap())
+                .is_absolute()
         );
     }
 
@@ -444,6 +531,66 @@ mod tests {
             json!({"entry": "main.pwn", "builds": [{"name": "x"}, {"name": "x"}]}),
         ] {
             assert!(build_configuration(&scope, &value, "").is_err());
+        }
+    }
+
+    #[test]
+    fn shared_sdk_includes_support_absolute_relative_and_named_build_paths() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("project");
+        let sdk = parent.path().join("shared SDK");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&sdk).unwrap();
+        fs::write(root.join("main.pwn"), "main() {}\n").unwrap();
+        fs::write(sdk.join("header.inc"), "stock Helper() {}\n").unwrap();
+        let scope = Workspace::open(&root).unwrap();
+        let sdk = workspace::canonical(&sdk).unwrap();
+        for configuration in [
+            json!({"entry":"main.pwn", "include_path":sdk}),
+            json!({"entry":"main.pwn", "pawnkit":{"includePaths":["../shared SDK"]}}),
+            json!({"entry":"main.pwn", "build":{"includes":[sdk.clone()]}}),
+            json!({"entry":"main.pwn", "build":{"args":["-i../shared SDK"]}}),
+            json!({"entry":"main.pwn", "builds":[{"name":"release", "includes":["../shared SDK"]}]}),
+        ] {
+            let build = build_configuration(&scope, &configuration, "").unwrap();
+            assert!(build.includes.contains(&sdk));
+        }
+        assert!(include_directory(&scope, &sdk.join("missing")).is_err());
+        assert!(include_directory(&scope, &sdk.join("header.inc")).is_err());
+        // Include inputs do not expand the workspace's source/output authority.
+        assert!(scope.resolve(&sdk).is_err());
+        assert!(scope.new_child(&sdk, "output").is_err());
+        fs::write(sdk.join("outside.pwn"), "main() {}\n").unwrap();
+        assert!(
+            build_configuration(&scope, &json!({"entry":sdk.join("outside.pwn")}), "").is_err()
+        );
+    }
+
+    #[test]
+    fn include_navigation_only_authorizes_files_under_declared_sdk_roots() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("workspace");
+        let project = root.join("nested");
+        let sdk = parent.path().join("shared SDK");
+        let other = parent.path().join("shared SDK-other");
+        for directory in [&root, &project, &sdk, &other] {
+            fs::create_dir(directory).unwrap();
+        }
+        fs::write(project.join("main.pwn"), "main() {}\n").unwrap();
+        fs::write(sdk.join("shared.inc"), "stock Shared() {}\n").unwrap();
+        fs::write(other.join("private.inc"), "private\n").unwrap();
+        fs::write(project.join("pawn.json"), serde_json::to_vec(&json!({"entry":"main.pwn", "builds":[{"name":"local"},{"name":"sdk","includes":[sdk]}]})).unwrap()).unwrap();
+        let scope = Workspace::open(&root).unwrap();
+        let header = workspace::canonical(&sdk.join("shared.inc")).unwrap();
+        assert_eq!(include_document(&scope, &header).unwrap(), header);
+        assert!(include_document(&scope, &other.join("private.inc")).is_err());
+        assert!(include_document(&scope, &sdk).is_err());
+        assert!(scope.resolve(&header).is_err());
+        #[cfg(unix)]
+        {
+            let escape = sdk.join("escape.inc");
+            std::os::unix::fs::symlink(other.join("private.inc"), &escape).unwrap();
+            assert!(include_document(&scope, &escape).is_err());
         }
     }
 

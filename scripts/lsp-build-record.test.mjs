@@ -27,6 +27,7 @@ test("local tool cache validates actual hash, pinned source/patch and compiler m
     { sourceCommit: "stale" },
     { sourceSha256: "wrong" },
     { patchSha256: "wrong" },
+    { modulePatchSha256: "wrong" },
     { version: "wrong" },
     { goVersion: "go1.26.4" },
     { target: "windows/arm64" },

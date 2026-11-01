@@ -1,0 +1,52 @@
+--- a/vendor/github.com/pawnkit/pawn-project/paths/paths.go
++++ b/vendor/github.com/pawnkit/pawn-project/paths/paths.go
+@@ -62,9 +62,11 @@
+ 	seen := make(map[string]bool)
+ 
+ 	for _, rel := range m.EffectiveIncludePaths() {
+-		p, err := pathutil.SafeJoin(root, rel)
+-		if err != nil {
+-			return Resolved{}, err
++		// Includes are read-only analysis inputs and may belong to a shared SDK.
++		// Entry/output resolution above deliberately remains workspace-scoped.
++		p := pathutil.Clean(rel)
++		if !pathutil.IsAbs(p) {
++			p = pathutil.Join(root, p)
+ 		}
+ 
+ 		if !seen[p] {
+--- /dev/null
++++ b/vendor/github.com/pawnkit/pawn-project/paths/ompide_external_includes_test.go
+@@ -0,0 +1,32 @@
++package paths
++
++import (
++	"github.com/pawnkit/pawn-project/manifest"
++	"testing"
++)
++
++func TestExternalSDKInputsPreserveSourceAndOutputBoundary(t *testing.T) {
++	for _, tc := range []struct{ root, include, want string }{
++		{"/project", "../shared SDK", "/shared SDK"},
++		{"/project", "/opt/shared SDK", "/opt/shared SDK"},
++		{"C:/project", `..\shared SDK`, "C:/shared SDK"},
++		{"C:/project", `D:\SDK\include`, "D:/SDK/include"},
++	} {
++		t.Run(tc.root+tc.include, func(t *testing.T) {
++			m := &manifest.Manifest{Entry: "main.pwn", IncludePath: tc.include}
++			result, err := Resolve(tc.root, m)
++			if err != nil || len(result.IncludeRoots) != 1 || result.IncludeRoots[0] != tc.want {
++				t.Fatalf("result=%+v err=%v", result, err)
++			}
++			m.Entry = "../outside.pwn"
++			if _, err := Resolve(tc.root, m); err == nil {
++				t.Fatal("external entry accepted")
++			}
++			m.Entry = "main.pwn"
++			m.Output = "../outside.amx"
++			if _, err := Resolve(tc.root, m); err == nil {
++				t.Fatal("external output accepted")
++			}
++		})
++	}
++}
