@@ -271,10 +271,11 @@ export function ThemePicker({ close }: { close: () => void }) {
           }
         }}
       />
-      <div className="settings-tool-actions">
+      <div className="settings-tool-actions theme-picker-actions">
         <button
           type="button"
           disabled={busy}
+          aria-pressed={!online}
           onClick={() => {
             setOnline(false);
             setSelected(0);
@@ -282,7 +283,12 @@ export function ThemePicker({ close }: { close: () => void }) {
         >
           {t("theme.installed")}
         </button>
-        <button type="button" disabled={busy} onClick={() => void search()}>
+        <button
+          type="button"
+          disabled={busy}
+          aria-pressed={online}
+          onClick={() => void search()}
+        >
           {t("theme.searchOnline")}
         </button>
         <button

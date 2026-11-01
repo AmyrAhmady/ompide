@@ -82,9 +82,23 @@ function SettingsDialog({
     <Modal label={t("settings.title")} onCancel={close}>
       <h2>{t("settings.title")}</h2>
       <div className="settings-fields">
-        <button type="button" onClick={themes}>
-          {t("theme.select")}: {selectedTheme(settings).name}
-        </button>
+        <label htmlFor="settings-color-theme">
+          {t("settings.theme")}
+          <button
+            id="settings-color-theme"
+            className="settings-theme-select"
+            type="button"
+            aria-haspopup="dialog"
+            aria-label={`${t("theme.select")}: ${selectedTheme(settings).name}`}
+            title={selectedTheme(settings).name}
+            onClick={themes}
+          >
+            <span>{selectedTheme(settings).name}</span>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m4 6 4 4 4-4" />
+            </svg>
+          </button>
+        </label>
         <ThemeSettings settings={settings} />
         <label>
           {t("settings.fontFamily")}

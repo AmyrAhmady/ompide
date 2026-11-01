@@ -808,12 +808,39 @@ dialog footer button.primary {
   gap: 35px;
 }
 .settings-fields input:not([type="checkbox"]),
-.settings-fields select {
+.settings-fields select,
+.settings-theme-select {
   background: var(--input-background);
   color: var(--input-foreground);
   border: 1px solid var(--input-border);
   padding: 5px;
   width: 230px;
+}
+.settings-theme-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 30px;
+  flex-shrink: 0;
+  text-align: left;
+}
+.settings-theme-select span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-theme-select svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.settings-theme-select:hover {
+  background: var(--list-hoverBackground);
 }
 .settings-fields label.checkbox {
   justify-content: flex-start;
@@ -1294,6 +1321,19 @@ dialog footer button.primary {
 .theme-picker-dialog {
   width: min(660px, 85vw);
   margin-top: 55px;
+}
+.theme-picker-actions {
+  margin-top: 10px;
+}
+.theme-picker-actions button {
+  min-height: 30px;
+  white-space: nowrap;
+}
+.theme-picker-actions button:hover:enabled {
+  background: var(--list-hoverBackground);
+}
+.theme-picker-actions button[aria-pressed="true"] {
+  border-color: var(--focusBorder);
 }
 .theme-options {
   max-height: 45vh;
