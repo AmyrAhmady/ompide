@@ -1,21 +1,22 @@
 import { t } from "../lib/i18n";
 import type { Layout } from "../settings/layout";
+import { Icon } from "./Icon";
 
 const views = [
   {
     id: "explorer",
     label: "explorer.title",
-    path: "M8 3h8l5 5v13H8z M3 7v14a3 3 0 0 0 3 3 M16 3v6h5",
+    icon: "files",
   },
   {
     id: "search",
     label: "search.title",
-    path: "M20 20l-5-5 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0",
+    icon: "search",
   },
   {
     id: "sourceControl",
     label: "scm.title",
-    path: "M6 8v8 M18 8v3a5 5 0 0 1-5 5H6 M9 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M21 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M9 19a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
+    icon: "sourceControl",
   },
 ] as const;
 
@@ -65,17 +66,7 @@ export function ActivityBar({
           disabled={!ready}
           onClick={() => select(view.id)}
         >
-          <svg
-            width="25"
-            height="25"
-            viewBox="0 0 26 26"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <path d={view.path} />
-          </svg>
+          <Icon name={view.icon} size={24} />
         </button>
       ))}
     </nav>

@@ -372,6 +372,7 @@
   "help.authorGithub": "AmyrAhmady on GitHub",
   "help.createdBy": "Created by {name}.",
   "help.builtWith": "Built with Tauri, React, Monaco Editor, xterm.js, pawnlsp and the open.mp compiler. Thanks to their contributors.",
+  "help.icons": "File icons: Seti UI by Jesse Weed and Microsoft (MIT). Control icons: Codicons by Microsoft and contributors (CC BY 4.0), used without modification. Source: https://github.com/microsoft/vscode-codicons. License: https://creativecommons.org/licenses/by/4.0/.",
   "help.support": "If ompide makes your work easier, you can support its development.",
   "help.close": "Close",
   "error.openLinkFailed": "The link could not be opened. Check your default browser and try again.",

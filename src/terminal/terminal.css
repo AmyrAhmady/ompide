@@ -40,12 +40,6 @@
 .terminal-toolbar select:hover {
   background: var(--toolbar-buttonHoverBackground);
 }
-.terminal-toolbar svg {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
-  fill: none;
-}
 .terminal-surface {
   flex: 1;
   min-height: 0;

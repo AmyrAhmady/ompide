@@ -1,5 +1,7 @@
 import { WindowControls } from "./components/WindowControls";
 import { AppLogo } from "./components/AppLogo";
+import { Icon } from "./components/Icon";
+import { FileIcon } from "./components/FileIcon";
 import { TerminalPanel, type TerminalActions } from "./terminal/TerminalPanel";
 import { ActivityBar } from "./components/ActivityBar";
 import { SourceControlPanel } from "./sourceControl/SourceControlPanel";
@@ -94,9 +96,7 @@ function SettingsDialog({
             onClick={themes}
           >
             <span>{selectedTheme(settings).name}</span>
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="m4 6 4 4 4-4" />
-            </svg>
+            <Icon name="chevronDown" />
           </button>
         </label>
         <ThemeSettings settings={settings} />
@@ -768,6 +768,7 @@ function App() {
     <main
       ref={shell}
       className="workbench"
+      data-color-scheme={themeBase(selectedTheme(displaySettings))}
       style={
         {
           ...themeVariables(selectedTheme(displaySettings)),
@@ -909,7 +910,7 @@ function App() {
             onClick={workbench.dismissError}
             aria-label={t("command.dismiss")}
           >
-            ×
+            <Icon name="close" />
           </button>
         </div>
       )}
@@ -1009,9 +1010,7 @@ function App() {
                     workbench.activate(tab.uri);
                   }}
                 >
-                  <span className="file-icon" aria-hidden="true">
-                    #
-                  </span>
+                  <FileIcon name={tab.name} />
                   {tab.name}
                 </button>
                 <button
@@ -1021,7 +1020,7 @@ function App() {
                   aria-label={t("editor.closeTab", { name: tab.name })}
                   title={tab.dirty ? t("editor.dirty") : t("command.close")}
                 >
-                  {tab.dirty ? "●" : "×"}
+                  <Icon name={tab.dirty ? "circleFilled" : "close"} />
                 </button>
               </div>
             ))}
@@ -1224,7 +1223,7 @@ function App() {
                     aria-label={t("panel.close")}
                     onClick={() => setPanel(layout.panel, false)}
                   >
-                    ×
+                    <Icon name="close" />
                   </button>
                 </div>
               </div>
@@ -1261,7 +1260,11 @@ function App() {
                                 }
                                 aria-hidden="true"
                               >
-                                ●
+                                <Icon
+                                  name={
+                                    problem.severity === 8 ? "error" : "warning"
+                                  }
+                                />
                               </span>
                               <span>{problem.message}</span>
                               <small>

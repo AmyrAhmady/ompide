@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "ompide-seti";
+  src: url("./components/icons/seti/seti.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+.app-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+  background: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
 * {
   box-sizing: border-box;
 }
@@ -417,7 +433,9 @@ hr {
   background: var(--list-activeSelectionBackground);
 }
 .tree-chevron {
-  width: 9px;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 .explorer-tools {
@@ -479,8 +497,17 @@ hr {
   font-size: 12px;
 }
 .file-icon {
-  color: var(--focusBorder);
-  padding-right: 3px;
+  display: inline-block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  font: normal 20px/16px "ompide-seti";
+  font-synthesis: none;
+  text-align: center;
+  color: var(--file-icon-dark);
+}
+[data-color-scheme="light"] .file-icon {
+  color: var(--file-icon-light);
 }
 .explorer-empty {
   padding: 0 14px;
@@ -830,14 +857,6 @@ dialog footer button.primary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.settings-theme-select svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
 }
 .settings-theme-select:hover {
   background: var(--list-hoverBackground);

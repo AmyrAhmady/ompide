@@ -1,3 +1,4 @@
+import { Icon } from "../components/Icon";
 import { memo, useEffect, useRef, useState } from "react";
 import { editor } from "monaco-editor";
 import { workbench } from "../app/workbench";
@@ -212,10 +213,10 @@ function SearchPanelView({
             aria-label={t("search.refresh")}
             title={t("search.refresh")}
           >
-            ↻
+            <Icon name="refresh" />
           </button>
           <button type="button" onClick={close} aria-label={t("search.close")}>
-            ×
+            <Icon name="close" />
           </button>
         </div>
       </div>

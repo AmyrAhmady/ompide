@@ -11,6 +11,8 @@ import {
   withinPath,
 } from "../lib/paths";
 import { Modal } from "../components/Modal";
+import { Icon } from "../components/Icon";
+import { FileIcon } from "../components/FileIcon";
 
 type Action = "file" | "folder" | "rename" | "trash";
 type Request = { action: Action; entry: Entry };
@@ -522,7 +524,7 @@ function ExplorerView({
             disabled={!parent || busy || parent.symlink}
             onClick={() => choose("file", parent)}
           >
-            ＋
+            <Icon name="newFile" />
           </button>
           <button
             type="button"
@@ -531,7 +533,7 @@ function ExplorerView({
             disabled={!parent || busy || parent.symlink}
             onClick={() => choose("folder", parent)}
           >
-            ▱+
+            <Icon name="newFolder" />
           </button>
           <button
             type="button"
@@ -542,7 +544,7 @@ function ExplorerView({
               if (activePath) revealPath(activePath);
             }}
           >
-            ◎
+            <Icon name="target" />
           </button>
           <button
             type="button"
@@ -551,7 +553,7 @@ function ExplorerView({
             disabled={!root || busy}
             onClick={refresh}
           >
-            ↻
+            <Icon name="refresh" />
           </button>
         </div>
       </div>
@@ -630,19 +632,23 @@ function ExplorerView({
                         }}
                       >
                         <span className="tree-chevron" aria-hidden="true">
-                          {entry.directory
-                            ? expanded.has(pathKey(entry.path))
-                              ? "⌄"
-                              : "›"
-                            : ""}
+                          {entry.directory && (
+                            <Icon
+                              name={
+                                expanded.has(key)
+                                  ? "chevronDown"
+                                  : "chevronRight"
+                              }
+                            />
+                          )}
                         </span>
-                        <span className="file-icon" aria-hidden="true">
-                          {entry.directory
-                            ? "▱"
-                            : entry.name.endsWith(".inc")
-                              ? "#"
-                              : "⋮"}
-                        </span>
+                        {entry.directory ? (
+                          <Icon
+                            name={expanded.has(key) ? "folderOpened" : "folder"}
+                          />
+                        ) : (
+                          <FileIcon name={entry.name} />
+                        )}
                         <span>{entry.name}</span>
                       </button>
                       {entry.directory &&

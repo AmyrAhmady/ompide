@@ -53,6 +53,7 @@ export function CreditsDialog({ close }: { close: () => void }) {
         <CreditLink link="author">{t("help.authorGithub")}</CreditLink>
       </p>
       <p>{t("help.builtWith")}</p>
+      <p>{t("help.icons")}</p>
       <p>{t("help.support")}</p>
       <p>
         <CreditLink link="donate">{t("help.donate")}</CreditLink>

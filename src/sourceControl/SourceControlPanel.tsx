@@ -1,3 +1,4 @@
+import { Icon } from "../components/Icon";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { native, desktop } from "../lib/native";
 import { t, type TranslationKey } from "../lib/i18n";
@@ -270,7 +271,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   })
                 }
               >
-                {staged ? "−" : "+"}
+                <Icon name={staged ? "remove" : "add"} />
               </button>
             </li>
           ))}

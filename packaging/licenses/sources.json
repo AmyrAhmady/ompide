@@ -43,5 +43,10 @@
     "file": "mpl-2.0.txt",
     "source": "LICENSE (Mozilla Public License 2.0)",
     "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+  },
+  {
+    "file": "seti.txt",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/6f269fc1b4cd8c8bb21902842cc7567a5c67ec00/extensions/theme-seti/ThirdPartyNotices.txt",
+    "sha256": "c67ddfeba3a0aaffe9e9f7165c155c06de5c8db609a92b3a1a29ee6ab316a0bb"
   }
 ]

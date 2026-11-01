@@ -14,6 +14,7 @@ import type { ShellProfile } from "./types";
 import { createSession, type TerminalSession } from "./session";
 import "@xterm/xterm/css/xterm.css";
 import "./terminal.css";
+import { Icon } from "../components/Icon";
 
 export interface TerminalActions {
   create: () => void;
@@ -198,7 +199,7 @@ export const TerminalPanel = forwardRef<
               title={t("terminal.new")}
               aria-label={t("terminal.new")}
             >
-              +
+              <Icon name="add" />
             </button>
             {sessions.length > 0 && (
               <>
@@ -224,9 +225,7 @@ export const TerminalPanel = forwardRef<
                   title={t("terminal.kill")}
                   onClick={() => current && close(current)}
                 >
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M3 4h10M6 4V2h4v2M4 4l1 10h6l1-10M7 6v6m2-6v6" />
-                  </svg>
+                  <Icon name="trash" />
                 </button>
               </>
             )}
@@ -241,7 +240,7 @@ export const TerminalPanel = forwardRef<
             aria-label={t("command.dismiss")}
             onClick={() => setError("")}
           >
-            ×
+            <Icon name="close" />
           </button>
         </div>
       )}

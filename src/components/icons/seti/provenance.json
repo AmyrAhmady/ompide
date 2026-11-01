@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/microsoft/vscode",
+  "commit": "6f269fc1b4cd8c8bb21902842cc7567a5c67ec00",
+  "files": {
+    "icon-theme.json": {
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/6f269fc1b4cd8c8bb21902842cc7567a5c67ec00/extensions/theme-seti/icons/vs-seti-icon-theme.json",
+      "sha256": "905f27f67b3db49ac02093f12fa41810fb44d03efea94dd13acd2553fbfc4c12",
+      "sourceSha256": "2088843e6f00a81870ed2890132fb658cf33406177a5dd58c9c7001e5184ca2a",
+      "processing": "JSON whitespace formatted with Prettier; associations unchanged"
+    },
+    "seti.woff": {
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/6f269fc1b4cd8c8bb21902842cc7567a5c67ec00/extensions/theme-seti/icons/seti.woff",
+      "sha256": "b127762058f89b37b08d76185e3b0558f5c28859e39a3840a27cb28b9739d6e2"
+    }
+  }
+}
