@@ -162,7 +162,7 @@ jobs:
           if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
             printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
           fi
-          pacman -Syu --noconfirm --needed base-devel git nodejs gtk3 webkit2gtk-4.1 libxdo lib32-glibc hicolor-icon-theme xorg-server-xvfb xorg-xwininfo xorg-xauth
+          pacman -Syu --noconfirm --needed base-devel git nodejs gtk3 webkit2gtk-4.1 xdotool lib32-glibc hicolor-icon-theme xorg-server-xvfb xorg-xwininfo xorg-xauth
           useradd --create-home ompide-build
 
       - name: Check out packaging scripts

@@ -1,4 +1,4 @@
-ompide {version} — Linux x64 portable archive
+ompide {version} â€” Linux x64 portable archive
 
 Extract the entire ZIP into a folder, then run:
 
@@ -27,7 +27,7 @@ On Ubuntu 22.04 or newer:
 
 On Arch Linux, enable the multilib repository, then install:
 
-  sudo pacman -S gtk3 webkit2gtk-4.1 libxdo lib32-glibc
+  sudo pacman -S gtk3 webkit2gtk-4.1 xdotool lib32-glibc
 
 Separate .deb and Arch .pkg.tar.zst packages are also produced by CI. Install
 those with apt or pacman respectively. The Arch package requires multilib too.
