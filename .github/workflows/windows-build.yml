@@ -90,10 +90,7 @@ jobs:
           npm run test:release
 
       - name: Prepare checksum-verified bundled tools
-        run: |
-          "OMPIDE_GO=$((Get-Command go).Source)" >> $env:GITHUB_ENV
-          $env:OMPIDE_GO = (Get-Command go).Source
-          npm.cmd run tools:prepare -- --download --reproducible
+        run: npm.cmd run tools:prepare -- --download --reproducible
 
       - name: Check native formatting, lint and tests
         run: |

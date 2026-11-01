@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { goExecutableArgument } from "./go-toolchain.mjs";
 import { removeTemporary } from "./release-support.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -19,6 +20,7 @@ const manifest = JSON.parse(
   await readFile(path.join(root, "toolchain/tools.json"), "utf8")
 );
 const download = process.argv.includes("--download");
+const go = goExecutableArgument(process.argv.slice(2));
 const cache = path.join(root, ".tools-cache");
 const binaries = path.join(root, "src-tauri/binaries");
 if (process.platform !== "win32" || process.arch !== "x64") {
@@ -37,6 +39,7 @@ for (const tool of manifest.tools) {
         path.join(root, "scripts/build-pawnlsp.mjs"),
         ...(download ? ["--download"] : []),
         ...(process.argv.includes("--reproducible") ? ["--reproducible"] : []),
+        ...(go ? ["--go", go] : []),
       ],
       { cwd: root, stdio: "inherit", windowsHide: true }
     );

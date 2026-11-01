@@ -18,6 +18,7 @@ import {
   selectGo,
   goBuildEnvironment,
   goModuleDirectory,
+  goExecutableArgument,
 } from "./go-toolchain.mjs";
 import { localBuildMatches, buildRecord } from "./lsp-build-record.mjs";
 
@@ -68,6 +69,15 @@ if (!process.argv.includes("--rebuild")) {
     if (error.code !== "ENOENT") throw error;
   }
 }
+const environment = goBuildEnvironment(process.env, download, reproducible);
+const { executable: go, version: goVersion } = await selectGo({
+  executable: goExecutableArgument(process.argv.slice(2)),
+  version: pin.minimumGoVersion,
+  exactVersion: reproducible ? pin.goVersion : undefined,
+  environment,
+});
+console.log(`Using ${goVersion} : ${go}`);
+
 await mkdir(cache, { recursive: true });
 const archive = path.join(cache, pin.source.archive);
 let bytes;
@@ -95,21 +105,6 @@ if (sha256(bytes) !== pin.source.sha256)
 const patch = path.join(root, "toolchain", pin.patch.path);
 if (sha256(await readFile(patch)) !== pin.patch.sha256)
   throw new Error("Source patch checksum mismatch");
-const environment = goBuildEnvironment(process.env, download);
-const {
-  executable: go,
-  source: goSource,
-  version: goVersion,
-} = await selectGo({
-  override: process.env.OMPIDE_GO,
-  searchPath: process.env.PATH,
-  cached: path.join(cache, `${pin.goVersion}/bin/go.exe`),
-  version: pin.minimumGoVersion,
-  exactVersion: reproducible ? pin.goVersion : undefined,
-  checksum: pin.developmentGoDistribution.executableSha256,
-  environment,
-});
-console.log(`Using ${goVersion} from ${goSource}: ${go}`);
 const staging = await mkdtemp(path.join(cache, "pawnlsp-build-"));
 try {
   const prefix = `pawnlsp-${pin.source.commit}`;

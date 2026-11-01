@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { copyPackageNotices } from "./release-notices.mjs";
+import { copyPackageNotices, npmPackages } from "./release-notices.mjs";
 import {
   listFiles,
   peInfo,
@@ -180,7 +180,7 @@ test(
   async () => {
     const { directory, cleanup } = await fixture();
     try {
-      const locate = (installation) =>
+      const locate = (installation, environment = {}) =>
         JSON.parse(
           execFileSync(
             "powershell.exe",
@@ -191,7 +191,12 @@ test(
               path.join(projectRoot, "scripts/find-vc-runtime.ps1"),
               ...(installation ? ["-InstallationPath", installation] : []),
             ],
-            { windowsHide: true, encoding: "utf8", stdio: "pipe" }
+            {
+              windowsHide: true,
+              encoding: "utf8",
+              stdio: "pipe",
+              env: { ...process.env, ...environment },
+            }
           )
         );
       const installed = locate();
@@ -214,6 +219,10 @@ test(
         const found = locate(installation);
         assert.equal(found.path, expected);
         assert.equal(found.version, installed.version);
+        assert.equal(
+          locate(undefined, { VSINSTALLDIR: installation }).path,
+          expected
+        );
         assert.match(found.signer, /O=Microsoft Corporation/);
       }
     } finally {
@@ -304,4 +313,17 @@ test("PE imports resolve section-relative addresses and reject an invalid DLL po
   });
   bytes.writeUInt32LE(0x9000, 0x20c);
   assert.throws(() => peInfo(bytes), /outside the executable/);
+});
+
+test("npm notices use the npm invocation or normal system command instead of a guessed installation path", () => {
+  const calls = [];
+  const run = (...args) => {
+    calls.push(args);
+    return "[]";
+  };
+  npmPackages({}, { npm_execpath: "custom-npm-cli.js" }, run);
+  assert.equal(calls[0][0], process.execPath);
+  assert.equal(calls[0][1][0], "custom-npm-cli.js");
+  npmPackages({}, {}, run);
+  assert.equal(calls[1][0], process.platform === "win32" ? "cmd.exe" : "npm");
 });

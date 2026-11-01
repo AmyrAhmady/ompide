@@ -6,12 +6,17 @@ $ErrorActionPreference = 'Stop'
 # Use this PowerShell installation's module when launched from PowerShell 7/Node.
 Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
 if (-not $InstallationPath) {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-    if (-not (Test-Path -LiteralPath $vswhere)) {
-        throw 'Visual Studio C++ Build Tools and its redistributable files are required to package the compiler.'
+    if ($env:VSINSTALLDIR -and (Test-Path -LiteralPath $env:VSINSTALLDIR -PathType Container)) {
+        $InstallationPath = @($env:VSINSTALLDIR)
+    } else {
+        $command = Get-Command vswhere.exe -CommandType Application -ErrorAction SilentlyContinue
+        $vswhere = if ($command) { $command.Source } else { Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe' }
+        if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw 'Visual Studio C++ Build Tools and its redistributable files are required to package the compiler. Use a Visual Studio developer shell or install vswhere.'
+        }
+        $InstallationPath = @(& $vswhere -all -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+        if ($LASTEXITCODE -ne 0 -or -not $InstallationPath) { throw 'Visual Studio C++ Build Tools was not found.' }
     }
-    $InstallationPath = @(& $vswhere -all -version '[17.0,19.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
-    if ($LASTEXITCODE -ne 0 -or -not $InstallationPath) { throw 'Visual Studio 2022/2026 C++ Build Tools was not found.' }
 }
 # Support numeric version directories and v143/v145 aliases, without searching
 # debug_nonredist, onecore or other architectures. Both toolsets use vcruntime140.

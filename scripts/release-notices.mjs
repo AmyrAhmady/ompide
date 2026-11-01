@@ -16,6 +16,25 @@ const legalName =
   /^(licen[cs]e|copying|notice|copyright|third[-_ ]?party.*notices)(?:$|[._ -])/i;
 const legalDirectory = /^(licenses?|legal|notices)$/i;
 
+export function npmPackages(
+  options,
+  environment = process.env,
+  run = execFileSync
+) {
+  const args = ["query", ":not(.dev)", "--json"];
+  const output = environment.npm_execpath
+    ? run(process.execPath, [environment.npm_execpath, ...args], options)
+    : process.platform === "win32"
+      ? // cmd is needed for npm.cmd shims. The command is fixed and contains no user input.
+        run(
+          environment.ComSpec || "cmd.exe",
+          ["/d", "/s", "/c", 'npm.cmd query ":not(.dev)" --json'],
+          { ...options, windowsVerbatimArguments: true }
+        )
+      : run("npm", args, options);
+  return JSON.parse(output);
+}
+
 export async function copyPackageNotices(
   directory,
   destination,
@@ -97,25 +116,13 @@ export async function applicationNotices(destination, target) {
     path.join(supplemental, "sources.json"),
     path.join(destination, "supplemental/sources.json")
   );
-  const npm =
-    process.env.npm_execpath ||
-    path.join(
-      path.dirname(process.execPath),
-      "node_modules/npm/bin/npm-cli.js"
-    );
   const options = {
     cwd: projectRoot,
     encoding: "utf8",
     windowsHide: true,
     maxBuffer: 32 * 1024 * 1024,
   };
-  const packages = JSON.parse(
-    execFileSync(
-      process.execPath,
-      [npm, "query", ":not(.dev)", "--json"],
-      options
-    )
-  );
+  const packages = npmPackages(options);
   const inventory = [];
   const seen = new Set();
   for (const pkg of packages) {

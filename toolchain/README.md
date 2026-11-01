@@ -47,9 +47,9 @@ versions; Go 1.27.3 passed the upstream tests and our real LSP integration check
 `scripts/build-pawnlsp.mjs` verifies source and patch checksums, checks that the
 recorded minimum agrees with upstream go.mod, verifies canonical dependency trees,
 runs upstream tests and builds with CGO disabled, trimmed paths and an empty build
-identifier. Compiler selection checks OMPIDE_GO, compatible installations on PATH,
-then the checksum-verified Go 1.26.5 cache. Explicit invalid overrides fail with a
-useful error. GOTOOLCHAIN=local prevents automatic compiler downloads. Neither
+identifier. The compiler is the normal `go` command on PATH. There is no private
+Go environment variable or cached-compiler fallback. An optional `--go <path>`
+selects a compiler explicitly when reproducing a release. GOTOOLCHAIN=local prevents automatic compiler downloads. Neither
 opening workspaces nor preparation downloads Go itself.
 
 Go uses its normal `GOPATH`, `GOMODCACHE` and `GOCACHE` defaults or your configured
@@ -79,7 +79,7 @@ complete source trees must match the original canonical module checksums, in
 addition to Go's normal module verification. Versions and sources remain pinned.
 
 ```powershell
-# Uses compatible Go from PATH; OMPIDE_GO is an optional explicit override.
+# Uses the installed Go command on PATH.
 npm.cmd run tools:build-lsp -- --download
 # Force a local rebuild with the selected compatible compiler:
 npm.cmd run tools:build-lsp -- --rebuild
@@ -88,6 +88,11 @@ npm.cmd run tools:build-lsp -- --rebuild --reproducible
 ```
 
 The shipped notices include PawnKit's MIT license and the Go BSD license.
+
+Build-script discovery also uses npm's standard invocation metadata or the npm
+command on PATH, and the Visual Studio developer-shell configuration or vswhere
+to locate C++ redistributables. It does not assume an npm directory beside Node
+or cap supported Visual Studio installation versions.
 
 ## Protocol and compiler verification
 

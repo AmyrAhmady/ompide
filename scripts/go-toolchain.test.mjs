@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -9,132 +6,54 @@ import {
   goAtLeast,
   goBuildEnvironment,
   goModuleDirectory,
+  goExecutableArgument,
 } from "./go-toolchain.mjs";
 
-async function fixture(t) {
-  const directory = await mkdtemp(path.join(tmpdir(), "ompide-go-selection-"));
-  t.after(async () => {
-    assert.equal(path.dirname(directory), path.resolve(tmpdir()));
-    assert.ok(path.basename(directory).startsWith("ompide-go-selection-"));
-    await rm(directory, { recursive: true, force: true });
-  });
-  const installed = path.join(directory, "installed Go");
-  await mkdir(installed);
-  const system = path.join(installed, "go.exe");
-  const cached = path.join(directory, "cached-go.exe");
-  const bytes = Buffer.from("cached compiler fixture");
-  await writeFile(system, "system compiler fixture");
-  await writeFile(cached, bytes);
-  return {
-    directory,
-    system,
-    options: {
-      searchPath: installed,
-      cached,
-      version: "go1.26.5",
-      checksum: createHash("sha256").update(bytes).digest("hex"),
-      environment: { GOTOOLCHAIN: "auto" },
-    },
-  };
-}
-
-test("uses installed Go before an absent cache and prevents implicit toolchain downloads", async (t) => {
-  const { system, options, directory } = await fixture(t);
-  options.cached = path.join(directory, "not-installed.exe");
-  const result = await selectGo(options, (executable, args, settings) => {
-    assert.equal(executable, system);
-    assert.deepEqual(args, ["version"]);
-    assert.equal(settings.env.GOTOOLCHAIN, "local");
-    assert.equal(settings.windowsHide, true);
-    return "go version go1.26.5 windows/amd64\r\n";
-  });
-  assert.deepEqual(result, {
-    executable: system,
-    source: "PATH",
-    version: "go1.26.5",
-  });
+test("uses normal system command lookup without private environment variables or caches", async () => {
+  const result = await selectGo(
+    { version: "go1.26.5", environment: {} },
+    (exe, args, options) => {
+      assert.equal(exe, "go");
+      assert.deepEqual(args, ["version"]);
+      assert.equal(options.env.GOTOOLCHAIN, "local");
+      return "go version go1.27.3 windows/amd64";
+    }
+  );
+  assert.deepEqual(result, { executable: "go", version: "go1.27.3" });
 });
-
-test("explicit override wins and an invalid override does not silently fall back", async (t) => {
-  const { options } = await fixture(t);
-  options.override = "explicit-go.exe";
-  const result = await selectGo(options, (executable) => {
-    assert.equal(executable, "explicit-go.exe");
-    return "go version go1.26.5 windows/amd64";
-  });
-  assert.equal(result.source, "OMPIDE_GO");
-  await assert.rejects(
-    selectGo(options, () => "go version go1.26.4 windows/amd64"),
-    /OMPIDE_GO must point/
+test("allows an explicit compiler path without making it a setup requirement", async () => {
+  const executable = path.resolve("custom Go", "bin/go.exe");
+  assert.equal(
+    (
+      await selectGo(
+        { executable, version: "go1.26.5", environment: {} },
+        (exe) => {
+          assert.equal(exe, executable);
+          return "go version go1.26.5 windows/amd64";
+        }
+      )
+    ).executable,
+    executable
   );
 });
-
-test("falls back from an incompatible system compiler to a checksum-verified cache", async (t) => {
-  const { system, options } = await fixture(t);
-  const result = await selectGo(options, (executable) =>
-    executable === system
-      ? "go version go1.26.4 windows/amd64"
-      : "go version go1.26.5 windows/amd64"
-  );
-  assert.deepEqual(result, {
-    executable: options.cached,
-    source: "cache",
-    version: "go1.26.5",
-  });
-});
-
-test("rejects a corrupt cache without running it", async (t) => {
-  const { options } = await fixture(t);
-  options.searchPath = "";
-  options.checksum = "0".repeat(64);
-  await assert.rejects(
-    selectGo(options, () => {
-      throw new Error("must not execute corrupt Go");
-    }),
-    /Cached Go executable checksum mismatch/
-  );
-});
-
-test("reports missing tools and rejects the wrong architecture or version suffix", async (t) => {
-  const { options, directory } = await fixture(t);
-  options.searchPath = "";
-  options.cached = path.join(directory, "missing.exe");
-  await assert.rejects(
-    selectGo(options),
-    /Install it on PATH or set OMPIDE_GO/
-  );
-  options.override = "explicit-go.exe";
-  for (const actual of [
-    "go version go1.26.5 windows/arm64",
+test("reports missing, old, prerelease and wrong-architecture system compilers", async () => {
+  for (const value of [
+    "go version go1.26.4 windows/amd64",
     "go version go1.27rc1 windows/amd64",
-    "go version devel go1.28 windows/amd64",
+    "go version go1.27.3 windows/arm64",
   ])
     await assert.rejects(
-      selectGo(options, () => actual),
-      /OMPIDE_GO must point/
+      selectGo({ version: "go1.26.5", environment: {} }, () => value),
+      /Install compatible Go on PATH/
     );
-});
-
-test("finds a compatible compiler after missing and incompatible PATH entries", async (t) => {
-  const { options, system, directory } = await fixture(t);
-  const old = path.join(directory, "old");
-  await mkdir(old);
-  await writeFile(path.join(old, "go.exe"), "old fixture");
-  options.searchPath = [
-    path.join(directory, "missing"),
-    old,
-    `"${path.dirname(system)}"`,
-  ].join(path.delimiter);
-  const result = await selectGo(options, (executable) =>
-    executable === system
-      ? "go version go1.26.5 windows/amd64"
-      : "go version go1.25.1 windows/amd64"
+  await assert.rejects(
+    selectGo({ version: "go1.26.5", environment: {} }, () => {
+      throw new Error("ENOENT");
+    }),
+    /ENOENT/
   );
-  assert.equal(result.executable, system);
 });
-
-test("accepts newer stable Go releases with numeric version comparisons", async (t) => {
-  const { options } = await fixture(t);
+test("accepts newer stable releases and retains explicit reproducible version checks", async () => {
   for (const version of [
     "go1.26.5",
     "go1.26.6",
@@ -147,7 +66,7 @@ test("accepts newer stable Go releases with numeric version comparisons", async 
     assert.equal(
       (
         await selectGo(
-          { ...options, override: "newer-go.exe" },
+          { version: "go1.26.5", environment: {} },
           () => `go version ${version} windows/amd64`
         )
       ).version,
@@ -155,18 +74,30 @@ test("accepts newer stable Go releases with numeric version comparisons", async 
     );
   }
   assert.equal(goAtLeast("go1.9.9", "go1.26.5"), false);
-});
-test("reproducible builds can still require the exact release compiler", async (t) => {
-  const { options } = await fixture(t);
   await assert.rejects(
     selectGo(
-      { ...options, exactVersion: "go1.26.5", override: "new-go.exe" },
+      { version: "go1.26.5", exactVersion: "go1.26.5", environment: {} },
       () => "go version go1.27.3 windows/amd64"
     ),
     /go1.26.5 exactly/
   );
 });
-
+test("parses optional compiler CLI paths and rejects incomplete or duplicate flags", () => {
+  assert.equal(goExecutableArgument([]), undefined);
+  assert.equal(
+    goExecutableArgument(["--download", "--go", "C:/custom Go/bin/go.exe"]),
+    "C:/custom Go/bin/go.exe"
+  );
+  for (const args of [
+    ["--go"],
+    ["--go", "--rebuild"],
+    ["--go", "one", "--go", "two"],
+  ])
+    assert.throws(
+      () => goExecutableArgument(args),
+      /requires one executable path/
+    );
+});
 test("uses standard Go caches and preserves configured cache and proxy settings", () => {
   const ordinary = goBuildEnvironment({}, true);
   for (const key of ["GOPATH", "GOMODCACHE", "GOCACHE", "GOPROXY", "GOSUMDB"])
@@ -225,4 +156,12 @@ test("uses Go-reported module paths rather than constructing a private cache pat
         ),
       /Module source unavailable/
     );
+});
+
+test("preserves local Go build/workspace settings and clears them only for reproducible builds", () => {
+  const settings = { GOFLAGS: "-tags=local", GOWORK: "user-workspace" };
+  assert.equal(goBuildEnvironment(settings, true).GOFLAGS, settings.GOFLAGS);
+  assert.equal(goBuildEnvironment(settings, true).GOWORK, settings.GOWORK);
+  assert.equal(goBuildEnvironment(settings, true, true).GOFLAGS, "");
+  assert.equal(goBuildEnvironment(settings, true, true).GOWORK, "off");
 });
