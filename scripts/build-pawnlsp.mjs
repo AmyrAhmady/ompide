@@ -20,6 +20,7 @@ import {
   goModuleDirectory,
   goExecutableArgument,
 } from "./go-toolchain.mjs";
+import { listToolArchive, extractToolArchive } from "./tool-archive.mjs";
 import { hostTarget, toolManifest } from "./toolchain-target.mjs";
 import { localBuildMatches, buildRecord } from "./lsp-build-record.mjs";
 
@@ -113,12 +114,7 @@ if (sha256(await readFile(patch)) !== pin.patch.sha256)
 const staging = await mkdtemp(path.join(cache, "pawnlsp-build-"));
 try {
   const prefix = `pawnlsp-${pin.source.commit}`;
-  const entries = execFileSync("tar", ["-tf", archive], {
-    encoding: "utf8",
-    windowsHide: true,
-  })
-    .trim()
-    .split(/\r?\n/);
+  const entries = listToolArchive(archive).trim().split(/\r?\n/);
   if (
     entries.some(
       (entry) =>
@@ -127,7 +123,7 @@ try {
     )
   )
     throw new Error("Unsafe source archive path");
-  execFileSync("tar", ["-xf", archive, "-C", staging], { windowsHide: true });
+  extractToolArchive(archive, staging);
   const source = path.join(staging, prefix);
   const moduleText = await readFile(path.join(source, "go.mod"), "utf8");
   if (

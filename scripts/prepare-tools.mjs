@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { listToolArchive, extractToolArchive } from "./tool-archive.mjs";
 import { toolManifest, hostTarget } from "./toolchain-target.mjs";
 import { goExecutableArgument } from "./go-toolchain.mjs";
 import { removeTemporary } from "./release-support.mjs";
@@ -66,9 +67,7 @@ for (const tool of manifest.tools) {
     throw new Error(`Archive checksum mismatch: ${archive}`);
   const staging = await mkdtemp(path.join(tmpdir(), "pawn-tools-"));
   try {
-    const entries = execFileSync("tar", ["-tf", archive], { encoding: "utf8" })
-      .trim()
-      .split(/\r?\n/);
+    const entries = listToolArchive(archive).trim().split(/\r?\n/);
     if (
       entries.some((entry) => {
         const normalized = entry.replaceAll("\\", "/");
@@ -81,7 +80,7 @@ for (const tool of manifest.tools) {
     ) {
       throw new Error(`Unsafe archive path: ${tool.name}`);
     }
-    execFileSync("tar", ["-xf", archive, "-C", staging]);
+    extractToolArchive(archive, staging);
     const executable = path.join(staging, tool.executable);
     const executableHash = sha256(await readFile(executable));
     if (tool.executableSha256 && executableHash !== tool.executableSha256) {

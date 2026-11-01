@@ -64,7 +64,7 @@ jobs:
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri -> target
-          key: linux-x64-${{ hashFiles('toolchain/tools-linux.json', 'toolchain/pawnlsp-build.json', 'toolchain/patches/**', 'scripts/build-pawnlsp.mjs', 'scripts/go-toolchain.mjs', 'scripts/lsp-build-record.mjs', 'scripts/prepare-tools.mjs', 'scripts/toolchain-target.mjs') }}
+          key: linux-x64-${{ hashFiles('toolchain/tools-linux.json', 'toolchain/pawnlsp-build.json', 'toolchain/patches/**', 'scripts/build-pawnlsp.mjs', 'scripts/go-toolchain.mjs', 'scripts/lsp-build-record.mjs', 'scripts/prepare-tools.mjs', 'scripts/toolchain-target.mjs', 'scripts/tool-archive.mjs') }}
           cache-directories: |
             .tools-cache
             src-tauri/binaries
