@@ -345,7 +345,7 @@ export class Workbench {
       fontSize: settings.fontSize,
       fontFamily: settings.fontFamily,
       minimap: { enabled: settings.minimap },
-      scrollBeyondLastLine: false,
+      scrollBeyondLastLine: true,
     });
     const cursor = this.codeEditor.onDidChangeCursorPosition((event) => {
       this.rememberLocation(
