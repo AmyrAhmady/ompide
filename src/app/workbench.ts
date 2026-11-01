@@ -14,6 +14,7 @@ import {
   type ToolInfo,
 } from "../lib/native";
 import { t, describeError } from "../lib/i18n";
+import { buildErrorDetails } from "../build/errors";
 import {
   applyEditorSettings,
   files,
@@ -855,6 +856,7 @@ export class Workbench {
           ...this.state.build,
           phase: "failed",
           error: describeError(error),
+          errorDetails: buildErrorDetails(error),
           elapsed: Date.now() - started,
         },
       });

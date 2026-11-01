@@ -84,6 +84,13 @@ function BuildPanelView({
           </p>
         ))}
       </div>
+      {state.errorDetails && (
+        <div className="build-error-details">
+          <strong>{t("build.errorDetails")}</strong>
+          {state.errorDetails.code && <code>{state.errorDetails.code}</code>}
+          {state.errorDetails.detail && <pre>{state.errorDetails.detail}</pre>}
+        </div>
+      )}
       {report && report.diagnostics.length > 0 && (
         <ul className="build-diagnostics">
           {report.diagnostics.map((diagnostic, index) => (

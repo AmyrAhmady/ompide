@@ -51,6 +51,7 @@
   "build.idle": "No build started",
   "build.saving": "Saving files…",
   "build.preparing": "Verifying project and compiler…",
+  "build.errorDetails": "Error details",
   "build.compiling": "Compiling…",
   "build.passed": "Build succeeded",
   "build.failed": "Build failed",

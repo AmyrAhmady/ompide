@@ -1,4 +1,5 @@
 import type { FileSnapshot, ToolInfo } from "../lib/native";
+import type { BuildErrorDetails } from "./errors";
 
 export interface Discovery {
   manifests: string[];
@@ -81,6 +82,7 @@ export interface BuildState {
   id?: number;
   result?: BuildResult;
   error?: string;
+  errorDetails?: BuildErrorDetails;
   entry?: string;
   output?: string;
   started?: number;
