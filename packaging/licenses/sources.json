@@ -48,5 +48,20 @@
     "file": "seti.txt",
     "source": "https://raw.githubusercontent.com/microsoft/vscode/6f269fc1b4cd8c8bb21902842cc7567a5c67ec00/extensions/theme-seti/ThirdPartyNotices.txt",
     "sha256": "c67ddfeba3a0aaffe9e9f7165c155c06de5c8db609a92b3a1a29ee6ab316a0bb"
+  },
+  {
+    "file": "dlopen2.txt",
+    "source": "https://raw.githubusercontent.com/OpenByteDev/dlopen2/cc80e4a0a90d499b677fdf7743699b4b3a43a989/LICENSE",
+    "sha256": "39fa265207450e77c62e90c5594a06c085b655d8374c7ced4bf7894b6bd95dd2"
+  },
+  {
+    "file": "libappindicator-mit.txt",
+    "source": "https://raw.githubusercontent.com/tauri-apps/libappindicator-rs/eafd1e3682a1247f595410266091e9684021cb6f/LICENSE-MIT",
+    "sha256": "eb227437252b2a7a9c1fc342c93ade1f3d7ce38cc6dd754f613db07d53ceff0b"
+  },
+  {
+    "file": "libappindicator-apache.txt",
+    "source": "https://raw.githubusercontent.com/tauri-apps/libappindicator-rs/eafd1e3682a1247f595410266091e9684021cb6f/LICENSE-APACHE",
+    "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
   }
 ]

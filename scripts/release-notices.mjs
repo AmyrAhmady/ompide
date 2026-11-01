@@ -205,6 +205,12 @@ export async function applicationNotices(destination, target) {
     } else if (ecosystem === "cargo") {
       const overrides = {
         "alloc-stdlib@0.3.0": ["alloc-stdlib.txt"],
+        "dlopen2@0.8.2": ["dlopen2.txt"],
+        "dlopen2_derive@0.4.3": ["dlopen2.txt"],
+        "libappindicator-sys@0.9.0": [
+          "libappindicator-mit.txt",
+          "libappindicator-apache.txt",
+        ],
         "selectors@0.38.0": ["mpl-2.0.txt"],
         "tauri-plugin@2.7.2": ["tauri-mit.txt", "tauri-apache.txt"],
         "webview2-com@0.39.1": ["webview2-com.txt"],
