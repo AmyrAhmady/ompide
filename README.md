@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/ompide.png" alt="ompide logo" width="160" />
+</p>
+
 # ompide
 
 ompide is a desktop editor for Pawn, built for open.mp projects. Write your
