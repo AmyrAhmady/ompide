@@ -17,6 +17,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
 import { removeTemporary, cargoExecutable } from "./release-support.mjs";
 
+import {
+  hostTarget,
+  toolManifest,
+  compilerEnvironment,
+} from "./toolchain-target.mjs";
+
+const host = hostTarget();
 const root = fileURLToPath(new URL("../", import.meta.url));
 const packageArgument = process.argv.indexOf("--package");
 const packaged =
@@ -26,20 +33,19 @@ if (packageArgument >= 0 && !packaged)
 const binaries = path.join(root, "src-tauri/binaries");
 const tool = (name) =>
   packaged
-    ? path.join(packaged, `${name}.exe`)
-    : path.join(binaries, `${name}-x86_64-pc-windows-msvc.exe`);
+    ? path.join(packaged, `${name}${host.suffix}`)
+    : path.join(binaries, `${name}-${host.target}${host.suffix}`);
+const pins = await toolManifest(root);
+const compilerPin = pins.tools.find((item) => item.name === "pawncc");
 const compiler = path.join(
   packaged ?? binaries,
-  `${packaged ? "binaries/" : ""}compiler/pawnc-3.10.11-windows/bin/pawncc.exe`
+  `${packaged ? "binaries/" : ""}${compilerPin.destination}`
 );
 const workspace = await mkdtemp(path.join(tmpdir(), "ompide "));
-const pins = JSON.parse(
-  await readFile(path.join(root, "toolchain/tools.json"), "utf8")
-);
 const bridgePath = await cargoExecutable({
   profile: "debug",
   target: pins.target,
-  binary: "pawn-lsp-bridge.exe",
+  binary: `pawn-lsp-bridge${host.suffix}`,
 });
 const versions = Object.fromEntries(
   pins.tools.map((tool) => [tool.name, tool.version])
@@ -62,6 +68,7 @@ function compile(workspace, expected) {
     ],
     {
       cwd: workspace,
+      env: compilerEnvironment(compiler),
       encoding: "utf8",
       windowsHide: true,
       timeout: 30_000,

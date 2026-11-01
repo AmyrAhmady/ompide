@@ -62,3 +62,40 @@ test("official release hash remains usable without local build metadata", () => 
     false
   );
 });
+
+test("source-built Linux receipts require matching source, target and release compiler", () => {
+  const hash = "c".repeat(64);
+  const linux = { ...tool, executableSha256: null };
+  const record = {
+    schemaVersion: 1,
+    executableSha256: hash,
+    build: buildRecord(pin, pin.goVersion, "linux/amd64"),
+  };
+  assert.equal(
+    localBuildMatches(record, pin, linux, hash, true, "linux/amd64"),
+    true
+  );
+  assert.equal(localBuildMatches(record, pin, linux, hash, true), false);
+  assert.equal(
+    localBuildMatches(
+      { ...record, build: { ...record.build, patchSha256: "wrong" } },
+      pin,
+      linux,
+      hash,
+      true,
+      "linux/amd64"
+    ),
+    false
+  );
+  assert.equal(
+    localBuildMatches(
+      { ...record, build: { ...record.build, goVersion: "go1.28.0" } },
+      pin,
+      linux,
+      hash,
+      true,
+      "linux/amd64"
+    ),
+    false
+  );
+});

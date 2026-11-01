@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "target": "x86_64-unknown-linux-gnu",
+  "tools": [
+    {
+      "name": "pawnlsp",
+      "version": "0.33.75-pawnide.3",
+      "executableSha256": null,
+      "destination": "pawnlsp-x86_64-unknown-linux-gnu",
+      "license": "MIT",
+      "sourceBuild": "pawnlsp-build.json",
+      "upstreamVersion": "0.33.75"
+    },
+    {
+      "name": "pawncc",
+      "version": "3.10.11",
+      "url": "https://github.com/openmultiplayer/compiler/releases/download/v3.10.11/pawnc-3.10.11-linux.tar.gz",
+      "sha256": "13977433acb1dfb23e3ec6354f622115d5073e97aced9395058a9db59d2564c2",
+      "executable": "pawnc-3.10.11-linux/bin/pawncc",
+      "executableSha256": "a2a46eb51b0e685622624006bc2a1bcabef96d0a8bbeb01dfb5c3c3b150b4ba0",
+      "destination": "compiler/pawnc-3.10.11-linux/bin/pawncc",
+      "companions": [
+        {
+          "name": "libpawnc.so",
+          "source": "pawnc-3.10.11-linux/lib/libpawnc.so",
+          "destination": "compiler/pawnc-3.10.11-linux/lib/libpawnc.so",
+          "sha256": "1a5e9ef69c71c1048b2cd0d225c4351e6d7bc7b5ff795ce0c6dfd028b2695de8"
+        }
+      ],
+      "license": "Zlib; see toolchain/licenses/compiler.txt"
+    }
+  ]
+}

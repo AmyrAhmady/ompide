@@ -43,6 +43,7 @@ test("release versions agree and reject a mismatched native version", async () =
       "src-tauri/Cargo.toml",
       "rust-toolchain.toml",
       "toolchain/tools.json",
+      "toolchain/tools-linux.json",
       "toolchain/pawnlsp-build.json",
     ]) {
       await mkdir(path.dirname(path.join(directory, file)), {
@@ -344,6 +345,7 @@ test("Cargo artifact discovery honors its reported target directory and rejects 
       root: directory,
       profile: "release",
       target: "x86_64-pc-windows-msvc",
+      binary: "ompide.exe",
     };
     await assert.rejects(
       cargoExecutable(options, metadata),

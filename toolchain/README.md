@@ -296,3 +296,35 @@ Packaging and real-tool verification obtain Cargo's target directory through
 `cargo metadata`, honoring CARGO_TARGET_DIR and Cargo configuration. If both native
 and explicit-target builds exist, packaging requires `--executable <path>` to
 avoid silently choosing a stale build. This option is otherwise unnecessary.
+
+
+## Linux x64 CI
+
+`.github/workflows/linux-build.yml` builds on Ubuntu 22.04 independently of the
+Windows workflow. Pushes to master, version tags, pull requests and manual runs
+produce a ZIP containing a Debian installer, installation instructions, license
+and a checksum manifest. macOS and other Linux package formats remain deferred.
+
+The workflow prepares tools, checks the frontend and Rust code, runs real LSP
+and compiler tests, builds a `.deb`, verifies its extracted contents, installs it
+and checks that a native window opens under Xvfb. This startup check does not
+replace interactive testing on a Linux desktop.
+
+`toolchain/tools-linux.json` pins the official open.mp compiler archive,
+executable and `libpawnc.so` checksums. The upstream compiler is 32-bit even
+though ompide and pawnlsp are x64. Debian/Ubuntu therefore needs the i386
+architecture enabled and `libc6:i386`; the installer declares that dependency.
+Only compiler subprocesses receive the bundled library lookup path.
+
+The Linux language server uses the same pinned source, patch and analysis fix
+as Windows. CI uses the release Go version in `pawnlsp-build.json`. Its first
+binary checksum is not known before the first Linux build: the source build
+records it with source/patch/compiler provenance, the application embeds it,
+and packaging verifies the receipt and shipped executable agree. A fixed
+Linux binary checksum can be pinned after a verified reproducible CI build.
+The existing fixed Windows checksum remains enforced.
+
+CI runs `npm run tools:prepare -- --download --reproducible`, then
+`npm run release:linux:notices`, Tauri's Debian build, and
+`npm run release:linux:package`. The final installed startup check is
+`xvfb-run -a npm run release:linux:smoke`. No Linux build is required locally.

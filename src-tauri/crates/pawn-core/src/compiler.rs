@@ -16,6 +16,32 @@ use std::{
     time::Duration,
 };
 
+/// Configure only the selected compiler process's bundled shared-library path.
+/// The upstream Linux distribution has an absolute build-machine RUNPATH.
+pub fn command(executable: &Path) -> io::Result<Command> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(Command::new(executable))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mut command = Command::new(executable);
+        if let Some(parent) = executable.parent().and_then(Path::parent) {
+            let library = parent.join("lib");
+            if library.join("libpawnc.so").is_file() {
+                let mut paths = vec![library];
+                if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
+                    paths.extend(std::env::split_paths(&existing));
+                }
+                let value = std::env::join_paths(paths)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+                command.env("LD_LIBRARY_PATH", value);
+            }
+        }
+        Ok(command)
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildResult {
@@ -228,9 +254,7 @@ pub fn build(
     }
     remove(&artifact)?;
     let result = match process::run(
-        Command::new(compiler)
-            .current_dir(scope.root())
-            .args(arguments),
+        command(compiler)?.current_dir(scope.root()).args(arguments),
         cancel,
         Duration::from_secs(15 * 60),
         8 * 1024 * 1024,
@@ -383,5 +407,34 @@ mod tests {
             );
             assert!(!scope.root().join("output").exists());
         }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_tests {
+    use super::*;
+
+    #[test]
+    fn bundled_library_lookup_is_scoped_to_the_compiler_child() {
+        let root = tempfile::tempdir().unwrap();
+        let library = root.path().join("lib");
+        fs::create_dir(&library).unwrap();
+        fs::write(library.join("libpawnc.so"), b"fixture").unwrap();
+        let executable = root.path().join("bin/pawncc");
+        let before = std::env::var_os("LD_LIBRARY_PATH");
+        let child = command(&executable).unwrap();
+        let (_, value) = child
+            .get_envs()
+            .find(|(key, _)| *key == "LD_LIBRARY_PATH")
+            .unwrap();
+        assert_eq!(std::env::split_paths(value.unwrap()).next(), Some(library));
+        assert_eq!(std::env::var_os("LD_LIBRARY_PATH"), before);
+        assert_eq!(
+            command(Path::new("/external/bin/pawncc"))
+                .unwrap()
+                .get_envs()
+                .count(),
+            0
+        );
     }
 }

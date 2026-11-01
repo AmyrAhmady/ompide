@@ -5,7 +5,6 @@ use pawn_core::{
     project::{self, Discovery, ProjectInfo},
 };
 use std::{
-    process::Command,
     sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
@@ -61,7 +60,7 @@ fn project_error(failure: io::Error) -> AppError {
 }
 
 fn bundled(app: &AppHandle) -> Result<PathBuf> {
-    let relative = Path::new("binaries/compiler/pawnc-3.10.11-windows/bin/pawncc.exe");
+    let relative = Path::new(env!("OMPIDE_COMPILER_RELATIVE"));
     let installed = app
         .path()
         .resource_dir()
@@ -80,11 +79,8 @@ fn bundled(app: &AppHandle) -> Result<PathBuf> {
 }
 
 fn verify_tools(app: &AppHandle) -> Result<BuildTools> {
-    let pins: ToolPins = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../toolchain/tools.json"
-    )))
-    .map_err(|failure| error("operationFailed", failure.to_string()))?;
+    let pins: ToolPins = serde_json::from_str(include_str!(env!("OMPIDE_TOOL_MANIFEST")))
+        .map_err(|failure| error("operationFailed", failure.to_string()))?;
     let pin = pins
         .tools
         .into_iter()
@@ -104,11 +100,12 @@ fn verify_tools(app: &AppHandle) -> Result<BuildTools> {
         Some(path) => workspace::canonical(Path::new(path))?,
         None => bundled(app)?,
     };
-    if source == "bundled" && tools::sha256(&path)? != pin.executable_sha256 {
+    if source == "bundled" && Some(tools::sha256(&path)?).as_ref() != pin.executable_sha256.as_ref()
+    {
         return Err(error("buildToolChecksum", "pawncc"));
     }
     let output = process::run(
-        Command::new(&path).arg("-h"),
+        compiler::command(&path)?.arg("-h"),
         &AtomicBool::new(false),
         Duration::from_secs(3),
         16384,

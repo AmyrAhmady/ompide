@@ -437,7 +437,8 @@ fn bundled_lsp() -> Result<PathBuf> {
     }
     if cfg!(debug_assertions) {
         let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("binaries/pawnlsp-x86_64-pc-windows-msvc.exe");
+            .join("binaries")
+            .join(env!("OMPIDE_LSP_DESTINATION"));
         if dev.is_file() {
             return Ok(dev);
         }
@@ -449,7 +450,7 @@ fn bundled_lsp() -> Result<PathBuf> {
 struct ToolPin {
     name: String,
     version: String,
-    executable_sha256: String,
+    executable_sha256: Option<String>,
 }
 #[derive(Deserialize)]
 struct ToolPins {
@@ -469,11 +470,8 @@ pub struct LanguageStart {
 }
 
 fn verified_lsp(app: &AppHandle) -> Result<ToolInfo> {
-    let pins: ToolPins = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../toolchain/tools.json"
-    )))
-    .map_err(|failure| error("operationFailed", failure.to_string()))?;
+    let pins: ToolPins = serde_json::from_str(include_str!(env!("OMPIDE_TOOL_MANIFEST")))
+        .map_err(|failure| error("operationFailed", failure.to_string()))?;
     let pin = pins
         .tools
         .into_iter()

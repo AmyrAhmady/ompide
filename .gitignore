@@ -35,3 +35,7 @@ dist-ssr
 **/target/
 *.tsbuildinfo
 /fixtures/openmp/.vendor/
+
+# Generated Linux package dependency notices
+/src-tauri/licenses/dependencies/
+/src-tauri/licenses/pawn-grammar.txt

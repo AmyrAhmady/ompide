@@ -5,8 +5,12 @@ use std::{fs, path::Path, sync::atomic::AtomicBool};
 #[test]
 #[ignore = "requires the prepared pinned open.mp compiler; run explicitly with --ignored"]
 fn real_compiler_success_failure_constants_and_cancelled_artifacts() {
-    let executable = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../binaries/compiler/pawnc-3.10.11-windows/bin/pawncc.exe");
+    let relative = if cfg!(target_os = "linux") {
+        "../../binaries/compiler/pawnc-3.10.11-linux/bin/pawncc"
+    } else {
+        "../../binaries/compiler/pawnc-3.10.11-windows/bin/pawncc.exe"
+    };
+    let executable = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
     assert!(executable.is_file(), "prepare the pinned compiler first");
     let root = tempfile::Builder::new()
         .prefix("pawn-direct-compiler-")

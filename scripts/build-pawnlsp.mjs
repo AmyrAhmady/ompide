@@ -8,6 +8,7 @@ import {
   mkdtemp,
   copyFile,
   cp,
+  chmod,
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -19,6 +20,7 @@ import {
   goModuleDirectory,
   goExecutableArgument,
 } from "./go-toolchain.mjs";
+import { hostTarget, toolManifest } from "./toolchain-target.mjs";
 import { localBuildMatches, buildRecord } from "./lsp-build-record.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -26,9 +28,8 @@ const cache = path.join(root, ".tools-cache");
 const pin = JSON.parse(
   await readFile(path.join(root, "toolchain/pawnlsp-build.json"), "utf8")
 );
-const tools = JSON.parse(
-  await readFile(path.join(root, "toolchain/tools.json"), "utf8")
-);
+const tools = await toolManifest(root);
+const host = hostTarget();
 const tool = tools.tools.find((tool) => tool.name === "pawnlsp");
 const destination = path.join(root, "src-tauri/binaries", tool.destination);
 const licenseDirectory = path.join(root, "src-tauri/binaries/licenses");
@@ -36,8 +37,6 @@ const licenseIndex = path.join(licenseDirectory, "pawnlsp-dependencies.json");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const download = process.argv.includes("--download");
 const reproducible = process.argv.includes("--reproducible");
-if (process.platform !== "win32" || process.arch !== "x64")
-  throw new Error("This server build is verified only for Windows x64.");
 if (!process.argv.includes("--rebuild")) {
   try {
     const notices = JSON.parse(await readFile(licenseIndex, "utf8"));
@@ -50,7 +49,8 @@ if (!process.argv.includes("--rebuild")) {
         pin,
         tool,
         sha256(await readFile(destination)),
-        reproducible
+        reproducible,
+        `${host.goos}/amd64`
       ) &&
       Array.isArray(notices.dependencies) &&
       notices.dependencies.length > 0 &&
@@ -68,12 +68,18 @@ if (!process.argv.includes("--rebuild")) {
     if (error.code !== "ENOENT") throw error;
   }
 }
-const environment = goBuildEnvironment(process.env, download, reproducible);
+const environment = goBuildEnvironment(
+  process.env,
+  download,
+  reproducible,
+  host.goos
+);
 const { executable: go, version: goVersion } = await selectGo({
   executable: goExecutableArgument(process.argv.slice(2)),
   version: pin.minimumGoVersion,
   exactVersion: reproducible ? pin.goVersion : undefined,
   environment,
+  goos: host.goos,
 });
 console.log(`Using ${goVersion}: ${go}`);
 
@@ -147,7 +153,7 @@ try {
     });
   runGo(["test", "-mod=readonly", "./..."]);
   runGo(["mod", "verify"]);
-  const executable = path.join(staging, "pawnlsp.exe");
+  const executable = path.join(staging, `pawnlsp${host.suffix}`);
   runGo([
     "build",
     "-mod=readonly",
@@ -159,8 +165,15 @@ try {
     "./cmd/pawnlsp",
   ]);
   const builtHash = sha256(await readFile(executable));
-  if (reproducible && builtHash !== tool.executableSha256) {
-    await copyFile(executable, path.join(cache, "pawnlsp-reproduction.exe"));
+  if (
+    reproducible &&
+    tool.executableSha256 &&
+    builtHash !== tool.executableSha256
+  ) {
+    await copyFile(
+      executable,
+      path.join(cache, `pawnlsp-reproduction${host.suffix}`)
+    );
     throw new Error(
       `Built server checksum ${builtHash} differs from the pinned artifact ${tool.executableSha256}`
     );
@@ -224,7 +237,7 @@ try {
       {
         schemaVersion: 1,
         executableSha256: builtHash,
-        build: buildRecord(pin, goVersion),
+        build: buildRecord(pin, goVersion, `${host.goos}/amd64`),
         dependencies,
       },
       null,
@@ -233,6 +246,7 @@ try {
   );
   await mkdir(path.dirname(destination), { recursive: true });
   await copyFile(executable, destination);
+  if (host.goos === "linux") await chmod(destination, 0o755);
   console.log(
     `Verified pawnlsp ${pin.version} built with ${goVersion}: ${builtHash}`
   );

@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 export function goBuildEnvironment(
   environment,
   download,
-  reproducible = false
+  reproducible = false,
+  goos = "windows"
 ) {
   return {
     ...environment,
@@ -12,7 +13,7 @@ export function goBuildEnvironment(
     CGO_ENABLED: "0",
     GOTELEMETRY: "off",
     ...(download ? {} : { GOPROXY: "off", GOSUMDB: "off" }),
-    GOOS: "windows",
+    GOOS: goos,
     GOARCH: "amd64",
     ...(reproducible ? { GOFLAGS: "", GOWORK: "off" } : {}),
   };
@@ -50,7 +51,7 @@ export function goAtLeast(actual, minimum) {
 
 /** Use normal executable lookup; an explicit CLI option is available for reproduction. */
 export async function selectGo(
-  { executable = "go", version, exactVersion, environment },
+  { executable = "go", version, exactVersion, environment, goos = "windows" },
   run = execFileSync
 ) {
   const requirement = exactVersion
@@ -64,9 +65,12 @@ export async function selectGo(
       timeout: 10000,
       maxBuffer: 8192,
     }).trim();
-    const match = /^go version (go\d+\.\d+\.\d+) windows\/amd64$/.exec(actual);
+    const match = /^go version (go\d+\.\d+\.\d+) (windows|linux)\/amd64$/.exec(
+      actual
+    );
     if (
       !match ||
+      match[2] !== goos ||
       !goAtLeast(match[1], version) ||
       (exactVersion && match[1] !== exactVersion)
     )
@@ -74,7 +78,7 @@ export async function selectGo(
     return { executable, version: match[1] };
   } catch (error) {
     throw new Error(
-      `Build requires ${requirement} for Windows x64. Install compatible Go on PATH or use --go <path-to-go.exe>. Checked ${executable}: ${error.message}`,
+      `Build requires ${requirement} for ${goos} x64. Install compatible Go on PATH or use --go <path-to-go>. Checked ${executable}: ${error.message}`,
       { cause: error }
     );
   }

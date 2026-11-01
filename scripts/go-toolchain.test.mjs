@@ -170,3 +170,16 @@ test("preserves local Go build/workspace settings and clears them only for repro
   assert.equal(goBuildEnvironment(settings, true, true).GOFLAGS, "");
   assert.equal(goBuildEnvironment(settings, true, true).GOWORK, "off");
 });
+
+test("Linux builds select the installed Linux Go compiler", async () => {
+  const options = { version: "go1.26.5", environment: {}, goos: "linux" };
+  assert.equal(
+    (await selectGo(options, () => "go version go1.27.3 linux/amd64")).version,
+    "go1.27.3"
+  );
+  await assert.rejects(
+    selectGo(options, () => "go version go1.27.3 windows/amd64"),
+    /Install compatible Go/
+  );
+  assert.equal(goBuildEnvironment({}, true, true, "linux").GOOS, "linux");
+});

@@ -7,27 +7,23 @@ import {
   readFile,
   writeFile,
   copyFile,
+  chmod,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { toolManifest, hostTarget } from "./toolchain-target.mjs";
 import { goExecutableArgument } from "./go-toolchain.mjs";
 import { removeTemporary } from "./release-support.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const manifest = JSON.parse(
-  await readFile(path.join(root, "toolchain/tools.json"), "utf8")
-);
+const manifest = await toolManifest(root);
 const download = process.argv.includes("--download");
 const go = goExecutableArgument(process.argv.slice(2));
 const cache = path.join(root, ".tools-cache");
 const binaries = path.join(root, "src-tauri/binaries");
-if (process.platform !== "win32" || process.arch !== "x64") {
-  throw new Error(
-    `Only verified target ${manifest.target} is currently supported.`
-  );
-}
+hostTarget();
 await mkdir(cache, { recursive: true });
 await mkdir(binaries, { recursive: true });
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
@@ -55,7 +51,7 @@ for (const tool of manifest.tools) {
   if (!bytes) {
     if (!download)
       throw new Error(
-        `Missing ${archive}. Place the pinned archive there manually, or run npm.cmd run tools:prepare -- --download. Source: ${tool.url}`
+        `Missing ${archive}. Place the pinned archive there manually, or run npm run tools:prepare -- --download. Source: ${tool.url}`
       );
     console.log(`Downloading ${tool.name} ${tool.version}: ${tool.url}`);
     const response = await fetch(tool.url);
@@ -94,7 +90,7 @@ for (const tool of manifest.tools) {
     const destination = path.join(binaries, tool.destination);
     await mkdir(path.dirname(destination), { recursive: true });
     if (tool.name === "pawncc") {
-      // The pinned distribution requires pawnc.dll next to pawncc.exe.
+      // Preserve each distribution's pinned compiler library layout.
       await copyFile(executable, destination);
       for (const companion of tool.companions) {
         if (
@@ -102,17 +98,21 @@ for (const tool of manifest.tools) {
           /[\\/:]/.test(companion.name)
         )
           throw new Error("Invalid companion filename");
-        const library = path.join(path.dirname(executable), companion.name);
+        const library = companion.source
+          ? path.join(staging, companion.source)
+          : path.join(path.dirname(executable), companion.name);
         if (sha256(await readFile(library)) !== companion.sha256)
           throw new Error(`Companion checksum mismatch: ${companion.name}`);
-        await copyFile(
-          library,
-          path.join(path.dirname(destination), companion.name)
-        );
+        const companionDestination = companion.destination
+          ? path.join(binaries, companion.destination)
+          : path.join(path.dirname(destination), companion.name);
+        await mkdir(path.dirname(companionDestination), { recursive: true });
+        await copyFile(library, companionDestination);
       }
     } else {
       await copyFile(executable, destination);
     }
+    if (process.platform === "linux") await chmod(destination, 0o755);
     console.log(
       `Verified ${tool.name} ${tool.version}: ${tool.destination} (sha256:${executableHash})`
     );

@@ -11,10 +11,18 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { hostTarget } from "./toolchain-target.mjs";
+
 export const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 
 export async function cargoExecutable(
-  { profile, target, executable, binary = "ompide.exe", root = projectRoot },
+  {
+    profile,
+    target,
+    executable,
+    binary = `ompide${hostTarget().suffix}`,
+    root = projectRoot,
+  },
   run = execFileSync
 ) {
   if (executable) return path.resolve(root, executable);
@@ -36,7 +44,7 @@ export async function cargoExecutable(
     throw new Error("Cargo did not report its target directory");
   const candidates = [
     path.join(metadata.target_directory, profile, binary),
-    path.join(metadata.target_directory, target, profile, "ompide.exe"),
+    path.join(metadata.target_directory, target, profile, binary),
   ];
   const found = [];
   for (const candidate of candidates) {
@@ -63,7 +71,7 @@ export async function releaseSettings(root = projectRoot) {
     JSON.parse(await readFile(path.join(root, file), "utf8"));
   const pkg = await json("package.json");
   const config = await json("src-tauri/tauri.conf.json");
-  const tools = await json("toolchain/tools.json");
+  const tools = await json(`toolchain/${hostTarget().manifest}`);
   const server = await json("toolchain/pawnlsp-build.json");
   const cargo = await readFile(path.join(root, "src-tauri/Cargo.toml"), "utf8");
   const rust = await readFile(path.join(root, "rust-toolchain.toml"), "utf8");
@@ -83,8 +91,12 @@ export async function releaseSettings(root = projectRoot) {
       "package.json, Cargo.toml and tauri.conf.json versions must match"
     );
   }
-  if (tools.target !== "x86_64-pc-windows-msvc")
-    throw new Error("Release packaging currently supports Windows x64 only");
+  if (
+    !["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"].includes(
+      tools.target
+    )
+  )
+    throw new Error("Unsupported release target");
   if (
     process.env.GITHUB_REF?.startsWith("refs/tags/") &&
     process.env.GITHUB_REF !== `refs/tags/v${pkg.version}`
