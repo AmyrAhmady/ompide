@@ -15,6 +15,7 @@ import test from "node:test";
 import { copyPackageNotices, npmPackages } from "./release-notices.mjs";
 import {
   listFiles,
+  cargoExecutable,
   peInfo,
   projectRoot,
   releaseSettings,
@@ -326,4 +327,56 @@ test("npm notices use the npm invocation or normal system command instead of a g
   assert.equal(calls[0][1][0], "custom-npm-cli.js");
   npmPackages({}, {}, run);
   assert.equal(calls[1][0], process.platform === "win32" ? "cmd.exe" : "npm");
+  if (process.platform === "win32")
+    assert.equal(calls[1][2].windowsVerbatimArguments, true);
+});
+
+test("Cargo artifact discovery honors its reported target directory and rejects ambiguous builds", async () => {
+  const { directory, cleanup } = await fixture();
+  try {
+    const target = path.join(directory, "custom build output");
+    const metadata = (exe, args) => {
+      assert.equal(exe, "cargo");
+      assert.ok(args.includes("metadata"));
+      return JSON.stringify({ target_directory: target });
+    };
+    const options = {
+      root: directory,
+      profile: "release",
+      target: "x86_64-pc-windows-msvc",
+    };
+    await assert.rejects(
+      cargoExecutable(options, metadata),
+      /No application build/
+    );
+    const native = path.join(target, "release", "ompide.exe");
+    await mkdir(path.dirname(native), { recursive: true });
+    await writeFile(native, "fixture");
+    assert.equal(await cargoExecutable(options, metadata), native);
+    const cross = path.join(target, options.target, "release", "ompide.exe");
+    await mkdir(path.dirname(cross), { recursive: true });
+    await writeFile(cross, "fixture");
+    await assert.rejects(
+      cargoExecutable(options, metadata),
+      /Multiple application builds/
+    );
+    assert.equal(
+      await cargoExecutable({ ...options, executable: cross }, () => {
+        throw new Error("explicit paths do not need discovery");
+      }),
+      cross
+    );
+    const bridge = path.join(target, "debug", "pawn-lsp-bridge.exe");
+    await mkdir(path.dirname(bridge), { recursive: true });
+    await writeFile(bridge, "fixture");
+    assert.equal(
+      await cargoExecutable(
+        { ...options, profile: "debug", binary: "pawn-lsp-bridge.exe" },
+        metadata
+      ),
+      bridge
+    );
+  } finally {
+    await cleanup();
+  }
 });

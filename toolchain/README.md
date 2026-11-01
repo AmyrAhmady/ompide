@@ -1,6 +1,6 @@
 # Verified toolchain
 
-`tools.json` pins Windows x64 executable hashes, release archives for the CLI/compiler,
+`tools.json` pins Windows x64 executable hashes, release archives for the compiler,
 and the source build for the patched language server. Binaries
 and archive caches are ignored by Git. Preparation is an explicit development or
 release operation, never an application startup or workspace-open hook:
@@ -73,10 +73,11 @@ hashes. To reproduce an official package, use the same flag locally; ordinary
 development builds do not need that compiler version.
 
 `--download` explicitly permits downloading the pinned source and Go module
-dependencies; the default is offline. The two `golang.org/x` dependencies use their
-official GitHub mirrors because the vanity/source host was unavailable here. Their
-complete source trees must match the original canonical module checksums, in
-addition to Go's normal module verification. Versions and sources remain pinned.
+dependencies; the default is offline. Dependencies use their original upstream
+module paths and go.sum through normal Go proxy resolution. Preparation runs
+`go mod verify` after the upstream tests. There are no network-specific module
+replacements for this development machine; source and dependency versions stay
+pinned.
 
 ```powershell
 # Uses the installed Go command on PATH.
@@ -279,3 +280,8 @@ node scripts/vscode-theme-smoke.mjs for picker rendering and a live registry
 round trip, and node scripts/vscode-theme-native-smoke.mjs after a debug packaged
 build for real WebView CSP and preferences/reload. The latter owns a temporary
 application instance and restores the user's preferences.
+
+Packaging and real-tool verification obtain Cargo's target directory through
+`cargo metadata`, honoring CARGO_TARGET_DIR and Cargo configuration. If both native
+and explicit-target builds exist, packaging requires `--executable <path>` to
+avoid silently choosing a stale build. This option is otherwise unnecessary.

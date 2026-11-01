@@ -1,9 +1,59 @@
 import { createHash } from "node:crypto";
-import { appendFile, readFile, readdir, realpath, rm } from "node:fs/promises";
+import {
+  appendFile,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+} from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const projectRoot = fileURLToPath(new URL("../", import.meta.url));
+
+export async function cargoExecutable(
+  { profile, target, executable, binary = "ompide.exe", root = projectRoot },
+  run = execFileSync
+) {
+  if (executable) return path.resolve(root, executable);
+  const metadata = JSON.parse(
+    run(
+      "cargo",
+      [
+        "metadata",
+        "--manifest-path",
+        path.join(root, "src-tauri/Cargo.toml"),
+        "--no-deps",
+        "--format-version",
+        "1",
+      ],
+      { cwd: root, encoding: "utf8", windowsHide: true }
+    )
+  );
+  if (typeof metadata.target_directory !== "string")
+    throw new Error("Cargo did not report its target directory");
+  const candidates = [
+    path.join(metadata.target_directory, profile, binary),
+    path.join(metadata.target_directory, target, profile, "ompide.exe"),
+  ];
+  const found = [];
+  for (const candidate of candidates) {
+    try {
+      if ((await stat(candidate)).isFile()) found.push(candidate);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  if (found.length !== 1)
+    throw new Error(
+      found.length
+        ? "Multiple application builds found. Pass --executable <path> to select the one to package."
+        : "No application build found in Cargo's target directory. Build first or pass --executable <path>."
+    );
+  return found[0];
+}
 
 export const sha256 = (bytes) =>
   createHash("sha256").update(bytes).digest("hex");

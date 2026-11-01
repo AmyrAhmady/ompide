@@ -11,25 +11,6 @@
   },
   "patch": {
     "path": "patches/pawnlsp-open-overlays.patch",
-    "sha256": "6f352bbc64003dac11f34e7eeef4d70f5d5c3fb9520d67e3f05145b7addcafe0"
-  },
-  "developmentGoDistribution": {
-    "url": "https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-win32-x64.zip",
-    "sha256": "221a6eeae6e3fb7a7bbbc3ae3f5d60f565bbf44114088786591043ca982e835b",
-    "executableSha256": "d6a71e6dc9806cb3f1fcb817d562175c5a7b1505fc3f6638299648e0b9f0f74f"
-  },
-  "dependencyMirrors": [
-    {
-      "module": "golang.org/x/mod",
-      "mirror": "github.com/golang/mod",
-      "version": "v0.38.0",
-      "canonicalChecksum": "h1:MECBjubtXD7yj4HrhIUcywNaGeNVUdfVnxmPajOk4yk="
-    },
-    {
-      "module": "golang.org/x/sync",
-      "mirror": "github.com/golang/sync",
-      "version": "v0.22.0",
-      "canonicalChecksum": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek="
-    }
-  ]
+    "sha256": "96f688dcbc63a0c5f3c9a8b5a4e4263d0e47c434cb58b2f49da6ff1cebddee5a"
+  }
 }

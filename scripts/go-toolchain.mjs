@@ -1,3 +1,4 @@
+import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 export function goBuildEnvironment(
@@ -88,5 +89,8 @@ export function goExecutableArgument(args) {
     args[index + 1].startsWith("--")
   )
     throw new Error("--go requires one executable path");
-  return args[index + 1];
+  const executable = args[index + 1];
+  return executable.includes("/") || executable.includes("\\")
+    ? path.resolve(executable)
+    : executable;
 }

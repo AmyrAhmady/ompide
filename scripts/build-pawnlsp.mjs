@@ -7,7 +7,6 @@ import {
   mkdir,
   mkdtemp,
   copyFile,
-  readdir,
   cp,
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -76,7 +75,7 @@ const { executable: go, version: goVersion } = await selectGo({
   exactVersion: reproducible ? pin.goVersion : undefined,
   environment,
 });
-console.log(`Using ${goVersion} : ${go}`);
+console.log(`Using ${goVersion}: ${go}`);
 
 await mkdir(cache, { recursive: true });
 const archive = path.join(cache, pin.source.archive);
@@ -146,38 +145,8 @@ try {
       stdio: "inherit",
       windowsHide: true,
     });
-  // Authenticate the official GitHub mirror trees against the original, canonical Go module sums.
-  for (const dependency of pin.dependencyMirrors) {
-    const directory = goModuleDirectory(
-      go,
-      `${dependency.mirror}@${dependency.version}`,
-      { cwd: source, env: environment }
-    );
-    const files = [];
-    const walk = async (relative) => {
-      for (const entry of await readdir(path.join(directory, relative), {
-        withFileTypes: true,
-      })) {
-        const file = relative ? `${relative}/${entry.name}` : entry.name;
-        if (entry.isDirectory()) await walk(file);
-        else if (entry.isFile()) files.push(file);
-        else throw new Error("Unexpected dependency link");
-      }
-    };
-    await walk("");
-    const hash = createHash("sha256");
-    for (const file of files.sort((a, b) =>
-      Buffer.compare(Buffer.from(a), Buffer.from(b))
-    ))
-      hash.update(
-        `${sha256(await readFile(path.join(directory, file)))}  ${dependency.module}@${dependency.version}/${file}\n`
-      );
-    if (`h1:${hash.digest("base64")}` !== dependency.canonicalChecksum)
-      throw new Error(
-        `Canonical dependency checksum mismatch: ${dependency.module}`
-      );
-  }
   runGo(["test", "-mod=readonly", "./..."]);
+  runGo(["mod", "verify"]);
   const executable = path.join(staging, "pawnlsp.exe");
   runGo([
     "build",
@@ -190,10 +159,7 @@ try {
     "./cmd/pawnlsp",
   ]);
   const builtHash = sha256(await readFile(executable));
-  if (
-    (reproducible || goVersion === pin.goVersion) &&
-    builtHash !== tool.executableSha256
-  ) {
+  if (reproducible && builtHash !== tool.executableSha256) {
     await copyFile(executable, path.join(cache, "pawnlsp-reproduction.exe"));
     throw new Error(
       `Built server checksum ${builtHash} differs from the pinned artifact ${tool.executableSha256}`
@@ -218,24 +184,13 @@ try {
   ];
   for (const dependency of buildInfo.Deps) {
     const module = dependency.Replace || dependency;
-    const metadata = JSON.parse(
-      execFileSync(
-        go,
-        ["mod", "download", "-json", `${module.Path}@${module.Version}`],
-        {
-          cwd: source,
-          env: environment,
-          encoding: "utf8",
-          windowsHide: true,
-        }
-      )
+    const directory = goModuleDirectory(
+      go,
+      `${module.Path}@${module.Version}`,
+      { cwd: source, env: environment }
     );
-    if (!metadata.Dir)
-      throw new Error(
-        `Missing source notices for ${module.Path}@${module.Version}`
-      );
     dependencies.push(
-      await copyPackageNotices(metadata.Dir, noticeStaging, {
+      await copyPackageNotices(directory, noticeStaging, {
         ecosystem: "go",
         name: dependency.Path,
         version: dependency.Version,

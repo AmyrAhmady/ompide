@@ -86,8 +86,13 @@ test("parses optional compiler CLI paths and rejects incomplete or duplicate fla
   assert.equal(goExecutableArgument([]), undefined);
   assert.equal(
     goExecutableArgument(["--download", "--go", "C:/custom Go/bin/go.exe"]),
-    "C:/custom Go/bin/go.exe"
+    path.resolve("C:/custom Go/bin/go.exe")
   );
+  assert.equal(
+    goExecutableArgument(["--go", "./custom Go/bin/go.exe"]),
+    path.resolve("./custom Go/bin/go.exe")
+  );
+  assert.equal(goExecutableArgument(["--go", "go1.26.5"]), "go1.26.5");
   for (const args of [
     ["--go"],
     ["--go", "--rebuild"],

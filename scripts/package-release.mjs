@@ -13,6 +13,7 @@ import path from "node:path";
 import { applicationNotices } from "./release-notices.mjs";
 import {
   listFiles,
+  cargoExecutable,
   projectRoot,
   releaseSettings,
   removeTemporary,
@@ -25,8 +26,23 @@ if (process.platform !== "win32" || process.arch !== "x64") {
 }
 const settings = await releaseSettings();
 const debug = process.argv.includes("--debug");
-if (process.argv.slice(2).some((argument) => argument !== "--debug"))
-  throw new Error("Usage: npm run release:package [-- --debug]");
+let executable;
+const arguments_ = process.argv.slice(2);
+for (let index = 0; index < arguments_.length; index++) {
+  if (arguments_[index] === "--debug") continue;
+  if (
+    arguments_[index] === "--executable" &&
+    !executable &&
+    arguments_[index + 1] &&
+    !arguments_[index + 1].startsWith("--")
+  ) {
+    executable = arguments_[++index];
+    continue;
+  }
+  throw new Error(
+    "Usage: npm run release:package [-- --debug] [--executable <path>]"
+  );
+}
 const profile = debug ? "debug" : "release";
 const output = path.join(projectRoot, "release");
 await mkdir(output, { recursive: true });
@@ -57,7 +73,10 @@ function powershell(script, args = []) {
 async function copy(source, destination) {
   const target = path.join(directory, destination);
   await mkdir(path.dirname(target), { recursive: true });
-  await copyFile(path.join(projectRoot, source), target);
+  await copyFile(
+    path.isAbsolute(source) ? source : path.join(projectRoot, source),
+    target
+  );
 }
 
 try {
@@ -65,7 +84,10 @@ try {
   const compiler = settings.tools.tools.find((tool) => tool.name === "pawncc");
   const compilerFolder = path.posix.dirname(`binaries/${compiler.destination}`);
   const runtime = JSON.parse(powershell("find-vc-runtime.ps1"));
-  await copy(`src-tauri/target/${profile}/ompide.exe`, "ompide.exe");
+  await copy(
+    await cargoExecutable({ profile, target: settings.target, executable }),
+    "ompide.exe"
+  );
   await copy(`src-tauri/binaries/${server.destination}`, "pawnlsp.exe");
   await copy(
     `src-tauri/binaries/${compiler.destination}`,

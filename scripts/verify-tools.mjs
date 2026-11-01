@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
-import { removeTemporary } from "./release-support.mjs";
+import { removeTemporary, cargoExecutable } from "./release-support.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const packageArgument = process.argv.indexOf("--package");
@@ -32,14 +32,15 @@ const compiler = path.join(
   packaged ?? binaries,
   `${packaged ? "binaries/" : ""}compiler/pawnc-3.10.11-windows/bin/pawncc.exe`
 );
-const bridgePath = path.join(
-  root,
-  "src-tauri/target/debug/pawn-lsp-bridge.exe"
-);
 const workspace = await mkdtemp(path.join(tmpdir(), "ompide "));
 const pins = JSON.parse(
   await readFile(path.join(root, "toolchain/tools.json"), "utf8")
 );
+const bridgePath = await cargoExecutable({
+  profile: "debug",
+  target: pins.target,
+  binary: "pawn-lsp-bridge.exe",
+});
 const versions = Object.fromEntries(
   pins.tools.map((tool) => [tool.name, tool.version])
 );
