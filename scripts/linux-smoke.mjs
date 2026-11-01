@@ -7,7 +7,15 @@ import path from "node:path";
 if (process.platform !== "linux")
   throw new Error("Linux startup check must run on Linux");
 const directory = await mkdtemp(path.join(tmpdir(), "ompide-installed-"));
-const child = spawn("/usr/bin/ompide", [], {
+const executableIndex = process.argv.indexOf("--executable");
+if (executableIndex >= 0 && !process.argv[executableIndex + 1])
+  throw new Error("--executable requires a path");
+const executable =
+  executableIndex >= 0
+    ? path.resolve(process.argv[executableIndex + 1])
+    : "/usr/bin/ompide";
+const child = spawn(executable, [], {
+  cwd: directory,
   detached: true,
   stdio: ["ignore", "pipe", "pipe"],
   env: {
@@ -51,9 +59,7 @@ try {
     /ompide/i,
     `No native application window: ${output}\n${windows}`
   );
-  console.log(
-    "Installed Linux package opened a native ompide window under Xvfb."
-  );
+  console.log("Linux package opened a native ompide window under Xvfb.");
 } finally {
   stopGroup("SIGTERM");
   await Promise.race([

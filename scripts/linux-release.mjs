@@ -1,9 +1,10 @@
-// Linux-only assembly and verification, run by CI after Tauri builds the .deb.
+// Linux-only assembly and verification, run by CI after Tauri builds the .deb payload.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
   appendFile,
   cp,
+  chmod,
   copyFile,
   mkdir,
   mkdtemp,
@@ -21,6 +22,7 @@ import {
   removeTemporary,
   sha256,
 } from "./release-support.mjs";
+import { payloadFiles, verifyPayloadFiles } from "./linux-package-support.mjs";
 import { compilerEnvironment } from "./toolchain-target.mjs";
 import { localBuildMatches } from "./lsp-build-record.mjs";
 
@@ -123,18 +125,16 @@ if (process.argv[2] === "notices") {
         `Missing libraries for ${file}: ${libraries}`
       );
     }
-    const tools = path.join(temporary, "tools");
-    await mkdir(tools);
-    await copyFile(serverPath, path.join(tools, "pawnlsp"));
-    await cp(path.join(resources, "binaries"), path.join(tools, "binaries"), {
-      recursive: true,
-    });
-    run(process.execPath, ["scripts/verify-tools.mjs", "--package", tools], {
-      stdio: "inherit",
-    });
     const files = path.join(temporary, "files");
     await mkdir(files);
-    await copyFile(deb, path.join(files, packages[0]));
+    await cp(path.join(extracted, "usr"), path.join(files, "usr"), {
+      recursive: true,
+    });
+    await copyFile(
+      path.join(projectRoot, "packaging/linux/ompide"),
+      path.join(files, "ompide")
+    );
+    await chmod(path.join(files, "ompide"), 0o755);
     await copyFile(
       path.join(projectRoot, "LICENSE"),
       path.join(files, "LICENSE")
@@ -154,14 +154,7 @@ if (process.argv[2] === "notices") {
       pawnlsp: record,
       files: [],
     };
-    for (const name of await readdir(files)) {
-      const bytes = await readFile(path.join(files, name));
-      manifest.files.push({
-        path: name,
-        size: bytes.length,
-        sha256: sha256(bytes),
-      });
-    }
+    manifest.files = await payloadFiles(files);
     await writeFile(
       path.join(files, "release-manifest.json"),
       JSON.stringify(manifest, null, 2) + "\n"
@@ -171,21 +164,55 @@ if (process.argv[2] === "notices") {
       `ompide-${settings.version}-linux-x64.zip`
     );
     await rm(archive, { force: true });
-    run("zip", [
-      "-j",
-      archive,
-      ...(await readdir(files)).map((file) => path.join(files, file)),
-    ]);
+    run("zip", ["-q", "-r", archive, "."], { cwd: files });
     const checksum = `${archive}.sha256`;
     await writeFile(
       checksum,
       `${sha256(await readFile(archive))}  ${path.basename(archive)}\n`
     );
     run("unzip", ["-t", archive]);
+    const verified = path.join(temporary, "portable extracted with spaces");
+    run("unzip", ["-q", archive, "-d", verified]);
+    await verifyPayloadFiles(verified, manifest.files);
+    const tools = path.join(temporary, "tools");
+    await mkdir(tools);
+    await copyFile(
+      path.join(verified, "usr/bin/pawnlsp"),
+      path.join(tools, "pawnlsp")
+    );
+    await cp(
+      path.join(verified, "usr/lib/ompide/binaries"),
+      path.join(tools, "binaries"),
+      { recursive: true }
+    );
+    run(process.execPath, ["scripts/verify-tools.mjs", "--package", tools], {
+      stdio: "inherit",
+    });
+
+    // Check the extracted archive before installing anything system-wide.
+    // Tauri resolves resources through usr/bin/../lib/ompide in this layout.
+    run(
+      "xvfb-run",
+      [
+        "-a",
+        process.execPath,
+        "scripts/linux-smoke.mjs",
+        "--executable",
+        path.join(verified, "ompide"),
+      ],
+      { stdio: "inherit" }
+    );
+    const publishedDeb = path.join(output, packages[0]);
+    await copyFile(deb, publishedDeb);
+    const debChecksum = `${publishedDeb}.sha256`;
+    await writeFile(
+      debChecksum,
+      `${sha256(await readFile(publishedDeb))}  ${path.basename(publishedDeb)}\n`
+    );
     if (process.env.GITHUB_OUTPUT)
       await appendFile(
         process.env.GITHUB_OUTPUT,
-        `archive=${archive}\nchecksum=${checksum}\ndeb=${deb}\n`
+        `archive=${archive}\nchecksum=${checksum}\ndeb=${publishedDeb}\ndebChecksum=${debChecksum}\n`
       );
     console.log(`Verified Linux package: ${archive}`);
   } finally {

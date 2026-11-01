@@ -1,0 +1,20 @@
+# Packages the exact CI-built Debian payload without recompiling or stripping it.
+pkgname=ompide
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='A desktop IDE for Pawn and open.mp'
+arch=('x86_64')
+url='https://github.com/AmyrAhmady/ompide'
+license=('MPL-2.0')
+depends=('cairo' 'gdk-pixbuf2' 'glib2' 'gtk3' 'pango' 'webkit2gtk-4.1' 'libxdo' 'lib32-glibc' 'hicolor-icon-theme')
+optdepends=('git: source control integration')
+options=('!strip' '!debug')
+source=('ompide.deb' 'LICENSE')
+noextract=('ompide.deb')
+sha256sums=('@DEB_SHA256@' '@LICENSE_SHA256@')
+
+package() {
+  set -o pipefail
+  bsdtar -xOf "$srcdir/ompide.deb" '@DATA_ARCHIVE@' | bsdtar -xf - -C "$pkgdir"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

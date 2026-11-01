@@ -113,6 +113,16 @@ jobs:
           sudo apt-get install -y "$DEB"
           xvfb-run -a npm run release:linux:smoke
 
+      - name: Upload the Debian payload for installation and Arch packaging
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-debian-payload
+          path: |
+            ${{ steps.package.outputs.deb }}
+            ${{ steps.package.outputs.debChecksum }}
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload the ZIP directly
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -136,4 +146,69 @@ jobs:
         run: |
           echo '## ompide Linux x64' >> "$GITHUB_STEP_SUMMARY"
           echo "[Download ZIP]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Debian/Ubuntu installer, bundled pawnlsp/compiler/library, licenses and checksums. Installed startup checked under Xvfb; interactive desktop testing remains separate.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Portable ZIP: extract and run ./ompide. Bundled pawnlsp/compiler/library, licenses and checksums. Portable and installed startup checked under Xvfb. Debian installer available separately; interactive desktop testing remains separate.' >> "$GITHUB_STEP_SUMMARY"
+
+  arch-x64:
+    needs: linux-x64
+    runs-on: ubuntu-22.04
+    container: archlinux:base-devel
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install Arch packaging and runtime prerequisites
+        run: |
+          if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+            printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+          fi
+          pacman -Syu --noconfirm --needed base-devel git nodejs gtk3 webkit2gtk-4.1 libxdo lib32-glibc hicolor-icon-theme xorg-server-xvfb xorg-xwininfo xorg-xauth
+          useradd --create-home ompide-build
+
+      - name: Check out packaging scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the verified Debian payload
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-debian-payload
+          path: release/linux-debian-payload
+
+      - name: Build, install and smoke-test the Arch package
+        id: package
+        run: node scripts/arch-release.mjs release/linux-debian-payload
+
+      - name: Upload the Arch package directly
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ steps.package.outputs.archive }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the Arch checksum
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ steps.package.outputs.checksum }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the versioned package recipe
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: release/PKGBUILD
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize the Arch package
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          echo '## ompide Arch Linux x64' >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download package]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Install with sudo pacman -U ./ompide-*.pkg.tar.zst after enabling multilib. Bundled tools and installed startup checked in an Arch container; no AUR publication.' >> "$GITHUB_STEP_SUMMARY"

@@ -302,29 +302,49 @@ avoid silently choosing a stale build. This option is otherwise unnecessary.
 
 `.github/workflows/linux-build.yml` builds on Ubuntu 22.04 independently of the
 Windows workflow. Pushes to master, version tags, pull requests and manual runs
-produce a ZIP containing a Debian installer, installation instructions, license
-and a checksum manifest. macOS and other Linux package formats remain deferred.
+produce a portable ZIP and a separate Debian installer. A dependent job packages
+the same verified binaries for Arch Linux. macOS remains deferred.
 
-The workflow prepares tools, checks the frontend and Rust code, runs real LSP
-and compiler tests, builds a `.deb`, verifies its extracted contents, installs it
-and checks that a native window opens under Xvfb. This startup check does not
-replace interactive testing on a Linux desktop.
+Extract the portable ZIP and run `./ompide`. Its launcher executes
+`usr/bin/ompide`; pawnlsp lives alongside the binary, and Tauri finds resources at
+`usr/lib/ompide`. This preserves Tauri's normal relative resource lookup without
+relying on an installed copy, an absolute installation path or custom environment
+variables. GTK/WebKitGTK and libc remain system dependencies; see the included
+README. Preferences continue to use the normal application data directory.
+
+The Ubuntu job prepares tools, checks frontend/Rust code, runs real LSP and
+compiler tests, builds a `.deb`, and checks its contents. It copies the payload
+into the ZIP, records every file's hash and Unix mode, re-extracts the ZIP into a
+path containing spaces, verifies the inventory, tests the archived tools, and
+checks native startup under Xvfb before installing any system copy. It also
+installs and checks the Debian package. These checks do not replace interactive
+testing on a real Linux desktop.
+
+The Arch job runs in the official `archlinux:base-devel` container. It verifies
+the Debian payload checksum and generates a version/checksum-specific PKGBUILD
+from `packaging/arch/PKGBUILD.in`. Unprivileged makepkg produces a `.pkg.tar.zst`
+without stripping or recompiling binaries. The job compares original and Arch
+payload hashes/modes, installs with pacman, checks installed files, probes both
+tools and verifies startup as an unprivileged user under Xvfb. It uploads the
+package, SHA-256 checksum and generated recipe; it does not publish to the AUR.
+The container follows Arch's rolling packages so compatibility changes surface
+in CI instead of testing against an obsolete snapshot.
 
 `toolchain/tools-linux.json` pins the official open.mp compiler archive,
 executable and `libpawnc.so` checksums. The upstream compiler is 32-bit even
-though ompide and pawnlsp are x64. Debian/Ubuntu therefore needs the i386
-architecture enabled and `libc6:i386`; the installer declares that dependency.
-Only compiler subprocesses receive the bundled library lookup path.
+though ompide and pawnlsp are x64. Debian/Ubuntu needs the i386 architecture and
+`libc6:i386`; Arch needs multilib enabled and `lib32-glibc`. Both installer recipes
+declare that runtime dependency. Only compiler subprocesses receive the bundled
+library lookup path.
 
 The Linux language server uses the same pinned source, patch and analysis fix
-as Windows. CI uses the release Go version in `pawnlsp-build.json`. Its first
-binary checksum is not known before the first Linux build: the source build
-records it with source/patch/compiler provenance, the application embeds it,
-and packaging verifies the receipt and shipped executable agree. A fixed
-Linux binary checksum can be pinned after a verified reproducible CI build.
-The existing fixed Windows checksum remains enforced.
+as Windows. CI uses the release Go version in `pawnlsp-build.json`. Its source
+build records the binary checksum with source/patch/compiler provenance; the
+application embeds it, and packaging verifies the receipt and executable agree.
+A fixed Linux binary checksum can be pinned after a verified reproducible CI
+build. The existing fixed Windows checksum remains enforced.
 
 CI runs `npm run tools:prepare -- --download --reproducible`, then
 `npm run release:linux:notices`, Tauri's Debian build, and
-`npm run release:linux:package`. The final installed startup check is
-`xvfb-run -a npm run release:linux:smoke`. No Linux build is required locally.
+`npm run release:linux:package`. `npm run release:arch:package` requires Arch's
+packaging tools and the dedicated CI account. No Linux build is required locally.

@@ -18,7 +18,7 @@
     "release:package": "node scripts/package-release.mjs",
     "release:verify": "node scripts/verify-release.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
-    "test:release": "node --test scripts/release-support.test.mjs scripts/go-toolchain.test.mjs scripts/lsp-build-record.test.mjs scripts/toolchain-target.test.mjs scripts/tool-archive.test.mjs",
+    "test:release": "node --test scripts/release-support.test.mjs scripts/go-toolchain.test.mjs scripts/lsp-build-record.test.mjs scripts/toolchain-target.test.mjs scripts/tool-archive.test.mjs scripts/linux-package-support.test.mjs",
     "test:grammar": "node --test scripts/pawn-grammar.test.mjs",
     "audit:localization": "node scripts/audit-localization.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
@@ -29,7 +29,8 @@
     "tools:build-lsp": "node scripts/build-pawnlsp.mjs",
     "release:linux:notices": "node scripts/linux-release.mjs notices",
     "release:linux:package": "node scripts/linux-release.mjs package",
-    "release:linux:smoke": "node scripts/linux-smoke.mjs"
+    "release:linux:smoke": "node scripts/linux-smoke.mjs",
+    "release:arch:package": "node scripts/arch-release.mjs"
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "37.6.0",
