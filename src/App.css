@@ -1242,6 +1242,37 @@ dialog footer button.primary {
 .source-control p {
   overflow-wrap: anywhere;
 }
+.source-control button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--input-border);
+  background: var(--button-secondaryBackground, var(--input-background));
+  color: var(--button-secondaryForeground, var(--input-foreground));
+  font-size: 12px;
+  line-height: 18px;
+}
+.source-control button:hover:enabled {
+  background: var(
+    --button-secondaryHoverBackground,
+    var(--list-hoverBackground)
+  );
+}
+.source-control button.primary {
+  background: var(--button-background);
+  color: var(--button-foreground);
+  border-color: var(--button-border, var(--button-background));
+}
+.source-control button.primary:hover:enabled {
+  background: var(--button-hoverBackground, var(--button-background));
+}
+.source-control > .panel-heading {
+  padding: 0;
+  gap: 8px;
+}
+.source-control .panel-heading button {
+  flex-shrink: 0;
+  font-size: 12px;
+}
 .source-control label {
   display: flex;
   flex-direction: column;
@@ -1255,9 +1286,15 @@ dialog footer button.primary {
   min-width: 0;
   box-sizing: border-box;
   font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-background);
+  color: var(--input-foreground);
 }
 .source-control textarea {
   resize: vertical;
+  min-height: 64px;
+  line-height: 1.5;
 }
 .scm-actions {
   display: flex;
@@ -1280,6 +1317,9 @@ dialog footer button.primary {
 }
 .scm-changes .panel-heading {
   flex-wrap: wrap;
+  gap: 4px;
+  height: auto;
+  min-height: 40px;
   padding: 8px 0;
 }
 .scm-changes ul {
@@ -1291,6 +1331,8 @@ dialog footer button.primary {
   display: flex;
   min-width: 0;
   align-items: center;
+  gap: 4px;
+  padding: 2px 0;
 }
 .scm-changes .scm-file {
   display: flex;
@@ -1302,6 +1344,10 @@ dialog footer button.primary {
   background: transparent;
   border: 0;
 }
+.scm-changes .scm-file:hover:enabled {
+  background: var(--list-hoverBackground);
+  color: var(--sideBar-foreground, var(--editor-foreground));
+}
 .scm-file span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1312,10 +1358,15 @@ dialog footer button.primary {
 }
 .source-control details {
   border-top: 1px solid var(--panel-border);
-  padding: 9px 0;
+  padding: 4px 0;
 }
 .source-control summary {
   cursor: pointer;
+  padding: 7px 6px;
+  border-radius: var(--radius-control);
+}
+.source-control summary:hover {
+  background: var(--list-hoverBackground);
 }
 .source-control fieldset {
   border: 0;
