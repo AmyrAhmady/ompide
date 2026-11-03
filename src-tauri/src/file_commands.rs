@@ -59,6 +59,23 @@ fn mutation_error(failure: io::Error) -> AppError {
 }
 
 #[tauri::command]
+pub async fn reveal_entry(
+    app: AppHandle,
+    state: State<'_, NativeState>,
+    path: PathBuf,
+) -> Result<()> {
+    let path = scope(&state)?.resolve(&path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .reveal_item_in_dir(path)
+            .map_err(|failure| error("revealFailed", failure.to_string()))
+    })
+    .await
+    .map_err(|failure| error("operationFailed", failure.to_string()))?
+}
+
+#[tauri::command]
 pub async fn create_entry(
     state: State<'_, NativeState>,
     parent: PathBuf,

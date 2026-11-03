@@ -12,6 +12,17 @@ export function withinPath(path: string, parent: string): boolean {
   return key === root || key.startsWith(root + "/");
 }
 
+/** Workspace-relative clipboard paths use native separators on Windows. */
+export function relativePath(path: string, root: string): string | undefined {
+  if (!withinPath(path, root)) return undefined;
+  const parent = root.replaceAll("\\", "/").replace(/\/+$/, "");
+  const relative = path.replaceAll("\\", "/").slice(parent.length + 1);
+  if (!relative) return ".";
+  return /^[A-Za-z]:[/\\]|^[/\\]{2}/.test(root)
+    ? relative.replaceAll("/", "\\")
+    : relative;
+}
+
 export function reconcilePaths(
   paths: string[],
   source: string,

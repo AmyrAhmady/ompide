@@ -69,6 +69,7 @@ pub fn run() {
             commands::create_entry,
             commands::rename_entry,
             commands::trash_entry,
+            commands::reveal_entry,
             commands::git_request,
             commands::cancel_git,
             commands::terminal_shells,

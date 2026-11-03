@@ -416,8 +416,8 @@ export class Workbench {
     await this.openSnapshot(await native.recentDocument(path));
   }
 
-  async openPath(path: string): Promise<void> {
-    await this.openSnapshot(await native.read(path));
+  async openPath(path: string, focusEditor = true): Promise<void> {
+    await this.openSnapshot(await native.read(path), focusEditor);
   }
 
   async openUri(uri: string, line?: number, column?: number): Promise<void> {
@@ -476,10 +476,13 @@ export class Workbench {
     }
   }
 
-  private async openSnapshot(snapshot: FileSnapshot): Promise<void> {
+  private async openSnapshot(
+    snapshot: FileSnapshot,
+    focusEditor = true
+  ): Promise<void> {
     snapshot = { ...snapshot, uri: Uri.parse(snapshot.uri).toString() };
     if (this.documents.has(snapshot.uri)) {
-      this.activate(snapshot.uri);
+      this.activate(snapshot.uri, focusEditor);
       return;
     }
     const existing = this.opening.get(snapshot.uri);
@@ -492,7 +495,8 @@ export class Workbench {
       snapshot.uri,
       snapshot.path.split(/[\\/]/).at(-1) ?? snapshot.path,
       snapshot.text,
-      snapshot
+      snapshot,
+      focusEditor
     );
     this.opening.set(snapshot.uri, opening);
     try {
@@ -523,7 +527,8 @@ export class Workbench {
     uri: string,
     name: string,
     text: string,
-    snapshot?: FileSnapshot
+    snapshot?: FileSnapshot,
+    focusEditor = true
   ): Promise<void> {
     const resource = Uri.parse(uri);
     const largeFile =
@@ -576,10 +581,10 @@ export class Workbench {
       listener,
       largeFile,
     });
-    this.activate(uri);
+    this.activate(uri, focusEditor);
   }
 
-  activate(uri: string): void {
+  activate(uri: string, focusEditor = true): void {
     const document = this.documents.get(uri);
     if (!document || !this.codeEditor) return;
     this.rememberLocation("edit");
@@ -596,7 +601,7 @@ export class Workbench {
     } finally {
       this.navigationMuted--;
     }
-    this.codeEditor.focus();
+    if (focusEditor) this.codeEditor.focus();
     this.rememberLocation(changed ? "jump" : "edit");
     const position = this.codeEditor.getPosition();
     this.update({

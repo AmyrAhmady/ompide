@@ -1,7 +1,14 @@
-import { memo, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { Uri } from "monaco-editor";
 import { workbench } from "../app/workbench";
-import type { Entry } from "../lib/native";
+import { native, type Entry } from "../lib/native";
 import { describeError, t, type TranslationKey } from "../lib/i18n";
 import {
   childPath,
@@ -9,12 +16,14 @@ import {
   parentPath,
   pathKey,
   withinPath,
+  relativePath,
 } from "../lib/paths";
 import { Modal } from "../components/Modal";
 import { Icon } from "../components/Icon";
 import { FileIcon } from "../components/FileIcon";
 
 type Action = "file" | "folder" | "rename" | "trash";
+type PathAction = "copyPath" | "copyRelativePath" | "revealNative";
 type Request = { action: Action; entry: Entry };
 type Listing = { revision: number; entries: Entry[]; error?: string };
 type Row = { entry: Entry; depth: number; position: number; total: number };
@@ -144,6 +153,7 @@ function ContextMenu({
   close,
   choose,
   open,
+  pathAction,
 }: {
   context: Context;
   root: string;
@@ -151,8 +161,16 @@ function ContextMenu({
   close: (restore?: boolean) => void;
   choose: (action: Action) => void;
   open: () => void;
+  pathAction: (action: PathAction) => void;
 }) {
   const menu = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = menu.current;
+    if (!element) return;
+    const bounds = element.getBoundingClientRect();
+    element.style.left = `${Math.max(6, Math.min(context.x, window.innerWidth - bounds.width - 6))}px`;
+    element.style.top = `${Math.max(6, Math.min(context.y, window.innerHeight - bounds.height - 6))}px`;
+  }, [context.x, context.y]);
   useEffect(() => {
     menu.current?.querySelector<HTMLButtonElement>("button:enabled")?.focus();
 
@@ -187,6 +205,18 @@ function ContextMenu({
     } else if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
       close(true);
+    } else if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      (event.key === "F2" || event.key === "Delete") &&
+      !disabled &&
+      pathKey(context.entry.path) !== pathKey(root)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      choose(event.key === "F2" ? "rename" : "trash");
     }
   };
   return (
@@ -243,6 +273,20 @@ function ContextMenu({
             <kbd>Delete</kbd>
           </button>
         </>
+      )}
+      <hr />
+      {(["copyPath", "copyRelativePath", "revealNative"] as const).map(
+        (action) => (
+          <button
+            key={action}
+            type="button"
+            role="menuitem"
+            disabled={action === "revealNative" && context.entry.symlink}
+            onClick={() => pathAction(action)}
+          >
+            {t(`explorer.${action}`)}
+          </button>
+        )
       )}
     </div>
   );
@@ -413,10 +457,33 @@ function ExplorerView({
     });
   };
 
-  const open = (entry: Entry) => {
+  const open = (entry: Entry, focusEditor = false) => {
     if (entry.symlink) return;
     if (entry.directory) toggle(entry);
-    else void workbench.openPath(entry.path).catch(workbench.report);
+    else
+      void workbench.openPath(entry.path, focusEditor).catch(workbench.report);
+  };
+
+  const pathAction = (action: PathAction, entry: Entry) => {
+    const operation = async () => {
+      if (action === "revealNative") {
+        await native.revealEntry(entry.path);
+      } else {
+        const value =
+          action === "copyRelativePath" && root
+            ? relativePath(entry.path, root)
+            : entry.path;
+        if (value === undefined) throw { code: "permissionDenied" };
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          throw { code: "clipboardWrite" };
+        }
+      }
+    };
+    void operation().catch(workbench.report);
+    setContext(undefined);
+    if (action !== "revealNative") focus(entry.path);
   };
 
   const choose = (action: Action, entry: Entry | undefined) => {
@@ -460,7 +527,7 @@ function ExplorerView({
           focus(parentPath(entry.path));
         break;
       case "Enter":
-        open(entry);
+        open(entry, true);
         break;
       case " ":
         setSelected(pathKey(entry.path));
@@ -623,7 +690,13 @@ function ExplorerView({
                             : entry.path
                         }
                         onFocus={() => setSelected(key)}
-                        onClick={() => open(entry)}
+                        onClick={(event) => {
+                          if (event.detail < 2) open(entry);
+                        }}
+                        onDoubleClick={() => {
+                          if (!entry.directory && !entry.symlink)
+                            workbench.focusEditor();
+                        }}
                         onKeyDown={(event) => navigate(event, row, index)}
                         onContextMenu={(event) => {
                           event.preventDefault();
@@ -684,8 +757,9 @@ function ExplorerView({
           choose={(action) => choose(action, context.entry)}
           open={() => {
             setContext(undefined);
-            open(context.entry);
+            open(context.entry, true);
           }}
+          pathAction={(action) => pathAction(action, context.entry)}
         />
       )}
       {request && (

@@ -180,4 +180,5 @@ export const native = {
   renameEntry: (path: string, name: string) =>
     invoke<EntryMutation>("rename_entry", { path, name }),
   trashEntry: (path: string) => invoke<EntryMutation>("trash_entry", { path }),
+  revealEntry: (path: string) => invoke<void>("reveal_entry", { path }),
 };
