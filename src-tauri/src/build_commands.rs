@@ -49,6 +49,12 @@ fn root(state: &NativeState, selected: Option<PathBuf>) -> Result<Workspace> {
 }
 
 fn project_error(failure: io::Error) -> AppError {
+    if failure
+        .get_ref()
+        .is_some_and(|detail| detail.is::<project::ConfigError>())
+    {
+        return failure.into();
+    }
     if matches!(
         failure.kind(),
         io::ErrorKind::InvalidInput | io::ErrorKind::InvalidData

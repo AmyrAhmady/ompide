@@ -98,15 +98,70 @@ pub struct BuildConfiguration {
     pub defines: std::collections::BTreeMap<String, String>,
 }
 
-fn invalid(reason: impl Into<String>) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidInput, reason.into())
+/// Structured configuration failures survive the io boundary for localization.
+#[derive(Clone, Debug)]
+pub struct ConfigError {
+    pub code: &'static str,
+    pub parameters: Value,
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.parameters)
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+fn invalid(code: &'static str, parameters: Value) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        ConfigError { code, parameters },
+    )
+}
+
+fn path_error(field: &str, path: &std::path::Path, failure: io::Error) -> io::Error {
+    invalid(
+        "projectConfigPath",
+        serde_json::json!({
+            "field": field, "path": path, "reason": failure.to_string()
+        }),
+    )
+}
+
+fn with_parameter(failure: io::Error, key: &str, value: Value) -> io::Error {
+    if let Some(diagnostic) = failure
+        .get_ref()
+        .and_then(|detail| detail.downcast_ref::<ConfigError>())
+    {
+        let mut parameters = diagnostic.parameters.clone();
+        parameters[key] = value;
+        invalid(diagnostic.code, parameters)
+    } else {
+        failure
+    }
+}
+
+fn nested_field(failure: io::Error, parent: &str) -> io::Error {
+    let field = failure
+        .get_ref()
+        .and_then(|detail| detail.downcast_ref::<ConfigError>())
+        .and_then(|diagnostic| diagnostic.parameters["field"].as_str())
+        .map(|field| format!("{parent}.{field}"));
+    match field {
+        Some(field) => with_parameter(failure, "field", Value::String(field)),
+        None => failure,
+    }
 }
 
 fn text<'a>(value: &'a Value, key: &str) -> io::Result<&'a str> {
     match value.get(key) {
         None | Some(Value::Null) => Ok(""),
         Some(Value::String(text)) => Ok(text),
-        _ => Err(invalid(format!("{key} must be a string"))),
+        _ => Err(invalid(
+            "projectConfigString",
+            serde_json::json!({"field": key}),
+        )),
     }
 }
 
@@ -115,34 +170,47 @@ fn strings(value: &Value, key: &str) -> io::Result<Vec<String>> {
         None | Some(Value::Null) => Ok(vec![]),
         Some(Value::Array(items)) if items.len() <= 256 => items
             .iter()
-            .map(|item| {
+            .enumerate()
+            .map(|(index, item)| {
                 item.as_str()
                     .filter(|item| item.len() <= 32768 && !item.contains('\0'))
                     .map(str::to_owned)
-                    .ok_or_else(|| invalid(format!("invalid {key} item")))
+                    .ok_or_else(|| {
+                        invalid(
+                            "projectConfigStringItem",
+                            serde_json::json!({"field": format!("{key}[{index}]")}),
+                        )
+                    })
             })
             .collect(),
-        _ => Err(invalid(format!(
-            "{key} must be an array with at most 256 strings"
-        ))),
+        _ => Err(invalid(
+            "projectConfigStringArray",
+            serde_json::json!({"field": key}),
+        )),
     }
 }
 
 fn selected(configuration: &Value, name: &str) -> io::Result<Value> {
     let defaults = configuration.get("build").filter(|value| !value.is_null());
     if defaults.is_some_and(|value| !value.is_object()) {
-        return Err(invalid("build must be an object"));
+        return Err(invalid(
+            "projectConfigObject",
+            serde_json::json!({"field": "build"}),
+        ));
     }
     let builds = match configuration.get("builds") {
         None => &[][..],
         Some(Value::Array(builds)) if builds.len() <= 128 => builds.as_slice(),
-        _ => return Err(invalid("builds must be an array with at most 128 entries")),
+        _ => return Err(invalid("projectConfigBuilds", serde_json::json!({}))),
     };
     let mut names = std::collections::HashSet::new();
     for build in builds {
         let name = text(build, "name")?;
         if !build.is_object() || name.is_empty() || !names.insert(name) {
-            return Err(invalid("named builds need unique nonempty names"));
+            return Err(invalid(
+                "projectConfigBuildName",
+                serde_json::json!({"name": name}),
+            ));
         }
     }
     let chosen = if name.is_empty() {
@@ -152,12 +220,20 @@ fn selected(configuration: &Value, name: &str) -> io::Result<Value> {
             builds
                 .iter()
                 .find(|build| build.get("name").and_then(Value::as_str) == Some(name))
-                .ok_or_else(|| invalid("unknown named build"))?,
+                .ok_or_else(|| {
+                    invalid(
+                        "projectConfigUnknownBuild",
+                        serde_json::json!({"name": name}),
+                    )
+                })?,
         )
     };
     let mut merged = defaults.cloned().unwrap_or_else(|| serde_json::json!({}));
     if let Some(chosen) = chosen {
-        for (key, value) in chosen.as_object().ok_or_else(|| invalid("invalid build"))? {
+        for (key, value) in chosen
+            .as_object()
+            .ok_or_else(|| invalid("projectConfigObject", serde_json::json!({"field": "build"})))?
+        {
             if value.is_null()
                 || value.as_str().is_some_and(str::is_empty)
                 || value.as_array().is_some_and(Vec::is_empty)
@@ -169,12 +245,18 @@ fn selected(configuration: &Value, name: &str) -> io::Result<Value> {
                     .get(key)
                     .cloned()
                     .unwrap_or_else(|| serde_json::json!({}));
-                let values = value
-                    .as_object()
-                    .ok_or_else(|| invalid("constants must be an object"))?;
-                let target = constants
-                    .as_object_mut()
-                    .ok_or_else(|| invalid("constants must be an object"))?;
+                let values = value.as_object().ok_or_else(|| {
+                    invalid(
+                        "projectConfigObject",
+                        serde_json::json!({"field": "constants"}),
+                    )
+                })?;
+                let target = constants.as_object_mut().ok_or_else(|| {
+                    invalid(
+                        "projectConfigObject",
+                        serde_json::json!({"field": "constants"}),
+                    )
+                })?;
                 target.extend(
                     values
                         .iter()
@@ -190,7 +272,8 @@ fn selected(configuration: &Value, name: &str) -> io::Result<Value> {
 }
 
 pub fn profile(configuration: &Value) -> io::Result<String> {
-    let extension = text(&configuration["pawnkit"], "profile")?;
+    let extension = text(&configuration["pawnkit"], "profile")
+        .map_err(|failure| nested_field(failure, "pawnkit"))?;
     if !extension.is_empty() {
         return Ok(extension.to_owned());
     }
@@ -209,9 +292,13 @@ pub fn include_directory(scope: &Workspace, path: &std::path::Path) -> io::Resul
     } else {
         scope.root().join(path)
     };
-    let path = workspace::canonical(&path)?;
+    let path = workspace::canonical(&path)
+        .map_err(|failure| path_error("includePaths", &path, failure))?;
     if !path.is_dir() {
-        return Err(invalid("include path must be an existing directory"));
+        return Err(invalid(
+            "projectConfigDirectory",
+            serde_json::json!({"path": path}),
+        ));
     }
     Ok(path)
 }
@@ -221,7 +308,10 @@ pub fn include_directory(scope: &Workspace, path: &std::path::Path) -> io::Resul
 pub fn include_document(scope: &Workspace, path: &std::path::Path) -> io::Result<PathBuf> {
     let path = workspace::canonical(path)?;
     if !path.is_file() {
-        return Err(invalid("include document must be a regular file"));
+        return Err(invalid(
+            "projectConfigFile",
+            serde_json::json!({"path": path}),
+        ));
     }
     for manifest in discover(scope)?.manifests {
         let project = Workspace::open(manifest.parent().unwrap())?;
@@ -261,7 +351,19 @@ pub fn build_configuration(
     name: &str,
 ) -> io::Result<BuildConfiguration> {
     if !configuration.is_object() {
-        return Err(invalid("manifest must be an object"));
+        return Err(invalid(
+            "projectConfigObject",
+            serde_json::json!({"field": "manifest"}),
+        ));
+    }
+    if configuration
+        .get("pawnkit")
+        .is_some_and(|value| !value.is_null() && !value.is_object())
+    {
+        return Err(invalid(
+            "projectConfigObject",
+            serde_json::json!({"field": "pawnkit"}),
+        ));
     }
     let chosen = selected(configuration, name)?;
     let input = text(&chosen, "input")?;
@@ -271,34 +373,63 @@ pub fn build_configuration(
         input
     };
     if entry.is_empty() {
-        return Err(invalid("select a Pawn entry point in the manifest"));
+        return Err(invalid("projectConfigEntryMissing", serde_json::json!({})));
     }
-    let entry = scope.resolve(std::path::Path::new(entry))?;
+    let field = if input.is_empty() {
+        "entry"
+    } else {
+        "build.input"
+    };
+    let entry_path = scope.root().join(entry);
+    let entry = scope
+        .resolve(&entry_path)
+        .map_err(|failure| path_error(field, &entry_path, failure))?;
     if !entry.is_file()
         || !entry
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("pwn"))
     {
-        return Err(invalid("entry must be an existing .pwn file"));
+        return Err(invalid(
+            "projectConfigEntry",
+            serde_json::json!({"field": field, "path": entry}),
+        ));
     }
     let mut includes = vec![scope.root().to_owned(), entry.parent().unwrap().to_owned()];
     let include = text(configuration, "include_path")?;
     let mut declared = if include.is_empty() {
         vec![]
     } else {
-        vec![include.to_owned()]
+        vec![("include_path".to_owned(), include.to_owned())]
     };
-    declared.extend(strings(&configuration["pawnkit"], "includePaths")?);
-    declared.extend(strings(&chosen, "includes")?);
-    let arguments = strings(&chosen, "args")?;
-    declared.extend(arguments.iter().filter_map(|argument| {
-        argument
-            .strip_prefix("-i")
-            .filter(|path| !path.is_empty())
-            .map(str::to_owned)
-    }));
-    for path in declared {
-        let path = include_directory(scope, std::path::Path::new(&path))?;
+    declared.extend(
+        strings(&configuration["pawnkit"], "includePaths")
+            .map_err(|failure| nested_field(failure, "pawnkit"))?
+            .into_iter()
+            .enumerate()
+            .map(|(index, path)| (format!("pawnkit.includePaths[{index}]"), path)),
+    );
+    declared.extend(
+        strings(&chosen, "includes")
+            .map_err(|failure| nested_field(failure, "build"))?
+            .into_iter()
+            .enumerate()
+            .map(|(index, path)| (format!("build.includes[{index}]"), path)),
+    );
+    let arguments = strings(&chosen, "args").map_err(|failure| nested_field(failure, "build"))?;
+    declared.extend(
+        arguments
+            .iter()
+            .enumerate()
+            .filter_map(|(index, argument)| {
+                argument
+                    .strip_prefix("-i")
+                    .filter(|path| !path.is_empty())
+                    .map(|path| (format!("build.args[{index}]"), path.to_owned()))
+            }),
+    );
+    for (field, path) in declared {
+        let path = include_directory(scope, std::path::Path::new(&path))
+            .map_err(|failure| with_parameter(failure, "field", Value::String(field)))?;
         if !includes.contains(&path) {
             includes.push(path);
         }
@@ -308,14 +439,19 @@ pub fn build_configuration(
         let constants = constants
             .as_object()
             .filter(|values| values.len() <= 256)
-            .ok_or_else(|| invalid("constants must be an object with at most 256 entries"))?;
+            .ok_or_else(|| invalid("projectConfigConstants", serde_json::json!({})))?;
         for (name, value) in constants {
             let value = match value {
                 Value::String(value) => value.clone(),
                 Value::Number(value) => value.to_string(),
                 Value::Bool(value) => if *value { "1" } else { "0" }.to_owned(),
                 Value::Null => "1".to_owned(),
-                _ => return Err(invalid("constant values must be scalar")),
+                _ => {
+                    return Err(invalid(
+                        "projectConfigConstant",
+                        serde_json::json!({"name": name}),
+                    ));
+                }
             };
             defines.insert(name.clone(), value);
         }
@@ -336,19 +472,46 @@ pub fn inspect(scope: &Workspace) -> io::Result<ProjectInfo> {
         .collect();
     if manifests.len() != 1 {
         return Err(invalid(
-            "select a folder containing exactly one Pawn manifest",
+            "projectConfigManifestCount",
+            serde_json::json!({"path": scope.root(), "count": manifests.len()}),
         ));
     }
-    let manifest = workspace::read_document(&scope.resolve(&manifests[0])?)?;
+    let manifest = workspace::read_document(&scope.resolve(&manifests[0])?)
+        .map_err(|failure| path_error("manifest", &manifests[0], failure))?;
     if manifest.text.len() > 256 * 1024 {
-        return Err(invalid("manifest exceeds 256 KiB"));
+        return Err(invalid(
+            "projectConfigSize",
+            serde_json::json!({"path": manifest.path}),
+        ));
     }
     let configuration: Value = if manifest.path.extension().is_some_and(|ext| ext == "json") {
-        serde_json::from_str(&manifest.text).map_err(|failure| invalid(failure.to_string()))?
+        serde_json::from_str(&manifest.text).map_err(|failure| {
+            invalid(
+                "projectConfigSyntax",
+                serde_json::json!({
+                    "path": manifest.path,
+                    "line": failure.line(),
+                    "column": failure.column(),
+                    "reason": failure.to_string()
+                }),
+            )
+        })?
     } else {
-        serde_yaml_ng::from_str(&manifest.text).map_err(|failure| invalid(failure.to_string()))?
+        serde_yaml_ng::from_str(&manifest.text).map_err(|failure| {
+            let location = failure.location();
+            invalid(
+                "projectConfigSyntax",
+                serde_json::json!({
+                    "path": manifest.path,
+                    "line": location.as_ref().map_or(1, |location| location.line()),
+                    "column": location.as_ref().map_or(1, |location| location.column()),
+                    "reason": failure.to_string()
+                }),
+            )
+        })?
     };
-    let build = build_configuration(scope, &configuration, "")?;
+    let build = build_configuration(scope, &configuration, "")
+        .map_err(|failure| with_parameter(failure, "manifest", serde_json::json!(manifest.path)))?;
     let project = ProjectDetails {
         root: scope.root().to_owned(),
         manifest: manifest.path.clone(),
@@ -370,7 +533,7 @@ pub fn preview(
     includes: &[String],
 ) -> io::Result<String> {
     if preset != "openmp" || includes.len() > 64 {
-        return Err(invalid("invalid project setup"));
+        return Err(invalid("projectConfigSetup", serde_json::json!({})));
     }
     let entry = scope.resolve(entry)?;
     let relative = |path: &std::path::Path| -> io::Result<String> {
@@ -531,6 +694,147 @@ mod tests {
             json!({"entry": "main.pwn", "builds": [{"name": "x"}, {"name": "x"}]}),
         ] {
             assert!(build_configuration(&scope, &value, "").is_err());
+        }
+    }
+
+    #[test]
+    fn configuration_failures_identify_the_field_path_and_manifest() {
+        let root = fixture();
+        let scope = Workspace::open(root.path()).unwrap();
+        let manifest = root.path().join("pawn.json");
+        for (configuration, code, field) in [
+            (
+                json!({"entry":"main.pwn", "pawnkit":{"includePaths":["missing SDK"]}}),
+                "projectConfigPath",
+                "pawnkit.includePaths[0]",
+            ),
+            (
+                json!({"entry":"main.pwn", "include_path":"other.pwn"}),
+                "projectConfigDirectory",
+                "include_path",
+            ),
+            (json!({"entry":"missing.pwn"}), "projectConfigPath", "entry"),
+            (json!({"entry":"include"}), "projectConfigEntry", "entry"),
+            (json!({"entry":42}), "projectConfigString", "entry"),
+            (
+                json!({"entry":"main.pwn", "pawnkit":42}),
+                "projectConfigObject",
+                "pawnkit",
+            ),
+            (
+                json!({"entry":"main.pwn", "pawnkit":{"includePaths":42}}),
+                "projectConfigStringArray",
+                "pawnkit.includePaths",
+            ),
+            (
+                json!({"entry":"main.pwn", "pawnkit":{"includePaths":[42]}}),
+                "projectConfigStringItem",
+                "pawnkit.includePaths[0]",
+            ),
+            (
+                json!({"entry":"main.pwn", "build":{"args":42}}),
+                "projectConfigStringArray",
+                "build.args",
+            ),
+        ] {
+            fs::write(&manifest, serde_json::to_vec(&configuration).unwrap()).unwrap();
+            let failure = inspect(&scope).unwrap_err();
+            let diagnostic = failure
+                .get_ref()
+                .unwrap()
+                .downcast_ref::<ConfigError>()
+                .unwrap();
+            assert_eq!(diagnostic.code, code, "{configuration}");
+            assert_eq!(diagnostic.parameters["field"], field);
+            assert_eq!(
+                diagnostic.parameters["manifest"],
+                serde_json::json!(scope.root().join("pawn.json"))
+            );
+            if code == "projectConfigPath"
+                || code == "projectConfigDirectory"
+                || code == "projectConfigEntry"
+            {
+                let path = diagnostic.parameters["path"].as_str().unwrap();
+                assert!(std::path::Path::new(path).is_absolute());
+            }
+        }
+    }
+
+    #[test]
+    fn malformed_manifests_report_parser_location_and_recover_after_correction() {
+        let root = fixture();
+        let scope = Workspace::open(root.path()).unwrap();
+        for (name, source) in [
+            ("pawn.json", "{\n  \"entry\":\n}"),
+            ("pawn.yaml", "entry: main.pwn\npawnkit: [\n"),
+        ] {
+            let path = root.path().join(name);
+            fs::write(&path, source).unwrap();
+            let failure = inspect(&scope).unwrap_err();
+            let diagnostic = failure
+                .get_ref()
+                .unwrap()
+                .downcast_ref::<ConfigError>()
+                .unwrap();
+            assert_eq!(diagnostic.code, "projectConfigSyntax");
+            assert_eq!(
+                diagnostic.parameters["path"],
+                serde_json::json!(scope.root().join(name))
+            );
+            assert!(diagnostic.parameters["line"].as_u64().unwrap() >= 2);
+            assert!(diagnostic.parameters["column"].as_u64().unwrap() >= 1);
+            assert!(!diagnostic.parameters["reason"].as_str().unwrap().is_empty());
+            fs::write(
+                &path,
+                if name.ends_with("json") {
+                    "{\"entry\":\"main.pwn\"}"
+                } else {
+                    "entry: main.pwn\n"
+                },
+            )
+            .unwrap();
+            assert!(inspect(&scope).is_ok());
+            fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn named_build_failures_preserve_the_problem_instead_of_generic_invalid_input() {
+        let root = fixture();
+        let scope = Workspace::open(root.path()).unwrap();
+        for (configuration, name, code) in [
+            (
+                json!({"entry":"main.pwn", "builds":[{"name":"same"},{"name":"same"}]}),
+                "",
+                "projectConfigBuildName",
+            ),
+            (
+                json!({"entry":"main.pwn"}),
+                "missing",
+                "projectConfigUnknownBuild",
+            ),
+            (
+                json!({"entry":"main.pwn", "build":{"constants":{"FEATURE":[]}}}),
+                "",
+                "projectConfigConstant",
+            ),
+            (
+                json!({"entry":"main.pwn", "builds":{}}),
+                "",
+                "projectConfigBuilds",
+            ),
+            (json!({}), "", "projectConfigEntryMissing"),
+        ] {
+            let failure = build_configuration(&scope, &configuration, name).unwrap_err();
+            assert_eq!(
+                failure
+                    .get_ref()
+                    .unwrap()
+                    .downcast_ref::<ConfigError>()
+                    .unwrap()
+                    .code,
+                code
+            );
         }
     }
 

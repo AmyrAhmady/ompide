@@ -989,6 +989,15 @@ dialog footer button.primary {
   gap: 5px;
   margin: 12px 0;
 }
+.project-error {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.project-error pre {
+  white-space: pre-wrap;
+  font: inherit;
+}
 .project-dialog select,
 .project-dialog textarea {
   width: 100%;

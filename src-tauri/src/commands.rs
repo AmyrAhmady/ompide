@@ -58,6 +58,16 @@ pub struct AppError {
 }
 impl From<io::Error> for AppError {
     fn from(error: io::Error) -> Self {
+        if let Some(failure) = error
+            .get_ref()
+            .and_then(|detail| detail.downcast_ref::<pawn_core::project::ConfigError>())
+        {
+            return Self {
+                code: failure.code,
+                detail: error.to_string(),
+                parameters: failure.parameters.clone(),
+            };
+        }
         let codec_error = error
             .get_ref()
             .and_then(|detail| detail.downcast_ref::<pawn_core::text::TextError>());

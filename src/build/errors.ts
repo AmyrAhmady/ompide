@@ -1,3 +1,29 @@
+import { describeError } from "../lib/i18n";
+
+export function projectErrorDescription(error: unknown) {
+  const details = buildErrorDetails(error);
+  const parameters =
+    typeof error === "object" && error !== null && "parameters" in error
+      ? error.parameters
+      : undefined;
+  const manifest =
+    typeof parameters === "object" &&
+    parameters !== null &&
+    "manifest" in parameters &&
+    typeof parameters.manifest === "string"
+      ? parameters.manifest
+      : undefined;
+  return {
+    message: describeError(error),
+    manifest,
+    // Structured config errors are already translated with their specific context.
+    // Preserve external/native details for older or unexpected failures too.
+    detail: details?.code?.startsWith("projectConfig")
+      ? undefined
+      : details?.detail,
+  };
+}
+
 export interface BuildErrorDetails {
   code?: string;
   detail?: string;

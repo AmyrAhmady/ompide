@@ -759,6 +759,7 @@ export class Workbench {
   async selectProject(path: string): Promise<void> {
     if (building(this.state.build)) throw { code: "buildBusy" };
     const generation = ++this.projectGeneration;
+    this.update({ project: undefined, selectedBuild: "" });
     const project = await native.inspectProject(path);
     if (generation === this.projectGeneration)
       this.update({ project, selectedBuild: "" });
