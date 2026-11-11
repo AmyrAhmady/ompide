@@ -151,6 +151,12 @@ try {
   const modulePatch = path.join(root, "toolchain", pin.modulePatch.path);
   if (sha256(await readFile(modulePatch)) !== pin.modulePatch.sha256)
     throw new Error("PawnKit dependency patch checksum mismatch");
+  runGo([
+    "test",
+    "-mod=mod",
+    "github.com/pawnkit/pawn-analysis",
+    "github.com/pawnkit/pawn-parser",
+  ]);
   runGo(["mod", "vendor"]);
   execFileSync(
     "git",
@@ -162,7 +168,6 @@ try {
     windowsHide: true,
   });
   runGo(["test", "-mod=vendor", "github.com/pawnkit/pawn-project/paths"]);
-  runGo(["test", "-mod=vendor", "github.com/pawnkit/pawn-analysis"]);
   runGo(["test", "-mod=vendor", "./..."]);
   runGo(["mod", "verify"]);
   const executable = path.join(staging, `pawnlsp${host.suffix}`);

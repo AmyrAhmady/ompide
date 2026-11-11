@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.5`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.6`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -39,23 +39,17 @@ correction. Token caching, trivia reuse, debounce and background analysis remain
 enabled. A synchronous workspace-analysis regression fails before this fix;
 real protocol tests cover repeated full-text and full-range valid/invalid edits.
 
-Version `.3` also pins the macro-expansion fix from
-[`AmyrAhmady/pawn-analysis`](https://github.com/AmyrAhmady/pawn-analysis/commit/e928673f7577cb4e93a197a6cd3bfb87f0809998),
-commit `e928673f7577cb4e93a197a6cd3bfb87f0809998`, through Go replacement version
-`v0.0.0-20261101092659-e928673f7577`. Its module checksums and the required
-`pawn-parser` v1.5.11 update are included in the verified source patch. This
-corrects punctuation-bearing macro patterns and adjacent token substitution,
-which otherwise inflate native parameter counts in the open.mp includes. All
-existing overlay and lifecycle fixes remain. Builds fetch the immutable module
-through normal Go resolution; a local fork checkout is unnecessary. Switch back
-to an upstream dependency release once it includes the fix.
+Version `.6` pins pawn-analysis at `ffc1adb39c55` and pawn-parser at
+`aef31f442279` through checksum-verified Go module replacements. These revisions
+carry the fixes for textual macros, generated declarations, conditional control
+flow, and chained Pawn comparisons. Go resolves the pinned revisions through
+its normal module cache.
 
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in
-pawn-project and corrects enum headers and diagnostics for expanded macro
-declarations in pawn-parser and pawn-analysis. Preparation applies it in a
-disposable vendor tree and runs the resolver, analysis regression and upstream
-LSP tests. Build receipts and dependency notices record the patch hash.
+pawn-project. Preparation runs parser and analyzer tests, applies the patch
+in a disposable vendor tree, and runs the resolver and LSP tests. Build
+receipts and dependency notices record the patch hash.
 
 Shared SDK directories may be absolute or relative to the project, including
 `../shared SDK`. Configure `include_path` or `pawnkit.includePaths` for analysis
