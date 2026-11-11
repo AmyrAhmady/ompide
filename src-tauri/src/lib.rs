@@ -60,6 +60,7 @@ pub fn run() {
             commands::inspect_project,
             commands::build_tools,
             commands::choose_build_tool,
+            commands::choose_include_folder,
             commands::preview_project,
             commands::create_project,
             commands::build_project,

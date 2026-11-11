@@ -781,6 +781,9 @@ export class Workbench {
     await this.settings({ compilerPath: path });
   }
 
+  chooseIncludeFolder = (): Promise<string | null> =>
+    native.chooseIncludeFolder();
+
   previewProject = (
     entry: string,
     profile: string,

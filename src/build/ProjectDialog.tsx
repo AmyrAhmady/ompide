@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { workbench, type WorkbenchState } from "../app/workbench";
 import { Modal } from "../components/Modal";
 import { t } from "../lib/i18n";
+import { pathKey } from "../lib/paths";
 import { projectErrorDescription } from "./errors";
 import { buildConfiguration } from "./configuration";
 import type { Discovery, BuildTools } from "./types";
@@ -99,6 +100,26 @@ export function ProjectDialog({
       path.replace(/[/\\][^/\\]+$/, "").toLowerCase() ===
       state.root?.toLowerCase()
   );
+
+  const chooseIncludeFolder = async () => {
+    const root = state.root;
+    if (!root) return;
+    const folder = await workbench.chooseIncludeFolder();
+    if (folder === null || root !== workbench.getSnapshot().root) return;
+
+    const keyFor = (value: string) => pathKey(`${root}/${value}`);
+    setIncludes((current) => {
+      if (
+        current
+          .split(/\r?\n/)
+          .some((line) => keyFor(line.trim()) === keyFor(folder))
+      ) {
+        return current;
+      }
+      if (!current.trim()) return folder;
+      return current + (current.endsWith("\n") ? "" : "\n") + folder;
+    });
+  };
   return (
     <Modal label={t("project.title")} onCancel={close}>
       <div className="project-dialog">
@@ -200,6 +221,13 @@ export function ProjectDialog({
                   />
                 </label>
                 <div className="settings-tool-actions">
+                  <button
+                    type="button"
+                    disabled={!state.root || busy}
+                    onClick={() => execute(chooseIncludeFolder)}
+                  >
+                    {t("project.browseInclude")}
+                  </button>
                   <button
                     type="button"
                     disabled={!entry || busy}

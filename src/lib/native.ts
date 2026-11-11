@@ -149,6 +149,7 @@ export const native = {
     invoke<ProjectInfo>("inspect_project", { path }),
   buildTools: () => invoke<BuildTools>("build_tools"),
   chooseBuildTool: () => invoke<string | null>("choose_build_tool"),
+  chooseIncludeFolder: () => invoke<string | null>("choose_include_folder"),
   previewProject: (entry: string, profile: string, includes: string[]) =>
     invoke<string>("preview_project", { entry, profile, includes }),
   createProject: (text: string) =>

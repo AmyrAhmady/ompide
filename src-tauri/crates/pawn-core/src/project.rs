@@ -303,6 +303,33 @@ pub fn include_directory(scope: &Workspace, path: &std::path::Path) -> io::Resul
     Ok(path)
 }
 
+/// Express a picked include directory relative to the workspace on the same volume.
+pub fn relative_include_directory(scope: &Workspace, path: &std::path::Path) -> io::Result<String> {
+    let path = include_directory(scope, path)?;
+    let base = scope.root();
+    let shared = base
+        .components()
+        .zip(path.components())
+        .take_while(|(left, right)| left == right)
+        .count();
+    if shared == 0 {
+        return Err(invalid(
+            "projectConfigRelativeInclude",
+            serde_json::json!({"path": path}),
+        ));
+    }
+    let mut relative = PathBuf::new();
+    for _ in base.components().skip(shared) {
+        relative.push("..");
+    }
+    relative.extend(path.components().skip(shared));
+    Ok(if relative.as_os_str().is_empty() {
+        ".".to_owned()
+    } else {
+        relative.to_string_lossy().replace('\\', "/")
+    })
+}
+
 /// Authorize a navigation target only through declared include roots, without
 /// broadening workspace file operations. Callers grant access to this file only.
 pub fn include_document(scope: &Workspace, path: &std::path::Path) -> io::Result<PathBuf> {
@@ -551,11 +578,12 @@ pub fn preview(
     };
     let paths: Vec<_> = includes
         .iter()
-        .map(|path| {
-            let path = include_directory(scope, std::path::Path::new(path))?;
+        .map(|input| {
+            let input = std::path::Path::new(input);
+            let path = include_directory(scope, input)?;
             let value = path
                 .strip_prefix(scope.root())
-                .unwrap_or(&path)
+                .unwrap_or(if input.is_absolute() { &path } else { input })
                 .to_string_lossy()
                 .replace('\\', "/");
             Ok(if value.is_empty() {
@@ -676,6 +704,33 @@ mod tests {
         assert!(
             std::path::Path::new(preview["pawnkit"]["includePaths"][0].as_str().unwrap())
                 .is_absolute()
+        );
+    }
+
+    #[test]
+    fn picked_include_folders_stay_relative_in_project_preview() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("project");
+        let local = root.join("include");
+        let sdk = parent.path().join("shared SDK");
+        fs::create_dir_all(&local).unwrap();
+        fs::create_dir_all(&sdk).unwrap();
+        fs::write(root.join("main.pwn"), "main() {}").unwrap();
+        let scope = Workspace::open(&root).unwrap();
+        assert_eq!(relative_include_directory(&scope, &root).unwrap(), ".");
+        let includes = [&local, &sdk].map(|path| relative_include_directory(&scope, path).unwrap());
+        assert_eq!(includes, ["include", "../shared SDK"]);
+        let text = preview(&scope, &root.join("main.pwn"), "openmp", &includes).unwrap();
+        let configuration: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            configuration["pawnkit"]["includePaths"],
+            json!(["include", "../shared SDK"])
+        );
+        let build = build_configuration(&scope, &configuration, "").unwrap();
+        assert!(
+            build
+                .includes
+                .contains(&workspace::canonical(&sdk).unwrap())
         );
     }
 

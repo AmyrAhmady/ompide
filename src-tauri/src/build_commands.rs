@@ -186,6 +186,32 @@ pub async fn choose_build_tool(app: AppHandle) -> Result<Option<PathBuf>> {
 }
 
 #[tauri::command]
+pub async fn choose_include_folder(
+    app: AppHandle,
+    state: State<'_, NativeState>,
+) -> Result<Option<String>> {
+    let scope = root(&state, None)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(selected) = app
+            .dialog()
+            .file()
+            .set_directory(scope.root())
+            .blocking_pick_folder()
+        else {
+            return Ok(None);
+        };
+        let path = selected
+            .into_path()
+            .map_err(|failure| error("operationFailed", failure.to_string()))?;
+        project::relative_include_directory(&scope, &path)
+            .map(Some)
+            .map_err(project_error)
+    })
+    .await
+    .map_err(|failure| error("operationFailed", failure.to_string()))?
+}
+
+#[tauri::command]
 pub async fn preview_project(
     state: State<'_, NativeState>,
     entry: PathBuf,
