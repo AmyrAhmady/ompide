@@ -554,16 +554,24 @@ hr {
   gap: 7px;
 }
 .close-tab {
-  margin-right: 5px;
-  width: 22px;
-  height: 24px;
-  font-size: 16px;
-}
-.close-tab.dirty {
-  font-size: 10px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-inline-end: 4px;
+  padding: 0;
 }
 .close-tab:hover {
-  background: var(--list-hoverBackground);
+  background: var(--toolbar-buttonHoverBackground);
+}
+.close-tab.dirty .app-icon[data-icon="close"],
+.close-tab.dirty:is(:hover, :focus-visible)
+  .app-icon[data-icon="circleFilled"] {
+  display: none;
+}
+.close-tab.dirty:is(:hover, :focus-visible) .app-icon[data-icon="close"] {
+  display: block;
 }
 .editor-area {
   position: relative;

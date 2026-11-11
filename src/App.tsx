@@ -1020,7 +1020,8 @@ function App() {
                   aria-label={t("editor.closeTab", { name: tab.name })}
                   title={tab.dirty ? t("editor.dirty") : t("command.close")}
                 >
-                  <Icon name={tab.dirty ? "circleFilled" : "close"} />
+                  {tab.dirty && <Icon name="circleFilled" size={12} />}
+                  <Icon name="close" size={14} />
                 </button>
               </div>
             ))}
