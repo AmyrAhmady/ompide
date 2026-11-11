@@ -61,11 +61,23 @@ export class DocumentLifecycle {
     flushOpen: () => Promise<unknown>,
     send: () => Promise<void>
   ): Promise<void> {
+    return this.enqueue(uri, send, flushOpen);
+  }
+
+  save(uri: string, send: () => Promise<void>): Promise<void> {
+    return this.enqueue(uri, () => send().catch(console.warn));
+  }
+
+  private enqueue(
+    uri: string,
+    send: () => Promise<void>,
+    flushOpen?: () => Promise<unknown>
+  ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     const state = this.state(uri);
     const change = state.changes.then(async () => {
       if (state.disposed) return;
-      await flushOpen();
+      await flushOpen?.();
       await state.opened;
       if (!state.disposed) await send();
     });

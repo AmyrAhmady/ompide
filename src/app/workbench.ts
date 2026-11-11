@@ -38,6 +38,7 @@ import { RecoveryPolicy } from "../language/recovery";
 import { commands } from "vscode";
 import {
   CancellationTokenSource,
+  type CancellationToken,
   type TextEdit,
   type SymbolInformation,
   type WorkspaceSymbol,
@@ -664,7 +665,14 @@ export class Workbench {
   ): Promise<boolean> {
     if (!uri) return Promise.resolve(true);
     const saving = this.saving.get(uri);
-    if (saving) return saving;
+    if (saving)
+      return saving.then((saved) => {
+        const document = this.documents.get(uri);
+        if (!saved || !document) return saved;
+        return saveAs || encoding || document.versions.dirty
+          ? this.save(uri, saveAs, encoding)
+          : true;
+      });
     const pending = this.saveDocument(uri, saveAs, encoding);
     this.saving.set(uri, pending);
     void pending
@@ -688,12 +696,32 @@ export class Workbench {
   ): Promise<boolean> {
     const document = this.documents.get(uri);
     if (!document) return true;
+    let formatSkipped = false;
     if (
       this.state.settings.formatOnSave &&
       !document.largeFile &&
       this.state.languageFeatures?.formatting
-    )
-      await this.format(uri);
+    ) {
+      const cancellation = new CancellationTokenSource();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        formatSkipped = await Promise.race([
+          this.format(uri, cancellation.token).then(() => false),
+          new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => {
+              cancellation.cancel();
+              resolve(true);
+            }, 1500);
+          }),
+        ]);
+      } catch (error) {
+        console.warn(error);
+        formatSkipped = true;
+      } finally {
+        clearTimeout(timer);
+        cancellation.dispose();
+      }
+    }
     const text = document.model.getValue();
     const version = document.model.getAlternativeVersionId();
     const targetEncoding =
@@ -731,19 +759,30 @@ export class Workbench {
       document.snapshot = snapshot;
       document.external = undefined;
       files.update(document.model.uri, text);
-      if (document.model.getAlternativeVersionId() === version)
-        await document.reference?.object.revert({ soft: true });
       document.versions.savedAt(version);
+      if (document.model.getAlternativeVersionId() === version)
+        void document.reference?.object
+          .revert({ soft: true })
+          .catch(console.warn);
+      this.update();
+      const client = this.language?.client;
+      const sync = client?.initializeResult?.capabilities.textDocumentSync;
+      const saveOptions = typeof sync === "number" ? sync !== 0 : sync?.save;
       if (
         document.model.getLanguageId() === "pawn" &&
-        this.language?.client.isRunning()
+        client?.isRunning() &&
+        saveOptions
       )
-        await this.language.client.sendNotification("textDocument/didSave", {
-          textDocument: { uri: protocolUri(document.model.uri) },
-          text,
-        });
-      this.update();
+        void client
+          .sendNotification("textDocument/didSave", {
+            textDocument: { uri: protocolUri(document.model.uri) },
+            ...(typeof saveOptions === "object" && saveOptions.includeText
+              ? { text }
+              : {}),
+          })
+          .catch(console.warn);
     }
+    if (formatSkipped) this.report({ code: "savedWithoutFormatting" });
     return true;
   }
 
@@ -1333,7 +1372,7 @@ export class Workbench {
     }
   }
 
-  async format(uri: string): Promise<void> {
+  async format(uri: string, cancellation?: CancellationToken): Promise<void> {
     const document = this.documents.get(uri);
     const client = this.language?.client;
     if (
@@ -1352,8 +1391,10 @@ export class Workbench {
           tabSize: this.state.settings.tabSize,
           insertSpaces: this.state.settings.insertSpaces,
         },
-      }
+      },
+      cancellation
     );
+    if (cancellation?.isCancellationRequested) return;
     if (
       document.model.isDisposed() ||
       version !== document.model.getVersionId()

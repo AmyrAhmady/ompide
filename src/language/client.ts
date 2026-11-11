@@ -131,7 +131,7 @@ export async function startLanguageSession(
             await lifecycle.changes();
           else if (method === "textDocument/didSave") {
             const uri = documentUri(params);
-            if (uri) await lifecycle.ready(uri);
+            if (uri) return lifecycle.save(uri, () => next(type, params));
           }
           return next(type, params);
         },

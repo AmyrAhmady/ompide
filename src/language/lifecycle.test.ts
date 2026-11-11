@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { DocumentLifecycle } from "./lifecycle";
 
-it("holds changes, requests and close behind an in-flight open, preserving edit order", async () => {
+it("holds changes, saves, requests and close behind an in-flight open", async () => {
   const lifecycle = new DocumentLifecycle();
   const events: string[] = [];
   let release!: () => void;
@@ -26,6 +26,9 @@ it("holds changes, requests and close behind an in-flight open, preserving edit 
       events.push("change-2");
     }
   );
+  const save = lifecycle.save("file:///main.pwn", async () => {
+    events.push("save");
+  });
   const request = lifecycle
     .ready("file:///main.pwn")
     .then(() => events.push("request"));
@@ -35,8 +38,8 @@ it("holds changes, requests and close behind an in-flight open, preserving edit 
   await Promise.resolve();
   expect(events).toEqual([]);
   release();
-  await Promise.all([open, change1, change2, request, close]);
-  expect(events.slice(0, 3)).toEqual(["open", "change-1", "change-2"]);
+  await Promise.all([open, change1, change2, save, request, close]);
+  expect(events.slice(0, 4)).toEqual(["open", "change-1", "change-2", "save"]);
   expect(events).toContain("request");
   expect(events).toContain("close");
 });

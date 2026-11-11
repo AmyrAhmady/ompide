@@ -302,6 +302,7 @@
   "error.toolVersion": "Expected pawnlsp {expected}, but the executable reports {actual}. Choose a compatible version in Settings.",
   "error.unsupportedEdit": "This language action requires a file operation or confirmation the editor cannot apply yet. No source edits were applied.",
   "error.invalidLanguageEdit": "The language server returned an invalid edit range. No edits were applied.",
+  "error.savedWithoutFormatting": "File saved. Format on Save did not complete.",
   "error.operationFailed": "The operation failed.",
   "error.watchFailed": "File watching failed. Use Refresh Explorer or Reload from Disk to check for external changes.",
   "error.themeInvalid": "Invalid theme file: {reason}",
