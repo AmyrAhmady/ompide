@@ -350,19 +350,24 @@ new file mode 100644
 +	}
 +}
 diff --git a/go.mod b/go.mod
-index aec6433..6910825 100644
+index aec6433..526be67 100644
 --- a/go.mod
 +++ b/go.mod
-@@ -5,7 +5,7 @@ go 1.26.5
+@@ -3,10 +3,10 @@ module github.com/pawnkit/pawnlsp
+ go 1.26.5
+ 
  require (
- 	github.com/pawnkit/pawn-analysis v0.30.3
+-	github.com/pawnkit/pawn-analysis v0.30.3
++	github.com/pawnkit/pawn-analysis v0.30.24
  	github.com/pawnkit/pawn-api v0.19.0
 -	github.com/pawnkit/pawn-parser v1.5.6
+-	github.com/pawnkit/pawn-project v0.3.3
 +	github.com/pawnkit/pawn-parser v1.5.11
- 	github.com/pawnkit/pawn-project v0.3.3
++	github.com/pawnkit/pawn-project v0.34.2
  	github.com/pawnkit/pawnfmt v1.4.4
  	github.com/pawnkit/pawnkit-core v0.5.0
-@@ -26,3 +26,7 @@ require (
+ 	github.com/pawnkit/pawnlint v1.8.12
+@@ -26,3 +26,9 @@ require (
  )
  
  tool golang.org/x/vuln/cmd/govulncheck
@@ -370,19 +375,23 @@ index aec6433..6910825 100644
 +replace github.com/pawnkit/pawn-analysis => github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55
 +
 +replace github.com/pawnkit/pawn-parser => github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279
++
++replace github.com/pawnkit/pawnlint => github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932
 diff --git a/go.sum b/go.sum
-index f9fbf7a..8e7f98d 100644
+index f9fbf7a..11ffae1 100644
 --- a/go.sum
 +++ b/go.sum
-@@ -1,3 +1,7 @@
+@@ -1,3 +1,9 @@
 +github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55 h1:TntsyDOnEKSWrd5wkGpiguwolGXaIORUTCtpS6g28/k=
 +github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55/go.mod h1:+SSXoxEkbhb6pQqO4MrkpX/9BkDPowjTOV3M8HRvLjA=
 +github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279 h1:aWWXKyKJ1GvqMd25LOUKMp0Xj3tCClYQA5KNdRxlIA0=
 +github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279/go.mod h1:Egw7oGm4jkDpaWBvLkYItfNTZcAcvTg+gWjlAGL9rbI=
++github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932 h1:mvfqH0LV/xN1dmHtmERugjrgj07JNsJ8rXzpFi8Vkm0=
++github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932/go.mod h1:iT3gJI+hyX+lNUygqw/Flx5oDJ2vnFC7v1aIfnz0axo=
  github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
  github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
  github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
-@@ -10,12 +14,8 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+@@ -10,20 +16,14 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
  github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
  github.com/google/renameio v0.1.0 h1:GOZbcHa3HfsPKPlmyPyN2KEohoMXOhdMbHrvbpl2QaA=
  github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
@@ -392,6 +401,16 @@ index f9fbf7a..8e7f98d 100644
  github.com/pawnkit/pawn-api v0.19.0/go.mod h1:kG0iHjG85iOU27geni1yaXk2WfSmJuhUoWkSrhUS7Ik=
 -github.com/pawnkit/pawn-parser v1.5.6 h1:6RZCmFvCpQC/EZJqQXsz0vYCQjpw/pZwaGLjY0DYrR8=
 -github.com/pawnkit/pawn-parser v1.5.6/go.mod h1:6iG1RfoTtroAadrF5A60QZc/zwalxBwn2gbgCQ/QO8Y=
- github.com/pawnkit/pawn-project v0.3.3 h1:XplAg9Qz1eo3GNVbT5j6gZwx8lAHN176Ydi4pU78xMo=
- github.com/pawnkit/pawn-project v0.3.3/go.mod h1:hMeRnvAYqu5TeWkJKT7EVqw6z62wTiuGBuIvcWNZuYY=
+-github.com/pawnkit/pawn-project v0.3.3 h1:XplAg9Qz1eo3GNVbT5j6gZwx8lAHN176Ydi4pU78xMo=
+-github.com/pawnkit/pawn-project v0.3.3/go.mod h1:hMeRnvAYqu5TeWkJKT7EVqw6z62wTiuGBuIvcWNZuYY=
++github.com/pawnkit/pawn-project v0.34.2 h1:0U3bSKSJJqEHjxdAcOyQuXrfF512rHrpDIqBrPuxEmo=
++github.com/pawnkit/pawn-project v0.34.2/go.mod h1:caXLtXl6HEpoo+7Uom0vdNo68X9i+z30xTMZ0ZVGkv4=
  github.com/pawnkit/pawnfmt v1.4.4 h1:T4jVPmacaR+tN7hgOH/F0KZKqqcHyGW7hIDL+XSpIow=
+ github.com/pawnkit/pawnfmt v1.4.4/go.mod h1:j9S8y940niZ6yxydu0Jh9Nz9K90rs1tg0mfw/euD00U=
+ github.com/pawnkit/pawnkit-core v0.5.0 h1:faEI2LGaP9czSDaKxtw4qvGUNuft88qeR/MdW0jLmlg=
+ github.com/pawnkit/pawnkit-core v0.5.0/go.mod h1:jGhXHEEzr8juezaRhh/AkGzX6S4eGQnprB83vrI1peU=
+-github.com/pawnkit/pawnlint v1.8.12 h1:9qbUZnCyKVc5XlR5sB62jtsnpdB73izNP2Zk7Vjyz50=
+-github.com/pawnkit/pawnlint v1.8.12/go.mod h1:1DI43RD9sUGMw3+NWSdW61xyEbkxCYmlfBPozvbok7U=
+ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+ github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=

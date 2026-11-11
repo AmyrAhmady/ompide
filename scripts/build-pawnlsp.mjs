@@ -156,6 +156,7 @@ try {
     "-mod=mod",
     "github.com/pawnkit/pawn-analysis",
     "github.com/pawnkit/pawn-parser",
+    "github.com/pawnkit/pawnlint/pkg/lint",
   ]);
   runGo(["mod", "vendor"]);
   execFileSync(

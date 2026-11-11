@@ -384,6 +384,30 @@ async function verifyLsp(workspace, includeDirectory = workspace) {
     evidence.checks.push(
       "Macro-tagged native signatures accept valid arguments, report the correct count for invalid calls, and clear the diagnostic after correction."
     );
+    source += "\r\nstock original() { return 1; }\r\nLink:alias->original;\r\n";
+    notify("textDocument/didChange", {
+      textDocument: { uri, version: ++version },
+      contentChanges: [{ text: source }],
+    });
+    const lintDeadline = Date.now() + 5000;
+    do {
+      diagnostics = await request("textDocument/diagnostic", {
+        textDocument: { uri },
+      });
+      if (diagnostics.resultId?.includes(":full")) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } while (Date.now() < lintDeadline);
+    assert.ok(
+      diagnostics.resultId?.includes(":full"),
+      JSON.stringify(diagnostics)
+    );
+    assert.ok(
+      diagnostics.items.every((item) => item.code !== "parse-error"),
+      JSON.stringify(diagnostics)
+    );
+    evidence.checks.push(
+      "Completed lint diagnostics accept a textual command alias from an include."
+    );
     notify("textDocument/didSave", { textDocument: { uri }, text: source });
     notify("textDocument/didClose", { textDocument: { uri } });
     await request("shutdown", null);
@@ -443,7 +467,8 @@ try {
     (await readFile(include, "utf8")) +
       "\n#define STYLE_TAG(%0) t_%0\n" +
       "#define STYLE: STYLE_TAG(STYLE):\n" +
-      "native bool:ApplyStyle(Text:textid, STYLE:style);\n"
+      "native bool:ApplyStyle(Text:textid, STYLE:style);\n" +
+      "#define Link:%0->%1; stock %0() { return %1(); }\n"
   );
   const entry = path.join(lspWorkspace, "main.pwn");
   await writeFile(

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "0.33.75-pawnide.6",
+  "version": "0.33.75-pawnide.7",
   "goVersion": "go1.27.3",
   "minimumGoVersion": "go1.26.5",
   "source": {
@@ -11,7 +11,7 @@
   },
   "patch": {
     "path": "patches/pawnlsp-open-overlays.patch",
-    "sha256": "5c94257b9cc4f35e38140c4732f84c27be28069ec165480950955eaa5e5fd010"
+    "sha256": "80629fb46ba37d9b6e2d3f1692c61db675aaf69f24a75b623dcdef0cda8d0995"
   },
   "modulePatch": {
     "path": "patches/pawnkit-compatibility.patch",

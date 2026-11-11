@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.6`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.7`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -45,9 +45,14 @@ carry the fixes for textual macros, generated declarations, conditional control
 flow, and chained Pawn comparisons. Go resolves the pinned revisions through
 its normal module cache.
 
+Version `.7` pins pawnlint at `bed18272a932`. Editor linting uses the shared
+analysis result for syntax diagnostics when it matches the current file and
+revision. This keeps the background lint pass from re-reporting raw syntax
+errors for valid textual macros.
+
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in
-pawn-project. Preparation runs parser and analyzer tests, applies the patch
+pawn-project. Preparation runs parser, analyzer and lint tests, applies the patch
 in a disposable vendor tree, and runs the resolver and LSP tests. Build
 receipts and dependency notices record the patch hash.
 
