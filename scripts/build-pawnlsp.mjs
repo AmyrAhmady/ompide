@@ -150,7 +150,7 @@ try {
   // Vendor only in this disposable source tree; never edit the user's Go cache.
   const modulePatch = path.join(root, "toolchain", pin.modulePatch.path);
   if (sha256(await readFile(modulePatch)) !== pin.modulePatch.sha256)
-    throw new Error("Project-library patch checksum mismatch");
+    throw new Error("PawnKit dependency patch checksum mismatch");
   runGo(["mod", "vendor"]);
   execFileSync(
     "git",
@@ -162,6 +162,7 @@ try {
     windowsHide: true,
   });
   runGo(["test", "-mod=vendor", "github.com/pawnkit/pawn-project/paths"]);
+  runGo(["test", "-mod=vendor", "github.com/pawnkit/pawn-analysis"]);
   runGo(["test", "-mod=vendor", "./..."]);
   runGo(["mod", "verify"]);
   const executable = path.join(staging, `pawnlsp${host.suffix}`);
@@ -229,7 +230,7 @@ try {
         ecosystem: "go",
         name: dependency.Path,
         version: dependency.Version,
-        ...(dependency.Path === "github.com/pawnkit/pawn-project"
+        ...(pin.modulePatch.modules.includes(dependency.Path)
           ? { patchSha256: pin.modulePatch.sha256 }
           : {}),
         ...(dependency.Replace

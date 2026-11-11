@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "0.33.75-pawnide.4",
+  "version": "0.33.75-pawnide.5",
   "goVersion": "go1.27.3",
   "minimumGoVersion": "go1.26.5",
   "source": {
@@ -14,7 +14,12 @@
     "sha256": "a6b060325e73490027a049e05e4f4e2d02634d3b12aa45bc768ed68f4b1ed14d"
   },
   "modulePatch": {
-    "path": "patches/pawn-project-external-includes.patch",
-    "sha256": "e76ecb9920343366b8b3c3a072e6e7f39d56af9c0c3ff6a1f6952d2e9bce5251"
+    "path": "patches/pawnkit-compatibility.patch",
+    "sha256": "7c2b375513d2deeb8dacd94822d2a1db608f3e4026311b42b12e3d18383c6c85",
+    "modules": [
+      "github.com/pawnkit/pawn-analysis",
+      "github.com/pawnkit/pawn-parser",
+      "github.com/pawnkit/pawn-project"
+    ]
   }
 }

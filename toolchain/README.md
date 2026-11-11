@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.4`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.5`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -50,15 +50,12 @@ existing overlay and lifecycle fixes remain. Builds fetch the immutable module
 through normal Go resolution; a local fork checkout is unnecessary. Switch back
 to an upstream dependency release once it includes the fix.
 
-Version `.4` additionally permits external SDK include paths in pawn-project's
-path resolver. The dependency-only patch is
-`patches/pawn-project-external-includes.patch`, pinned by checksum in
-`pawnlsp-build.json`. Preparation vendors the already pinned modules into the
-disposable build tree, applies that patch there, tests the changed resolver and
-runs the upstream LSP suite. It never edits the user's Go module cache or needs
-a private module proxy. Entry/output paths remain bounded by the original
-resolver. Build receipts and dependency notices record the extra patch hash.
-The macro-expansion fix and every previous overlay/lifecycle fix remain active.
+The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
+checksum in `pawnlsp-build.json`. It permits external SDK include paths in
+pawn-project and corrects enum headers and diagnostics for expanded macro
+declarations in pawn-parser and pawn-analysis. Preparation applies it in a
+disposable vendor tree and runs the resolver, analysis regression and upstream
+LSP tests. Build receipts and dependency notices record the patch hash.
 
 Shared SDK directories may be absolute or relative to the project, including
 `../shared SDK`. Configure `include_path` or `pawnkit.includePaths` for analysis
