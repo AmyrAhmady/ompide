@@ -39,6 +39,8 @@ import {
 import type { TranslationKey } from "./lib/i18n";
 import { ProjectDialog } from "./build/ProjectDialog";
 import { BuildPanel } from "./build/BuildPanel";
+import { defaultManifest } from "./build/configuration";
+import { parentPath, withinPath } from "./lib/paths";
 import { building } from "./build/types";
 import {
   SearchPanel,
@@ -484,6 +486,30 @@ function App() {
   const external = state.tabs.find((tab) => tab.uri === state.active)?.external;
   const connected = state.languagePhase === "ready";
   const nativeReady = desktop && state.ready;
+  const [setupRoot, setSetupRoot] = useState<string>();
+  const findingBuildProject = useRef(false);
+  const workspaceRoot = state.root;
+  useEffect(() => {
+    if (!nativeReady || !workspaceRoot || state.project || projectOpen) return;
+    let live = true;
+    void workbench
+      .discoverProjects()
+      .then((result) => {
+        if (live) {
+          setSetupRoot(
+            result.entries.length && !result.manifests.length
+              ? workspaceRoot
+              : undefined
+          );
+        }
+      })
+      .catch(() => {
+        if (live) setSetupRoot(undefined);
+      });
+    return () => {
+      live = false;
+    };
+  }, [nativeReady, workspaceRoot, state.project, projectOpen]);
   const activeTitle = state.tabs.find((tab) => tab.uri === state.active);
   const encodingDocument = state.tabs.find((tab) => tab.uri === encodingTarget);
   const windowTitle = [
@@ -535,14 +561,47 @@ function App() {
     };
   }, [navigate]);
 
-  const startBuild = () => {
-    if (!state.project) {
-      setProjectOpen(true);
-      return;
-    }
-    setBuildOpen(true);
-    setProblemsOpen(false);
-    run(() => workbench.buildProject());
+  const startBuild = (preferActive = true, requestedFile?: string) => {
+    const root = state.root;
+    if (!root) return;
+    const activeFile = preferActive
+      ? (requestedFile ?? workbench.activePawnFile())
+      : undefined;
+    run(async () => {
+      let project = workbench.getSnapshot().project;
+      if (
+        !project ||
+        (activeFile && !withinPath(activeFile, project.project.root))
+      ) {
+        if (findingBuildProject.current) return;
+        findingBuildProject.current = true;
+        try {
+          const discovery = await workbench.discoverProjects();
+          if (root !== workbench.getSnapshot().root) return;
+          const candidates = activeFile
+            ? discovery.manifests.filter((path) =>
+                withinPath(activeFile, parentPath(path))
+              )
+            : discovery.manifests;
+          const selected = defaultManifest(candidates, root);
+          if (!selected) {
+            setProjectOpen(true);
+            return;
+          }
+          await workbench.selectProject(parentPath(selected));
+        } catch {
+          if (root === workbench.getSnapshot().root) setProjectOpen(true);
+          return;
+        } finally {
+          findingBuildProject.current = false;
+        }
+        project = workbench.getSnapshot().project;
+      }
+      if (root !== workbench.getSnapshot().root || !project) return;
+      setBuildOpen(true);
+      setProblemsOpen(false);
+      await workbench.buildProject(activeFile);
+    });
   };
   const registeredCommands = createCommands(state, workbench, nativeReady, {
     settings: () => setSettingsOpen(true),
@@ -556,7 +615,8 @@ function App() {
     quickOpen: () => setQuickOpen(true),
     problems: () => setProblemsOpen((value) => !value),
     symbols: setSymbolsOpen,
-    build: startBuild,
+    build: () => startBuild(),
+    buildProject: () => startBuild(false),
     buildOutput: () => {
       setBuildOpen(true);
       setProblemsOpen(false);
@@ -690,7 +750,8 @@ function App() {
       } else if (modifier && event.shiftKey && key === "b") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (nativeReady && state.root && !buildBusy) startBuild();
+        if (nativeReady && state.root && !buildBusy && !event.repeat)
+          startBuild();
         return;
       } else if (modifier && event.shiftKey && key === "o") {
         event.preventDefault();
@@ -869,6 +930,7 @@ function App() {
             <CommandMenuItem command={command("command.restartLanguage")} />
           </Menu>
           <Menu label="menu.build">
+            <CommandMenuItem command={command("build.activeCommand")} />
             <CommandMenuItem command={command("build.command")} />
             <CommandMenuItem command={command("build.cancel")} />
             <CommandMenuItem command={command("project.title")} />
@@ -961,6 +1023,11 @@ function App() {
                 reveal={explorerReveal}
                 busy={state.mutationBusy || buildBusy}
                 refresh={refreshExplorer}
+                setupProject={
+                  setupRoot === state.root && setupRoot && !state.project
+                    ? configureProject
+                    : undefined
+                }
               />
             </>
           )}
@@ -1424,9 +1491,10 @@ function App() {
       )}
       {projectOpen && (
         <ProjectDialog
+          key={state.root}
           state={state}
           close={() => setProjectOpen(false)}
-          build={startBuild}
+          build={(activeFile) => startBuild(Boolean(activeFile), activeFile)}
         />
       )}
       {quickOpen && <QuickOpen close={() => setQuickOpen(false)} />}

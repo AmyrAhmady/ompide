@@ -190,7 +190,7 @@ fn strings(value: &Value, key: &str) -> io::Result<Vec<String>> {
     }
 }
 
-fn selected(configuration: &Value, name: &str) -> io::Result<Value> {
+fn selected(configuration: &Value, name: &str, use_first: bool) -> io::Result<Value> {
     let defaults = configuration.get("build").filter(|value| !value.is_null());
     if defaults.is_some_and(|value| !value.is_object()) {
         return Err(invalid(
@@ -214,7 +214,7 @@ fn selected(configuration: &Value, name: &str) -> io::Result<Value> {
         }
     }
     let chosen = if name.is_empty() {
-        defaults.or_else(|| builds.first())
+        defaults.or_else(|| if use_first { builds.first() } else { None })
     } else {
         Some(
             builds
@@ -377,6 +377,65 @@ pub fn build_configuration(
     configuration: &Value,
     name: &str,
 ) -> io::Result<BuildConfiguration> {
+    let chosen = selected(configuration, name, true)?;
+    resolve_build(scope, configuration, &chosen, None)
+}
+
+pub fn build_configuration_for_file(
+    scope: &Workspace,
+    configuration: &Value,
+    entry: &std::path::Path,
+    preferred: &str,
+) -> io::Result<BuildConfiguration> {
+    let entry = scope.resolve(entry)?;
+    let shared = selected(configuration, "", false)?;
+    let shared_input = build_input(configuration, &shared)?.1;
+    let matches_entry = |input: &str| {
+        scope
+            .resolve(&scope.root().join(input))
+            .is_ok_and(|path| path == entry)
+    };
+    let preferred_build = selected(configuration, preferred, true)?;
+    if matches_entry(build_input(configuration, &preferred_build)?.1) {
+        return resolve_build(scope, configuration, &preferred_build, Some(entry));
+    }
+    if matches_entry(shared_input) {
+        return resolve_build(scope, configuration, &shared, Some(entry));
+    }
+    if let Some(builds) = configuration.get("builds").and_then(Value::as_array) {
+        for build in builds {
+            let input = build
+                .get("input")
+                .and_then(Value::as_str)
+                .filter(|input| !input.is_empty())
+                .unwrap_or(shared_input);
+            if matches_entry(input) {
+                let chosen = selected(configuration, text(build, "name")?, true)?;
+                return resolve_build(scope, configuration, &chosen, Some(entry));
+            }
+        }
+    }
+    resolve_build(scope, configuration, &shared, Some(entry))
+}
+
+fn build_input<'a>(
+    configuration: &'a Value,
+    chosen: &'a Value,
+) -> io::Result<(&'static str, &'a str)> {
+    let input = text(chosen, "input")?;
+    if input.is_empty() {
+        Ok(("entry", text(configuration, "entry")?))
+    } else {
+        Ok(("build.input", input))
+    }
+}
+
+fn resolve_build(
+    scope: &Workspace,
+    configuration: &Value,
+    chosen: &Value,
+    active_file: Option<PathBuf>,
+) -> io::Result<BuildConfiguration> {
     if !configuration.is_object() {
         return Err(invalid(
             "projectConfigObject",
@@ -392,25 +451,19 @@ pub fn build_configuration(
             serde_json::json!({"field": "pawnkit"}),
         ));
     }
-    let chosen = selected(configuration, name)?;
-    let input = text(&chosen, "input")?;
-    let entry = if input.is_empty() {
-        text(configuration, "entry")?
+    let (field, entry) = if let Some(entry) = active_file {
+        ("entry", entry)
     } else {
-        input
+        let (field, input) = build_input(configuration, chosen)?;
+        if input.is_empty() {
+            return Err(invalid("projectConfigEntryMissing", serde_json::json!({})));
+        }
+        let path = scope.root().join(input);
+        let entry = scope
+            .resolve(&path)
+            .map_err(|failure| path_error(field, &path, failure))?;
+        (field, entry)
     };
-    if entry.is_empty() {
-        return Err(invalid("projectConfigEntryMissing", serde_json::json!({})));
-    }
-    let field = if input.is_empty() {
-        "entry"
-    } else {
-        "build.input"
-    };
-    let entry_path = scope.root().join(entry);
-    let entry = scope
-        .resolve(&entry_path)
-        .map_err(|failure| path_error(field, &entry_path, failure))?;
     if !entry.is_file()
         || !entry
             .extension()
@@ -436,13 +489,13 @@ pub fn build_configuration(
             .map(|(index, path)| (format!("pawnkit.includePaths[{index}]"), path)),
     );
     declared.extend(
-        strings(&chosen, "includes")
+        strings(chosen, "includes")
             .map_err(|failure| nested_field(failure, "build"))?
             .into_iter()
             .enumerate()
             .map(|(index, path)| (format!("build.includes[{index}]"), path)),
     );
-    let arguments = strings(&chosen, "args").map_err(|failure| nested_field(failure, "build"))?;
+    let arguments = strings(chosen, "args").map_err(|failure| nested_field(failure, "build"))?;
     declared.extend(
         arguments
             .iter()
@@ -544,7 +597,7 @@ pub fn inspect(scope: &Workspace) -> io::Result<ProjectInfo> {
         manifest: manifest.path.clone(),
         entry: build.entry,
         profile: profile(&configuration)?,
-        build: text(&selected(&configuration, "")?, "name")?.to_owned(),
+        build: text(&selected(&configuration, "", true)?, "name")?.to_owned(),
     };
     Ok(ProjectInfo {
         project,
@@ -578,9 +631,16 @@ pub fn preview(
     };
     let paths: Vec<_> = includes
         .iter()
-        .map(|input| {
+        .enumerate()
+        .map(|(index, input)| {
             let input = std::path::Path::new(input);
-            let path = include_directory(scope, input)?;
+            let path = include_directory(scope, input).map_err(|failure| {
+                with_parameter(
+                    failure,
+                    "field",
+                    Value::String(format!("pawnkit.includePaths[{index}]")),
+                )
+            })?;
             let value = path
                 .strip_prefix(scope.root())
                 .unwrap_or(if input.is_absolute() { &path } else { input })
@@ -636,6 +696,45 @@ mod tests {
             scope.root().join("main.pwn")
         );
         assert!(build_configuration(&scope, &configuration, "missing").is_err());
+    }
+
+    #[test]
+    fn active_files_use_matching_targets_or_shared_settings() {
+        let root = fixture();
+        let scope = Workspace::open(root.path()).unwrap();
+        let filterscripts = scope.root().join("filterscripts");
+        fs::create_dir(&filterscripts).unwrap();
+        let admin = filterscripts.join("admin.pwn");
+        fs::write(&admin, "main() {}").unwrap();
+        let config = json!({
+            "entry": "main.pwn",
+            "pawnkit": {"includePaths": ["include"]},
+            "builds": [{"name": "other", "input": "other.pwn", "args": ["-d1"]}]
+        });
+        let active = build_configuration_for_file(&scope, &config, &admin, "other").unwrap();
+        assert_eq!(active.entry, admin);
+        assert_eq!(
+            active.includes,
+            [
+                scope.root().to_owned(),
+                filterscripts,
+                scope.root().join("include")
+            ]
+        );
+        assert!(active.arguments.is_empty());
+        let named =
+            build_configuration_for_file(&scope, &config, &scope.root().join("other.pwn"), "")
+                .unwrap();
+        assert_eq!(named.arguments, ["-d1"]);
+        assert!(
+            build_configuration_for_file(&scope, &config, &scope.root().join("include"), "")
+                .is_err()
+        );
+        let outside = fixture();
+        assert!(
+            build_configuration_for_file(&scope, &config, &outside.path().join("main.pwn"), "")
+                .is_err()
+        );
     }
 
     #[test]

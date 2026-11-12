@@ -20,6 +20,7 @@ export interface CommandViews {
   problems: () => void;
   symbols: (mode: "document" | "workspace") => void;
   build: () => void;
+  buildProject: () => void;
   buildOutput: () => void;
   palette: () => void;
   toggleSidebar: () => void;
@@ -183,10 +184,15 @@ export function createCommands(
   );
   add("command.problems", true, views.problems);
   add(
-    "build.command",
+    "build.activeCommand",
     mutable && Boolean(state.root) && !busy,
     views.build,
     "Ctrl+Shift+B"
+  );
+  add(
+    "build.command",
+    mutable && Boolean(state.root) && !busy,
+    views.buildProject
   );
   add("build.cancel", busy, () => workbench.cancelBuild());
   add("project.title", mutable && Boolean(state.root) && !busy, views.project);

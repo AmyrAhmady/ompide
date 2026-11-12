@@ -26,6 +26,7 @@ export interface BuildTools {
 export interface BuildSelection {
   root: string;
   entry: string;
+  activeFile?: string;
   revision: string;
   build: string;
   profile: string;

@@ -57,6 +57,8 @@ async function evaluate(operation, argument) {
 }
 const dialog = () =>
   page.getByRole("dialog", { name: "Configure Project…", exact: true });
+const setupDialog = () =>
+  page.getByRole("dialog", { name: "Set up this project", exact: true });
 async function configure() {
   await page
     .locator(".menu summary")
@@ -68,11 +70,19 @@ async function configure() {
   await expect(dialog()).toBeVisible();
 }
 async function build(phase = "passed") {
+  const previous = await evaluate(
+    (workbench) => workbench.getSnapshot().build.started
+  );
   await page.keyboard.press("Control+Shift+B");
   await expect
-    .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase), {
-      timeout: 30_000,
-    })
+    .poll(
+      () =>
+        evaluate((workbench, previous) => {
+          const build = workbench.getSnapshot().build;
+          return build.started === previous ? undefined : build.phase;
+        }, previous),
+      { timeout: 30_000 }
+    )
     .toBe(phase);
 }
 try {
@@ -85,6 +95,10 @@ try {
     recursive: true,
     filter: (file) => !file.includes(`${path.sep}output`),
   });
+  const nested = path.join(existing, "include", "library");
+  await mkdir(nested, { recursive: true });
+  await writeFile(path.join(nested, "pawn.json"), '{"entry":"library.pwn"}');
+  await writeFile(path.join(nested, "library.pwn"), "main() {}\n");
   await mkdir(setup);
   await mkdir(yaml);
   await cp(path.join(root, "fixtures/openmp"), openmp, {
@@ -92,6 +106,17 @@ try {
     filter: (file) => !file.includes(`${path.sep}output`),
   });
   await writeFile(path.join(setup, "first.pwn"), "main() { return 1; }\n");
+  await mkdir(path.join(setup, "filterscripts"));
+  await mkdir(path.join(setup, "include"));
+  await writeFile(
+    path.join(setup, "include", "common.inc"),
+    "#define SUCCESS (1)\n"
+  );
+  const admin = path.join(setup, "filterscripts", "admin.pwn");
+  await writeFile(
+    admin,
+    "#include <common>\nforward OnFilterScriptInit();\npublic OnFilterScriptInit() { return SUCCESS; }\n"
+  );
   await writeFile(
     path.join(setup, "second.pwn"),
     "main() { MissingFunction(); }\n"
@@ -114,22 +139,14 @@ try {
   );
   await page.reload();
   await page.getByRole("button", { name: existing, exact: true }).click();
+  await expect
+    .poll(() =>
+      evaluate((workbench) => workbench.getSnapshot().project?.manifest.path)
+    )
+    .toBe(path.join(existing, "pawn.json"));
   await page.getByRole("treeitem", { name: "main.pwn", exact: true }).click();
   await assert.rejects(stat(path.join(existing, "output")), { code: "ENOENT" });
-  await page.keyboard.press("Control+Shift+B");
-  await expect(dialog()).toBeVisible();
-  await expect(dialog().getByTestId("build-entry")).toHaveText(
-    path.join(existing, "main.pwn")
-  );
-  await expect(
-    dialog().getByRole("button", { name: "Build Project", exact: true })
-  ).toBeEnabled({ timeout: 20_000 });
-  await dialog()
-    .getByRole("button", { name: "Build Project", exact: true })
-    .click();
-  await expect
-    .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
-    .toBe("passed");
+  await build("passed");
   assert.ok((await stat(path.join(existing, "output/main.amx"))).size > 0);
   await expect(
     page.getByText("Compiler exit code: 0", { exact: true })
@@ -138,7 +155,7 @@ try {
     path: path.join(root, "test-results/build-success.png"),
   });
   evidence.push(
-    "Build command opens configuration first; real selected entry compiles to a verified AMX with compiler exit status."
+    "Opening a workspace selects its root manifest despite a nested dependency manifest; the shortcut compiles the active entry to a verified AMX."
   );
 
   await evaluate((workbench) => {
@@ -203,16 +220,7 @@ try {
   await evaluate(async (workbench, yaml) => {
     await workbench.chooseFolder(yaml);
   }, yaml);
-  await page.keyboard.press("Control+Shift+B");
-  await expect(dialog().getByTestId("build-entry")).toContainText(
-    "alternate.pwn"
-  );
-  await dialog()
-    .getByRole("button", { name: "Build Project", exact: true })
-    .click();
-  await expect
-    .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
-    .toBe("passed");
+  await build("passed");
   assert.ok((await stat(path.join(yaml, "output/alternate.amx"))).size > 0);
   evidence.push(
     "YAML manifests and default build input overrides select the correct entry."
@@ -233,14 +241,7 @@ try {
   await evaluate(async (workbench, openmp) => {
     await workbench.chooseFolder(openmp);
   }, openmp);
-  await page.keyboard.press("Control+Shift+B");
-  await expect(dialog().getByTestId("build-entry")).toContainText("main.pwn");
-  await dialog()
-    .getByRole("button", { name: "Build Project", exact: true })
-    .click();
-  await expect
-    .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
-    .toBe("passed");
+  await build("passed");
   assert.ok((await stat(path.join(openmp, "output/main.amx"))).size > 0);
   evidence.push(
     "Official open.mp includes, callbacks and macros compile through the native Build UI with openmultiplayer/compiler 3.10.11."
@@ -249,35 +250,61 @@ try {
   await evaluate(async (workbench, setup) => {
     await workbench.chooseFolder(setup);
   }, setup);
-  await page.keyboard.press("Control+Shift+B");
-  await expect(dialog().getByLabel("Entry point")).toBeVisible();
-  await expect(dialog().getByLabel("Entry point")).toHaveValue("");
-  await dialog()
-    .getByLabel("Entry point")
+  await page
+    .getByRole("button", { name: "Set up this project", exact: true })
+    .click();
+  await expect(setupDialog().getByLabel("Main script")).toHaveValue("");
+  await setupDialog()
+    .getByLabel("Main script")
     .selectOption(path.join(setup, "first.pwn"));
-  await dialog()
+  await setupDialog()
+    .getByRole("button", { name: "Enter Path", exact: true })
+    .click();
+  await setupDialog().getByLabel("Include folder 1").fill("missing");
+  await setupDialog()
+    .getByRole("button", { name: "Save Setup", exact: true })
+    .click();
+  await expect(setupDialog().getByLabel("Include folder 1")).toHaveAttribute(
+    "aria-invalid",
+    "true"
+  );
+  await expect(setupDialog().getByRole("alert")).toContainText("missing");
+  await setupDialog().getByLabel("Include folder 1").fill("include");
+  await setupDialog().getByText("Advanced", { exact: true }).click();
+  await setupDialog()
     .getByRole("button", { name: "Preview Manifest", exact: true })
     .click();
-  await expect(dialog().locator(".manifest-preview")).toContainText(
+  await expect(setupDialog().locator(".manifest-preview")).toContainText(
     "first.pwn"
   );
   await assert.rejects(stat(path.join(setup, "pawn.json")), { code: "ENOENT" });
-  await dialog()
-    .getByRole("button", { name: "Create pawn.json", exact: true })
+  await setupDialog().getByText("Advanced", { exact: true }).click();
+  await setupDialog().screenshot({
+    path: path.join(root, "test-results/project-setup.png"),
+  });
+  await setupDialog()
+    .getByRole("button", { name: "Save and Build first.pwn", exact: true })
     .click();
-  await expect(dialog().getByTestId("build-entry")).toContainText("first.pwn");
+  await expect(setupDialog()).toBeHidden();
   assert.equal(
     JSON.parse(await readFile(path.join(setup, "pawn.json"), "utf8")).entry,
     "first.pwn"
   );
-  await dialog()
-    .getByRole("button", { name: "Build Project", exact: true })
-    .click();
   await expect
     .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
     .toBe("passed");
+  await expect(page.locator(".build-summary")).toContainText("first.pwn");
+  assert.ok((await stat(path.join(setup, "output/first.amx"))).size > 0);
   evidence.push(
-    "Ambiguous manifest-less folders require entry selection; preview writes nothing, explicit creation preserves the existing manifest format, then real compilation passes."
+    "The Explorer opens setup, ambiguous main scripts require selection, invalid includes show inline, preview writes nothing, and Save and Build creates pawn.json and compiles."
+  );
+  await evaluate((workbench, file) => workbench.openPath(file), admin);
+  await build("passed");
+  await expect(page.locator(".build-summary")).toContainText("admin.pwn");
+  assert.ok((await stat(path.join(setup, "output/admin.amx"))).size > 0);
+  assert.ok((await stat(path.join(setup, "output/first.amx"))).size > 0);
+  evidence.push(
+    "Ctrl+Shift+B compiles the active filterscript with shared includes without registering it as a named build."
   );
 
   const firstPath = path.join(setup, "first.pwn");
@@ -359,7 +386,7 @@ try {
     return { source: external.compiler.source, rejected };
   });
   assert.equal(selection.source, "external");
-  assert.equal(selection.rejected, "buildToolVersion");
+  assert.equal(selection.rejected, "compilerVersionUnknown");
   evidence.push(
     "Compatible external compiler paths are verified; selecting the language server as compiler is rejected."
   );

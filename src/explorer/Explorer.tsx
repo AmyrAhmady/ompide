@@ -299,6 +299,7 @@ function ExplorerView({
   reveal,
   busy,
   refresh,
+  setupProject,
 }: {
   root?: string;
   active?: string;
@@ -306,6 +307,7 @@ function ExplorerView({
   reveal: number;
   busy: boolean;
   refresh: () => void;
+  setupProject?: () => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [listings, setListings] = useState<Map<string, Listing>>(new Map());
@@ -636,6 +638,16 @@ function ExplorerView({
           >
             {rootEntry.name}
           </div>
+          {setupProject && (
+            <button
+              type="button"
+              className="explorer-project-setup"
+              onClick={setupProject}
+              disabled={busy}
+            >
+              {t("project.setup")}
+            </button>
+          )}
           {!rootListing ? (
             <p className="muted explorer-empty" role="status">
               {t("explorer.loading")}

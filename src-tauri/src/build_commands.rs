@@ -31,6 +31,7 @@ pub struct BuildEvent {
 pub struct BuildSelection {
     root: PathBuf,
     entry: PathBuf,
+    active_file: Option<PathBuf>,
     revision: String,
     build: String,
     profile: String,
@@ -277,14 +278,27 @@ pub async fn build_project(
         if current.manifest.revision != selection.revision {
             return Err(error("projectChanged", "manifest changed since selection"));
         }
-        let configuration =
-            project::build_configuration(&scope, &current.configuration, &selection.build)
-                .map_err(project_error)?;
-        if scope.resolve(&selection.entry)? != configuration.entry
-            || selection.profile != current.project.profile
-        {
-            return Err(error("projectChanged", "selected entry or profile changed"));
+        if selection.profile != current.project.profile {
+            return Err(error("projectChanged", "selected profile changed"));
         }
+        let configuration = match selection.active_file {
+            Some(path) => project::build_configuration_for_file(
+                &scope,
+                &current.configuration,
+                &path,
+                &selection.build,
+            )
+            .map_err(project_error)?,
+            None => {
+                let configuration =
+                    project::build_configuration(&scope, &current.configuration, &selection.build)
+                        .map_err(project_error)?;
+                if scope.resolve(&selection.entry)? != configuration.entry {
+                    return Err(error("projectChanged", "selected entry changed"));
+                }
+                configuration
+            }
+        };
         if cfg!(windows)
             && (!scope.root().to_string_lossy().is_ascii()
                 || !tools.compiler.path.to_string_lossy().is_ascii()

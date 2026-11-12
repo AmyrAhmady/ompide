@@ -641,13 +641,16 @@ export class Workbench {
     const root = recent
       ? await native.recentWorkspace(selected)
       : await native.activateWorkspace(selected);
-    const preferences = await native.preferences();
+    const [preferences, project] = await Promise.all([
+      native.preferences(),
+      native.inspectProject(root).catch(() => undefined),
+    ]);
     ++this.projectGeneration;
     this.navigation.clear();
     this.update({
       root,
       recent: preferences.recentWorkspaces,
-      project: undefined,
+      project,
       selectedBuild: "",
       build: { phase: "idle" },
     });
@@ -836,12 +839,21 @@ export class Workbench {
     await this.restartLanguage();
   }
 
-  async buildProject(): Promise<void> {
+  activePawnFile(root = this.state.root): string | undefined {
+    const path = this.state.active
+      ? this.documents.get(this.state.active)?.snapshot?.path
+      : undefined;
+    return path && root && /\.pwn$/i.test(path) && withinPath(path, root)
+      ? path
+      : undefined;
+  }
+
+  async buildProject(activeFile?: string): Promise<void> {
     if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
     if (this.buildPending) return this.buildPending;
     if (!this.state.project) throw { code: "projectRequired" };
     this.buildCancelRequested = false;
-    this.buildPending = this.performBuild();
+    this.buildPending = this.performBuild(activeFile);
     try {
       await this.buildPending;
     } finally {
@@ -849,7 +861,7 @@ export class Workbench {
     }
   }
 
-  private async performBuild(): Promise<void> {
+  private async performBuild(activeFile?: string): Promise<void> {
     const project = this.state.project!;
     const selectedBuild = this.state.selectedBuild;
     const configuration = buildConfiguration(project, selectedBuild);
@@ -857,8 +869,13 @@ export class Workbench {
     this.update({
       build: {
         phase: "saving",
-        entry: configuration.entry,
-        output: configuration.output,
+        entry: activeFile ?? configuration.entry,
+        output: activeFile
+          ? childPath(
+              project.project.root,
+              `output/${fileName(activeFile).slice(0, -4)}.amx`
+            )
+          : configuration.output,
         started,
       },
     });
@@ -871,6 +888,7 @@ export class Workbench {
         {
           root: project.project.root,
           entry: configuration.entry,
+          activeFile,
           revision: project.manifest.revision,
           build: selectedBuild,
           profile: project.project.profile,

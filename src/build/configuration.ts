@@ -1,4 +1,12 @@
 import type { ProjectInfo } from "./types";
+import { parentPath, pathKey } from "../lib/paths";
+
+export function defaultManifest(manifests: string[], root?: string) {
+  const atRoot =
+    root &&
+    manifests.find((path) => pathKey(parentPath(path)) === pathKey(root));
+  return atRoot || (manifests.length === 1 ? manifests[0] : undefined);
+}
 
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)

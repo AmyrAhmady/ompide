@@ -1007,16 +1007,50 @@ dialog footer button.primary {
   font: inherit;
 }
 .project-dialog select,
-.project-dialog textarea {
+.project-dialog input {
   width: 100%;
   padding: 6px;
   color: var(--input-foreground);
   background: var(--input-background);
   border: 1px solid var(--input-border);
 }
-.project-dialog fieldset {
-  border: 1px solid var(--panel-border);
-  margin-top: 18px;
+.project-dialog .project-includes {
+  border: 0;
+  margin: 16px 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.project-includes legend {
+  padding: 0;
+}
+.project-include-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.project-include-row input {
+  flex: 1;
+  min-width: 0;
+}
+.project-include-row button {
+  white-space: nowrap;
+}
+.project-advanced,
+.project-compiler-summary {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+}
+.project-advanced > button {
+  margin-top: 10px;
+}
+.project-dialog footer {
+  flex-wrap: wrap;
+}
+.project-save-location {
+  margin-inline-end: auto;
+}
+.explorer-project-setup {
+  margin: 6px 12px;
 }
 .project-dialog h3 {
   font-size: 13px;
@@ -1051,9 +1085,6 @@ dialog footer button.primary {
   padding: 10px;
   background: var(--editor-background);
   font-size: 12px;
-}
-.project-tool {
-  margin: 12px 0;
 }
 .build-panel {
   height: 280px;

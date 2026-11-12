@@ -16,6 +16,13 @@ export function projectErrorDescription(error: unknown) {
   return {
     message: describeError(error),
     manifest,
+    field:
+      typeof parameters === "object" &&
+      parameters !== null &&
+      "field" in parameters &&
+      typeof parameters.field === "string"
+        ? parameters.field
+        : undefined,
     // Structured config errors are already translated with their specific context.
     // Preserve external/native details for older or unexpected failures too.
     detail: details?.code?.startsWith("projectConfig")
