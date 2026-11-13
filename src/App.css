@@ -1049,6 +1049,20 @@ dialog footer button.primary {
 .project-save-location {
   margin-inline-end: auto;
 }
+.compiler-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.compiler-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 0 16px;
+}
+.compiler-settings code {
+  color: var(--descriptionForeground);
+}
 .explorer-project-setup {
   margin: 6px 12px;
 }

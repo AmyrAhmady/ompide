@@ -816,6 +816,33 @@ export class Workbench {
     if (!building(this.state.build)) this.update({ selectedBuild });
   }
 
+  async saveCompilerSettings(
+    project: ProjectInfo,
+    text: string
+  ): Promise<void> {
+    if (building(this.state.build)) throw { code: "buildBusy" };
+    if (this.state.mutationBusy) throw { code: "fileOperationBusy" };
+    if (this.state.project !== project) throw { code: "projectChanged" };
+    const { path, bom, revision, encoding } = project.manifest;
+    const open = [...this.documents.values()].find(
+      (document) =>
+        document.snapshot && pathKey(document.snapshot.path) === pathKey(path)
+    );
+    if (open && (open.versions.dirty || this.saving.has(open.uri)))
+      throw { code: "compilerManifestUnsaved" };
+    const generation = this.projectGeneration;
+    await native.save(path, text, bom, revision, encoding);
+    if (generation !== this.projectGeneration || this.state.project !== project)
+      return;
+    const refreshed = await native.inspectProject(project.project.root);
+    if (generation === this.projectGeneration && this.state.project === project)
+      this.update({
+        project: refreshed,
+        treeVersion: this.state.treeVersion + 1,
+      });
+    if (open) await this.reconcileDocument(open);
+  }
+
   async configureBuildTool(bundled = false): Promise<void> {
     if (building(this.state.build)) throw { code: "buildBusy" };
     const path = bundled ? "" : await native.chooseBuildTool();

@@ -38,6 +38,7 @@ import {
 } from "./app/commands";
 import type { TranslationKey } from "./lib/i18n";
 import { ProjectDialog } from "./build/ProjectDialog";
+import { CompilerSettingsDialog } from "./build/CompilerSettingsDialog";
 import { BuildPanel } from "./build/BuildPanel";
 import { defaultManifest } from "./build/configuration";
 import { parentPath, withinPath } from "./lib/paths";
@@ -342,6 +343,7 @@ function App() {
     "document" | "workspace" | undefined
   >();
   const [projectOpen, setProjectOpen] = useState(false);
+  const [compilerOpen, setCompilerOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [searchFields, setSearchFields] = useState(initialSearchFields);
   const [treeRevision, setTreeRevision] = useState(0);
@@ -609,6 +611,7 @@ function App() {
     encoding: () => setEncodingTarget(state.active),
     openEncoding: () => setEncodingTarget("open"),
     project: configureProject,
+    compilerSettings: () => setCompilerOpen(true),
     explorer: showExplorer,
     search: showSearch,
     sourceControl: showSourceControl,
@@ -934,6 +937,7 @@ function App() {
             <CommandMenuItem command={command("build.command")} />
             <CommandMenuItem command={command("build.cancel")} />
             <CommandMenuItem command={command("project.title")} />
+            <CommandMenuItem command={command("compiler.title")} />
             <CommandMenuItem command={command("build.output")} />
           </Menu>
           <Menu label="menu.terminal">
@@ -1495,6 +1499,18 @@ function App() {
           state={state}
           close={() => setProjectOpen(false)}
           build={(activeFile) => startBuild(Boolean(activeFile), activeFile)}
+        />
+      )}
+      {compilerOpen && (
+        <CompilerSettingsDialog
+          key={state.project?.manifest.path ?? state.root}
+          project={state.project}
+          selectedBuild={state.selectedBuild}
+          close={() => setCompilerOpen(false)}
+          configure={() => {
+            setCompilerOpen(false);
+            configureProject();
+          }}
         />
       )}
       {quickOpen && <QuickOpen close={() => setQuickOpen(false)} />}

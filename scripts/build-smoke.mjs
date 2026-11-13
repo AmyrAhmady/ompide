@@ -59,6 +59,17 @@ const dialog = () =>
   page.getByRole("dialog", { name: "Configure Project…", exact: true });
 const setupDialog = () =>
   page.getByRole("dialog", { name: "Set up this project", exact: true });
+async function openCompilerSettings() {
+  await page
+    .locator(".menu summary")
+    .getByText("Build", { exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Compiler Settings", exact: true })
+    .click();
+  return page.getByRole("dialog", { name: "Compiler Settings", exact: true });
+}
+
 async function configure() {
   await page
     .locator(".menu summary")
@@ -148,6 +159,24 @@ try {
   await assert.rejects(stat(path.join(existing, "output")), { code: "ENOENT" });
   await build("passed");
   assert.ok((await stat(path.join(existing, "output/main.amx"))).size > 0);
+  const compilerSettings = await openCompilerSettings();
+  await compilerSettings.getByLabel("Debug level").selectOption("2");
+  await compilerSettings.getByLabel("Require semicolons").selectOption("+");
+  await compilerSettings
+    .getByLabel("Require parentheses in calls")
+    .selectOption("+");
+  await compilerSettings
+    .getByRole("button", { name: "Save Compiler Settings", exact: true })
+    .click();
+  await expect(compilerSettings).toBeHidden();
+  const savedManifest = JSON.parse(
+    await readFile(path.join(existing, "pawn.json"), "utf8")
+  );
+  assert.deepEqual(savedManifest.build.args, ["-d2", "-;+", "-(+"]);
+  await build("passed");
+  evidence.push(
+    "Compiler Settings saves shared flags and the next build uses the updated manifest."
+  );
   await expect(
     page.getByText("Compiler exit code: 0", { exact: true })
   ).toBeVisible();
@@ -220,6 +249,19 @@ try {
   await evaluate(async (workbench, yaml) => {
     await workbench.chooseFolder(yaml);
   }, yaml);
+  const yamlSettings = await openCompilerSettings();
+  await yamlSettings.getByLabel("Apply to").selectOption("broken");
+  await yamlSettings
+    .getByLabel("Optimization", { exact: true })
+    .selectOption("2");
+  await yamlSettings
+    .getByRole("button", { name: "Save Compiler Settings", exact: true })
+    .click();
+  await expect(yamlSettings).toBeHidden();
+  assert.match(
+    await readFile(path.join(yaml, "pawn.yaml"), "utf8"),
+    /name: broken\s+input: main\.pwn\s+args:\s+- -O2/
+  );
   await build("passed");
   assert.ok((await stat(path.join(yaml, "output/alternate.amx"))).size > 0);
   evidence.push(

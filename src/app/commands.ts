@@ -13,6 +13,7 @@ export interface CommandViews {
   settings: () => void;
   themes?: () => void;
   project: () => void;
+  compilerSettings: () => void;
   explorer: () => void;
   search: () => void;
   sourceControl: () => void;
@@ -196,6 +197,11 @@ export function createCommands(
   );
   add("build.cancel", busy, () => workbench.cancelBuild());
   add("project.title", mutable && Boolean(state.root) && !busy, views.project);
+  add(
+    "compiler.title",
+    mutable && Boolean(state.root) && !busy,
+    views.compilerSettings
+  );
   add("build.output", true, views.buildOutput);
   add("terminal.toggle", nativeReady, views.terminal, "Ctrl+`");
   add("terminal.new", nativeReady, views.newTerminal, "Ctrl+Shift+`");

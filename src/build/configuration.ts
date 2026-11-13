@@ -20,6 +20,31 @@ const strings = (value: unknown): string[] =>
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 
+export function compilerTargets(info: ProjectInfo) {
+  const configuration = record(info.configuration);
+  const shared = strings(record(configuration.build).args);
+  const builds = Array.isArray(configuration.builds)
+    ? configuration.builds.map(record)
+    : [];
+  return [
+    {
+      name: "",
+      field: configuration.build == null ? ["build"] : ["build", "args"],
+      args: shared,
+      inherited: false,
+    },
+    ...builds.map((build, index) => {
+      const args = strings(build.args);
+      return {
+        name: text(build.name),
+        field: ["builds", index, "args"],
+        args: args.length ? args : shared,
+        inherited: !args.length,
+      };
+    }),
+  ];
+}
+
 const join = (root: string, child: string) =>
   /^[a-z]:[/\\]|^[/\\]/i.test(child)
     ? child
