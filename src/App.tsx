@@ -40,8 +40,8 @@ import type { TranslationKey } from "./lib/i18n";
 import { ProjectDialog } from "./build/ProjectDialog";
 import { CompilerSettingsDialog } from "./build/CompilerSettingsDialog";
 import { BuildPanel } from "./build/BuildPanel";
-import { defaultManifest } from "./build/configuration";
-import { parentPath, withinPath } from "./lib/paths";
+import { defaultManifest, rootManifest } from "./build/configuration";
+import { parentPath, pathKey, withinPath } from "./lib/paths";
 import { building } from "./build/types";
 import {
   SearchPanel,
@@ -342,7 +342,7 @@ function App() {
   const [symbolsOpen, setSymbolsOpen] = useState<
     "document" | "workspace" | undefined
   >();
-  const [projectOpen, setProjectOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState<"configure" | "setup">();
   const [compilerOpen, setCompilerOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [searchFields, setSearchFields] = useState(initialSearchFields);
@@ -359,7 +359,7 @@ function App() {
     []
   );
 
-  const configureProject = useCallback(() => setProjectOpen(true), []);
+  const configureProject = useCallback(() => setProjectOpen("configure"), []);
 
   const focusMain = useCallback(
     () =>
@@ -491,15 +491,20 @@ function App() {
   const [setupRoot, setSetupRoot] = useState<string>();
   const findingBuildProject = useRef(false);
   const workspaceRoot = state.root;
+  const hasRootProject =
+    !!workspaceRoot &&
+    !!state.project &&
+    pathKey(state.project.project.root) === pathKey(workspaceRoot);
   useEffect(() => {
-    if (!nativeReady || !workspaceRoot || state.project || projectOpen) return;
+    if (!nativeReady || !workspaceRoot || hasRootProject || projectOpen) return;
     let live = true;
     void workbench
       .discoverProjects()
       .then((result) => {
         if (live) {
           setSetupRoot(
-            result.entries.length && !result.manifests.length
+            result.entries.length &&
+              !rootManifest(result.manifests, workspaceRoot)
               ? workspaceRoot
               : undefined
           );
@@ -511,7 +516,7 @@ function App() {
     return () => {
       live = false;
     };
-  }, [nativeReady, workspaceRoot, state.project, projectOpen]);
+  }, [nativeReady, workspaceRoot, hasRootProject, projectOpen, treeRevision]);
   const activeTitle = state.tabs.find((tab) => tab.uri === state.active);
   const encodingDocument = state.tabs.find((tab) => tab.uri === encodingTarget);
   const windowTitle = [
@@ -587,12 +592,17 @@ function App() {
             : discovery.manifests;
           const selected = defaultManifest(candidates, root);
           if (!selected) {
-            setProjectOpen(true);
+            const needsRootSetup =
+              !rootManifest(discovery.manifests, root) &&
+              (candidates.length === 0 || !activeFile) &&
+              discovery.entries.length > 0;
+            setProjectOpen(needsRootSetup ? "setup" : "configure");
             return;
           }
           await workbench.selectProject(parentPath(selected));
         } catch {
-          if (root === workbench.getSnapshot().root) setProjectOpen(true);
+          if (root === workbench.getSnapshot().root)
+            setProjectOpen("configure");
           return;
         } finally {
           findingBuildProject.current = false;
@@ -1028,8 +1038,8 @@ function App() {
                 busy={state.mutationBusy || buildBusy}
                 refresh={refreshExplorer}
                 setupProject={
-                  setupRoot === state.root && setupRoot && !state.project
-                    ? configureProject
+                  setupRoot === state.root && setupRoot && !hasRootProject
+                    ? () => setProjectOpen("setup")
                     : undefined
                 }
               />
@@ -1497,7 +1507,8 @@ function App() {
         <ProjectDialog
           key={state.root}
           state={state}
-          close={() => setProjectOpen(false)}
+          setupWorkspaceRoot={projectOpen === "setup"}
+          close={() => setProjectOpen(undefined)}
           build={(activeFile) => startBuild(Boolean(activeFile), activeFile)}
         />
       )}

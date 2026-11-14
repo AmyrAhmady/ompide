@@ -2,14 +2,30 @@ import { useEffect, useState } from "react";
 import { workbench, type WorkbenchState } from "../app/workbench";
 import { Modal } from "../components/Modal";
 import { t } from "../lib/i18n";
-import { fileName, parentPath, pathKey, relativePath } from "../lib/paths";
+import {
+  fileName,
+  parentPath,
+  pathKey,
+  relativePath,
+  withinPath,
+} from "../lib/paths";
 import { projectErrorDescription } from "./errors";
-import { buildConfiguration, defaultManifest } from "./configuration";
+import {
+  buildConfiguration,
+  defaultManifest,
+  rootManifest,
+} from "./configuration";
 import type { Discovery, BuildTools } from "./types";
 
 function suggestedEntry(discovery: Discovery, root?: string): string {
-  if (discovery.entries.length === 1) return discovery.entries[0];
-  const gamemodes = discovery.entries.filter(
+  const nestedProjects = discovery.manifests
+    .map(parentPath)
+    .filter((path) => root && pathKey(path) !== pathKey(root));
+  const entries = discovery.entries.filter(
+    (path) => !nestedProjects.some((project) => withinPath(path, project))
+  );
+  if (entries.length === 1) return entries[0];
+  const gamemodes = entries.filter(
     (path) =>
       root && /^gamemodes[/\\][^/\\]+$/i.test(relativePath(path, root) ?? "")
   );
@@ -18,10 +34,12 @@ function suggestedEntry(discovery: Discovery, root?: string): string {
 
 export function ProjectDialog({
   state,
+  setupWorkspaceRoot,
   close,
   build,
 }: {
   state: WorkbenchState;
+  setupWorkspaceRoot: boolean;
   close: () => void;
   build: (activeFile?: string) => void;
 }) {
@@ -34,7 +52,7 @@ export function ProjectDialog({
   const [toolError, setToolError] =
     useState<ReturnType<typeof projectErrorDescription>>();
   const [manifest, setManifest] = useState(state.project?.manifest.path ?? "");
-  const [setupHere, setSetupHere] = useState(false);
+  const [setupHere, setSetupHere] = useState(setupWorkspaceRoot);
   const [entry, setEntry] = useState("");
   const [includes, setIncludes] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ key: string; text: string }>();
@@ -44,11 +62,7 @@ export function ProjectDialog({
     ? buildConfiguration(project, state.selectedBuild)
     : undefined;
   const canSetUpRoot =
-    discovery &&
-    root &&
-    !discovery.manifests.some(
-      (path) => pathKey(parentPath(path)) === pathKey(root)
-    );
+    discovery && root && !rootManifest(discovery.manifests, root);
   const firstSetup =
     !!discovery &&
     (!discovery.manifests.length || Boolean(canSetUpRoot && setupHere));
@@ -103,9 +117,11 @@ export function ProjectDialog({
     );
     await Promise.all([
       inspect(
-        result.manifests.includes(manifest)
-          ? manifest
-          : (defaultManifest(result.manifests, root) ?? "")
+        setupHere && root && !rootManifest(result.manifests, root)
+          ? ""
+          : result.manifests.includes(manifest)
+            ? manifest
+            : (defaultManifest(result.manifests, root) ?? "")
       ),
       verifyTools(),
     ]);
@@ -119,7 +135,10 @@ export function ProjectDialog({
         if (!live || root !== workbench.getSnapshot().root) return;
         setDiscovery(result);
         setEntry(suggestedEntry(result, root));
-        const selected = defaultManifest(result.manifests, root);
+        const selected =
+          setupWorkspaceRoot && root
+            ? rootManifest(result.manifests, root)
+            : defaultManifest(result.manifests, root);
         if (selected && !workbench.getSnapshot().project) {
           setManifest(selected);
           await workbench.selectProject(parentPath(selected));
@@ -142,7 +161,7 @@ export function ProjectDialog({
     return () => {
       live = false;
     };
-  }, [root]);
+  }, [root, setupWorkspaceRoot]);
 
   const updateIncludes = (values: string[]) => {
     setIncludes(values);

@@ -120,6 +120,11 @@ try {
   await mkdir(path.join(setup, "filterscripts"));
   await mkdir(path.join(setup, "include"));
   await writeFile(
+    path.join(setup, "include", "pawn.json"),
+    '{"entry":"library.pwn"}'
+  );
+  await writeFile(path.join(setup, "include", "library.pwn"), "main() {}\n");
+  await writeFile(
     path.join(setup, "include", "common.inc"),
     "#define SUCCESS (1)\n"
   );
@@ -292,6 +297,15 @@ try {
   await evaluate(async (workbench, setup) => {
     await workbench.chooseFolder(setup);
   }, setup);
+  await evaluate(
+    (workbench, file) => workbench.openPath(file),
+    path.join(setup, "first.pwn")
+  );
+  await page.keyboard.press("Control+Shift+B");
+  await expect(setupDialog()).toBeVisible();
+  await setupDialog()
+    .getByRole("button", { name: "Dismiss", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Set up this project", exact: true })
     .click();
@@ -338,7 +352,7 @@ try {
   await expect(page.locator(".build-summary")).toContainText("first.pwn");
   assert.ok((await stat(path.join(setup, "output/first.amx"))).size > 0);
   evidence.push(
-    "The Explorer opens setup, ambiguous main scripts require selection, invalid includes show inline, preview writes nothing, and Save and Build creates pawn.json and compiles."
+    "Explorer and Ctrl+Shift+B open root setup with a nested include manifest present. Ambiguous main scripts require selection, invalid includes show inline, preview writes nothing, and Save and Build creates pawn.json and compiles."
   );
   await evaluate((workbench, file) => workbench.openPath(file), admin);
   await build("passed");

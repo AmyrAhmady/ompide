@@ -1,11 +1,15 @@
 import type { ProjectInfo } from "./types";
 import { parentPath, pathKey } from "../lib/paths";
 
+export function rootManifest(manifests: string[], root: string) {
+  return manifests.find((path) => pathKey(parentPath(path)) === pathKey(root));
+}
+
 export function defaultManifest(manifests: string[], root?: string) {
-  const atRoot =
-    root &&
-    manifests.find((path) => pathKey(parentPath(path)) === pathKey(root));
-  return atRoot || (manifests.length === 1 ? manifests[0] : undefined);
+  return (
+    (root && rootManifest(manifests, root)) ||
+    (manifests.length === 1 ? manifests[0] : undefined)
+  );
 }
 
 const record = (value: unknown): Record<string, unknown> =>
