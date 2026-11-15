@@ -404,6 +404,24 @@ hr {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.explorer-project-setup {
+  appearance: none;
+  display: block;
+  width: calc(100% - 24px);
+  min-height: 28px;
+  margin: 4px 12px 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--button-border, var(--input-border));
+  background: var(--button-secondaryBackground, var(--input-background));
+  color: var(--button-secondaryForeground, var(--sideBar-foreground));
+  line-height: 18px;
+}
+.explorer-project-setup:hover:enabled {
+  background: var(
+    --button-secondaryHoverBackground,
+    var(--list-hoverBackground)
+  );
+}
 .explorer ul {
   margin: 0;
   padding: 0;
@@ -1062,9 +1080,6 @@ dialog footer button.primary {
 }
 .compiler-settings code {
   color: var(--descriptionForeground);
-}
-.explorer-project-setup {
-  margin: 6px 12px;
 }
 .project-dialog h3 {
   font-size: 13px;
