@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.7`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.8`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -49,6 +49,10 @@ Version `.7` pins pawnlint at `bed18272a932`. Editor linting uses the shared
 analysis result for syntax diagnostics when it matches the current file and
 revision. This keeps the background lint pass from re-reporting raw syntax
 errors for valid textual macros.
+
+Version `.8` builds one UTF-16 line index per document-symbol request. Monaco
+requests document symbols in the background, so this also reduces the wait for
+completion and diagnostics on large files.
 
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in

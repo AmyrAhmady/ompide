@@ -212,6 +212,16 @@ index 91bf675..fcd9909 100644
  			MaxOutputTokens:          analysisOutputTokenLimit,
  			Revision:                 fmt.Sprintf("%s:%T:%T:%d", doc.Path, doc.Includes, doc.Names, doc.Revision),
  			TokenCache:               s.tokenCache,
+@@ -1112,7 +1115,8 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
+ 	doc := s.readyDocument(params.TextDocument.URI)
+ 	items := make([]map[string]any, 0)
+ 	if doc != nil && doc.Analysis != nil && doc.Analysis.Symbols != nil {
++		index := coresource.NewLineIndex(string(doc.text()))
+ 		for _, item := range doc.Analysis.Symbols.Symbols {
+-			rng := offsetRange(doc.text(), int(item.Span.Start), int(item.Span.End))
++			rng := offsetRangeWithIndex(index, int(item.Span.Start), int(item.Span.End))
+ 			items = append(items, map[string]any{
+ 				"name": item.Name, "kind": symbolKind(item.Kind),
 diff --git a/lsp/workspace.go b/lsp/workspace.go
 index f834c01..3dbcce0 100644
 --- a/lsp/workspace.go
