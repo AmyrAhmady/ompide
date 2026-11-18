@@ -994,6 +994,9 @@ function App() {
         <ActivityBar
           layout={layout}
           ready={state.ready}
+          build={registeredCommands.find(
+            (command) => command.label === "build.activeCommand"
+          )!}
           select={(view) => {
             const visible = layout.sidebar !== view || !layout.sidebarVisible;
             changeLayout({ sidebar: view, sidebarVisible: visible });

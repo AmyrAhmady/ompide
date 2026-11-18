@@ -16,8 +16,10 @@ import sourceControl from "@vscode/codicons/src/icons/source-control.svg?url";
 import trash from "@vscode/codicons/src/icons/trash.svg?url";
 import error from "@vscode/codicons/src/icons/error.svg?url";
 import warning from "@vscode/codicons/src/icons/warning.svg?url";
+import tools from "@vscode/codicons/src/icons/tools.svg?url";
 
 const icons = {
+  tools,
   add,
   remove,
   close,

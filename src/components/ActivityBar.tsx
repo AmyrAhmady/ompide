@@ -24,10 +24,12 @@ export function ActivityBar({
   layout,
   ready,
   select,
+  build,
 }: {
   layout: Layout;
   ready: boolean;
   select: (view: Layout["sidebar"]) => void;
+  build: { enabled: boolean; run: () => unknown };
 }) {
   return (
     <nav
@@ -37,8 +39,11 @@ export function ActivityBar({
         const keys = ["ArrowUp", "ArrowDown", "Home", "End"];
         if (!keys.includes(event.key)) return;
         const buttons = [
-          ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button"),
+          ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+            "button:enabled"
+          ),
         ];
+        if (buttons.length === 0) return;
         const current = buttons.indexOf(
           document.activeElement as HTMLButtonElement
         );
@@ -69,6 +74,16 @@ export function ActivityBar({
           <Icon name={view.icon} size={24} />
         </button>
       ))}
+      <button
+        type="button"
+        title={`${t("build.activeCommand")} (Ctrl+Shift+B)`}
+        aria-label={t("build.activeCommand")}
+        aria-keyshortcuts="Control+Shift+B"
+        disabled={!build.enabled}
+        onClick={() => build.run()}
+      >
+        <Icon name="tools" size={24} />
+      </button>
     </nav>
   );
 }
