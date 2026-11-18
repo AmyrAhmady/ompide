@@ -12,9 +12,12 @@ import {
 import { projectErrorDescription } from "./errors";
 import {
   buildConfiguration,
+  entryOutput,
+  validEntryOutput,
   defaultManifest,
   rootManifest,
 } from "./configuration";
+import { editManifestValue } from "./compilerSettings";
 import type { Discovery, BuildTools } from "./types";
 
 function suggestedEntry(discovery: Discovery, root?: string): string {
@@ -55,12 +58,14 @@ export function ProjectDialog({
   const [setupHere, setSetupHere] = useState(setupWorkspaceRoot);
   const [entry, setEntry] = useState("");
   const [includes, setIncludes] = useState<string[]>([]);
+  const [outputDraft, setOutputDraft] = useState<string>();
   const [preview, setPreview] = useState<{ key: string; text: string }>();
   const root = state.root;
   const project = state.project;
   const configuration = project
     ? buildConfiguration(project, state.selectedBuild)
     : undefined;
+  const output = outputDraft ?? (project ? entryOutput(project) : "");
   const canSetUpRoot =
     discovery && root && !rootManifest(discovery.manifests, root);
   const firstSetup =
@@ -206,6 +211,53 @@ export function ProjectDialog({
     execute(async () => {
       await workbench.openPath(path);
       close();
+    });
+
+  useEffect(() => {
+    setOutputDraft(undefined);
+  }, [project?.manifest.path]);
+
+  const saveOutput = (value: string) =>
+    execute(async () => {
+      if (!project) return;
+      if (!validEntryOutput(project.project.root, value.trim())) {
+        throw { code: "projectConfigOutput", parameters: { path: value } };
+      }
+      const { path, text } = project.manifest;
+      await workbench.saveProjectConfiguration(
+        project,
+        editManifestValue(path, text, ["output"], value.trim() || undefined)
+      );
+      setOutputDraft(undefined);
+    });
+
+  const browseOutput = () =>
+    execute(async () => {
+      if (!project) return;
+      const folder = await workbench.chooseIncludeFolder();
+      if (folder === null) return;
+      if (
+        root !== workbench.getSnapshot().root ||
+        project !== workbench.getSnapshot().project
+      )
+        return;
+      const absolute = /^[a-z]:[/\\]|^[/\\]/i.test(folder)
+        ? folder
+        : folder === "."
+          ? root!
+          : `${root}/${folder}`;
+      const relative = relativePath(absolute, project.project.root);
+      if (relative === undefined)
+        throw { code: "projectConfigOutput", parameters: { path: absolute } };
+      const filename = fileName(project.project.entry).replace(
+        /\.pwn$/i,
+        ".amx"
+      );
+      setOutputDraft(
+        relative === "."
+          ? filename
+          : `${relative.replace(/[/\\]+$/, "")}/${filename}`
+      );
     });
 
   const compilerName = state.settings.compilerPath
@@ -400,6 +452,43 @@ export function ProjectDialog({
               <dd>{configuration.includes.join("\n") || t("project.none")}</dd>
             </dl>
           </section>
+        )}
+        {project && !firstSetup && (
+          <fieldset className="project-includes">
+            <legend>{t("project.entryOutput")}</legend>
+            <p className="muted">{t("project.entryOutputHint")}</p>
+            <label>
+              <span>{t("project.output")}</span>
+              <input
+                value={output}
+                disabled={busy}
+                placeholder={relativePath(
+                  project.project.entry,
+                  project.project.root
+                )?.replace(/\.pwn$/i, ".amx")}
+                onChange={(event) => setOutputDraft(event.target.value)}
+              />
+            </label>
+            <div className="settings-tool-actions">
+              <button type="button" disabled={busy} onClick={browseOutput}>
+                {t("project.outputBrowse")}
+              </button>
+              <button
+                type="button"
+                disabled={busy || output.trim() === entryOutput(project)}
+                onClick={() => saveOutput(output)}
+              >
+                {t("project.outputSave")}
+              </button>
+              <button
+                type="button"
+                disabled={busy || (!output && !entryOutput(project))}
+                onClick={() => saveOutput("")}
+              >
+                {t("project.outputReset")}
+              </button>
+            </div>
+          </fieldset>
         )}
         {(manifest || project) && !firstSetup && (
           <button

@@ -51,7 +51,7 @@ import {
   type Discovery,
   type BuildTools,
 } from "../build/types";
-import { buildConfiguration } from "../build/configuration";
+import { buildConfiguration, buildOutput } from "../build/configuration";
 import type {
   SearchOptions,
   SearchResult,
@@ -816,7 +816,7 @@ export class Workbench {
     if (!building(this.state.build)) this.update({ selectedBuild });
   }
 
-  async saveCompilerSettings(
+  async saveProjectConfiguration(
     project: ProjectInfo,
     text: string
   ): Promise<void> {
@@ -898,10 +898,7 @@ export class Workbench {
         phase: "saving",
         entry: activeFile ?? configuration.entry,
         output: activeFile
-          ? childPath(
-              project.project.root,
-              `output/${fileName(activeFile).slice(0, -4)}.amx`
-            )
+          ? buildOutput(project, activeFile)
           : configuration.output,
         started,
       },

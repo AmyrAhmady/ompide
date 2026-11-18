@@ -93,6 +93,7 @@ pub struct ProjectDetails {
 #[derive(Debug)]
 pub struct BuildConfiguration {
     pub entry: PathBuf,
+    pub output: PathBuf,
     pub includes: Vec<PathBuf>,
     pub arguments: Vec<String>,
     pub defines: std::collections::BTreeMap<String, String>,
@@ -536,8 +537,35 @@ fn resolve_build(
             defines.insert(name.clone(), value);
         }
     }
+    let mut output = entry.with_extension("amx");
+    let configured_output = text(configuration, "output")?;
+    let default_build = selected(configuration, "", true)?;
+    let primary = build_input(configuration, &default_build)?.1;
+    if !configured_output.is_empty() && scope.resolve(&scope.root().join(primary))? == entry {
+        output = scope.root().join(configured_output);
+        let relative = output
+            .strip_prefix(scope.root())
+            .map_err(|_| invalid("projectConfigOutput", serde_json::json!({"path": output})))?;
+        if !output
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("amx"))
+            || relative.components().any(|part| match part {
+                std::path::Component::Normal(name) => {
+                    name.to_string_lossy().eq_ignore_ascii_case(".git")
+                }
+                std::path::Component::CurDir => false,
+                _ => true,
+            })
+        {
+            return Err(invalid(
+                "projectConfigOutput",
+                serde_json::json!({"path": output}),
+            ));
+        }
+    }
     Ok(BuildConfiguration {
         entry,
+        output,
         includes,
         arguments,
         defines,
@@ -675,6 +703,38 @@ mod tests {
     }
 
     #[test]
+    fn output_defaults_to_each_source_and_override_only_applies_to_entry() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("gamemodes")).unwrap();
+        fs::create_dir(root.path().join("filterscripts")).unwrap();
+        fs::write(root.path().join("gamemodes/main.pwn"), "main() {}\n").unwrap();
+        fs::write(root.path().join("filterscripts/admin.pwn"), "main() {}\n").unwrap();
+        let scope = Workspace::open(root.path()).unwrap();
+        let mut config = json!({"entry":"gamemodes/main.pwn"});
+        assert_eq!(
+            build_configuration(&scope, &config, "").unwrap().output,
+            scope.root().join("gamemodes/main.amx")
+        );
+        config["output"] = json!("bin/nested/main.amx");
+        assert_eq!(
+            build_configuration(&scope, &config, "").unwrap().output,
+            scope.root().join("bin/nested/main.amx")
+        );
+        let script = build_configuration_for_file(
+            &scope,
+            &config,
+            &scope.root().join("filterscripts/admin.pwn"),
+            "",
+        )
+        .unwrap();
+        assert_eq!(script.output, scope.root().join("filterscripts/admin.amx"));
+        for output in ["../outside.amx", ".git/file.amx", "file.pwn"] {
+            config["output"] = json!(output);
+            assert!(build_configuration(&scope, &config, "").is_err());
+        }
+    }
+
+    #[test]
     fn named_builds_inherit_inputs_arguments_includes_and_merge_constants() {
         let root = fixture();
         let scope = Workspace::open(root.path()).unwrap();
@@ -731,10 +791,13 @@ mod tests {
                 .is_err()
         );
         let outside = fixture();
-        assert!(
-            build_configuration_for_file(&scope, &config, &outside.path().join("main.pwn"), "")
-                .is_err()
-        );
+        assert!(build_configuration_for_file(
+            &scope,
+            &config,
+            &outside.path().join("main.pwn"),
+            ""
+        )
+        .is_err());
     }
 
     #[test]
@@ -785,11 +848,9 @@ mod tests {
             "",
         )
         .unwrap();
-        assert!(
-            configuration
-                .includes
-                .contains(&workspace::canonical(outside.path()).unwrap())
-        );
+        assert!(configuration
+            .includes
+            .contains(&workspace::canonical(outside.path()).unwrap()));
         let preview: Value = serde_json::from_str(
             &preview(
                 &scope,
@@ -826,11 +887,9 @@ mod tests {
             json!(["include", "../shared SDK"])
         );
         let build = build_configuration(&scope, &configuration, "").unwrap();
-        assert!(
-            build
-                .includes
-                .contains(&workspace::canonical(&sdk).unwrap())
-        );
+        assert!(build
+            .includes
+            .contains(&workspace::canonical(&sdk).unwrap()));
     }
 
     #[test]

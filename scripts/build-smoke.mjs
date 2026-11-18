@@ -163,7 +163,7 @@ try {
   await page.getByRole("treeitem", { name: "main.pwn", exact: true }).click();
   await assert.rejects(stat(path.join(existing, "output")), { code: "ENOENT" });
   await build("passed");
-  assert.ok((await stat(path.join(existing, "output/main.amx"))).size > 0);
+  assert.ok((await stat(path.join(existing, "main.amx"))).size > 0);
   const compilerSettings = await openCompilerSettings();
   await compilerSettings.getByLabel("Debug level").selectOption("2");
   await compilerSettings.getByLabel("Require semicolons").selectOption("+");
@@ -202,7 +202,7 @@ try {
     await readFile(path.join(existing, "main.pwn"), "utf8"),
     /MissingFunction/
   );
-  await assert.rejects(stat(path.join(existing, "output/main.amx")), {
+  await assert.rejects(stat(path.join(existing, "main.amx")), {
     code: "ENOENT",
   });
   const diagnostic = page
@@ -246,7 +246,7 @@ try {
   await expect
     .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
     .toBe("passed");
-  assert.ok((await stat(path.join(existing, "output/alternate.amx"))).size > 0);
+  assert.ok((await stat(path.join(existing, "alternate.amx"))).size > 0);
   evidence.push(
     "Changed manifests require refreshed selection; named builds display and compile their actual entry point."
   );
@@ -268,7 +268,7 @@ try {
     /name: broken\s+input: main\.pwn\s+args:\s+- -O2/
   );
   await build("passed");
-  assert.ok((await stat(path.join(yaml, "output/alternate.amx"))).size > 0);
+  assert.ok((await stat(path.join(yaml, "alternate.amx"))).size > 0);
   evidence.push(
     "YAML manifests and default build input overrides select the correct entry."
   );
@@ -289,7 +289,7 @@ try {
     await workbench.chooseFolder(openmp);
   }, openmp);
   await build("passed");
-  assert.ok((await stat(path.join(openmp, "output/main.amx"))).size > 0);
+  assert.ok((await stat(path.join(openmp, "main.amx"))).size > 0);
   evidence.push(
     "Official open.mp includes, callbacks and macros compile through the native Build UI with openmultiplayer/compiler 3.10.11."
   );
@@ -350,15 +350,15 @@ try {
     .poll(() => evaluate((workbench) => workbench.getSnapshot().build.phase))
     .toBe("passed");
   await expect(page.locator(".build-summary")).toContainText("first.pwn");
-  assert.ok((await stat(path.join(setup, "output/first.amx"))).size > 0);
+  assert.ok((await stat(path.join(setup, "first.amx"))).size > 0);
   evidence.push(
     "Explorer and Ctrl+Shift+B open root setup with a nested include manifest present. Ambiguous main scripts require selection, invalid includes show inline, preview writes nothing, and Save and Build creates pawn.json and compiles."
   );
   await evaluate((workbench, file) => workbench.openPath(file), admin);
   await build("passed");
   await expect(page.locator(".build-summary")).toContainText("admin.pwn");
-  assert.ok((await stat(path.join(setup, "output/admin.amx"))).size > 0);
-  assert.ok((await stat(path.join(setup, "output/first.amx"))).size > 0);
+  assert.ok((await stat(path.join(setup, "admin.amx"))).size > 0);
+  assert.ok((await stat(path.join(setup, "first.amx"))).size > 0);
   evidence.push(
     "Ctrl+Shift+B compiles the active filterscript with shared includes without registering it as a named build."
   );
@@ -418,7 +418,7 @@ try {
       workbench.getSnapshot().tabs.some((tab) => tab.dirty)
     )
   );
-  await assert.rejects(stat(path.join(setup, "output/first.amx")), {
+  await assert.rejects(stat(path.join(setup, "first.amx")), {
     code: "ENOENT",
   });
   evidence.push(

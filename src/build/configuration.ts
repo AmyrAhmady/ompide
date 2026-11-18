@@ -1,5 +1,11 @@
 import type { ProjectInfo } from "./types";
-import { parentPath, pathKey } from "../lib/paths";
+import {
+  parentPath,
+  pathKey,
+  withinPath,
+  relativePath,
+  fileName,
+} from "../lib/paths";
 
 export function rootManifest(manifests: string[], root: string) {
   return manifests.find((path) => pathKey(parentPath(path)) === pathKey(root));
@@ -83,14 +89,32 @@ export function buildConfiguration(info: ProjectInfo, name = "") {
       ? strings(selected.args)
       : strings(defaults.args),
     builds: named.map((build) => text(build.name)).filter(Boolean),
-    output: join(
-      info.project.root,
-      `output/${
-        path
-          .split(/[/\\]/)
-          .at(-1)
-          ?.replace(/\.pwn$/i, "") ?? "main"
-      }.amx`
-    ),
+    output: buildOutput(info, path),
   };
+}
+
+export function entryOutput(info: ProjectInfo): string {
+  return text(record(info.configuration).output);
+}
+
+export function validEntryOutput(root: string, value: string): boolean {
+  if (!value) return true;
+  const path = join(root, value);
+  const relative = relativePath(path, root);
+  return (
+    withinPath(path, root) &&
+    relative !== undefined &&
+    fileName(path).length > 4 &&
+    /\.amx$/i.test(path) &&
+    relative
+      .split(/[/\\]/)
+      .every((part) => part !== ".." && part.toLowerCase() !== ".git")
+  );
+}
+
+export function buildOutput(info: ProjectInfo, file: string): string {
+  const output = entryOutput(info);
+  return pathKey(file) === pathKey(info.project.entry) && output
+    ? join(info.project.root, output)
+    : file.replace(/\.pwn$/i, ".amx");
 }

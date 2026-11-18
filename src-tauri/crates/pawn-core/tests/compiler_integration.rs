@@ -35,6 +35,12 @@ fn real_compiler_success_failure_constants_and_cancelled_artifacts() {
         report.process.stdout, report.process.stderr
     );
     assert!(report.artifacts[0].size > 56);
+    assert!(root.path().join("main.amx").is_file());
+    let custom = project::build_configuration(&scope, &serde_json::json!({"entry":"main.pwn", "output":"bin/nested/custom.amx", "build":{"includes":["include"],"constants":{"FEATURE":true}}}), "").unwrap();
+    let custom_result =
+        compiler::build(&scope, &custom, &executable, &AtomicBool::new(false)).unwrap();
+    assert_eq!(custom_result.report.unwrap().status, "passed");
+    assert!(root.path().join("bin/nested/custom.amx").is_file());
     assert!(report.process.stdout.contains("Pawn compiler 3.10.11"));
     fs::write(
         root.path().join("main.pwn"),
@@ -45,18 +51,16 @@ fn real_compiler_success_failure_constants_and_cancelled_artifacts() {
         compiler::build(&scope, &configuration, &executable, &AtomicBool::new(false)).unwrap();
     let report = result.report.unwrap();
     assert_eq!(report.status, "failed");
-    assert!(
-        report
-            .diagnostics
-            .iter()
-            .any(|item| item.code == "pawncc-017" && item.primary.range.start.line == 0)
-    );
-    assert!(!root.path().join("output/main.amx").exists());
-    fs::write(root.path().join("output/main.amx"), b"stale artifact").unwrap();
+    assert!(report
+        .diagnostics
+        .iter()
+        .any(|item| item.code == "pawncc-017" && item.primary.range.start.line == 0));
+    assert!(!root.path().join("main.amx").exists());
+    fs::write(root.path().join("main.amx"), b"stale artifact").unwrap();
     let result =
         compiler::build(&scope, &configuration, &executable, &AtomicBool::new(true)).unwrap();
     assert_eq!(result.outcome, "cancelled");
-    assert!(!root.path().join("output/main.amx").exists());
+    assert!(!root.path().join("main.amx").exists());
 }
 
 #[test]
@@ -97,7 +101,7 @@ fn real_compiler_accepts_shared_sdk_inputs_and_reports_external_header_errors() 
             "{}{}",
             report.process.stdout, report.process.stderr
         );
-        assert!(root.join("output/main.amx").is_file());
+        assert!(root.join("main.amx").is_file());
         assert_eq!(fs::read_to_string(&header).unwrap(), original);
         assert!(!sdk.join("output").exists());
     }
@@ -127,5 +131,5 @@ fn real_compiler_accepts_shared_sdk_inputs_and_reports_external_header_errors() 
         report.process.stdout,
         report.process.stderr
     );
-    assert!(!root.join("output/main.amx").exists());
+    assert!(!root.join("main.amx").exists());
 }

@@ -57,7 +57,7 @@ const evidence = {
 };
 
 function compile(workspace, expected) {
-  const artifact = path.join(workspace, "output/main.amx");
+  const artifact = path.join(workspace, "main.amx");
   const result = spawnSync(
     compiler,
     [
@@ -448,7 +448,7 @@ try {
   await mkdir(path.join(workspace, "output"), { recursive: true });
   const valid = compile(workspace, 0);
   assert.ok(valid.stdout.includes("Pawn compiler " + versions.pawncc));
-  const artifact = await readFile(path.join(workspace, "output/main.amx"));
+  const artifact = await readFile(path.join(workspace, "main.amx"));
   assert.ok(artifact.length > 56);
   assert.equal(artifact.readUInt16LE(4), 0xf1e0);
   evidence.checks.push(
@@ -500,10 +500,10 @@ try {
     path.join(workspace, "main.pwn"),
     "main() { MissingFunction(); }\n"
   );
-  await rm(path.join(workspace, "output/main.amx"));
+  await rm(path.join(workspace, "main.amx"));
   const invalid = compile(workspace, 1);
   assert.match(invalid.stdout + invalid.stderr, /error 017:.*MissingFunction/);
-  await assert.rejects(stat(path.join(workspace, "output/main.amx")), {
+  await assert.rejects(stat(path.join(workspace, "main.amx")), {
     code: "ENOENT",
   });
   evidence.failureOutput = invalid.stdout + invalid.stderr;

@@ -243,33 +243,51 @@ fn remove(path: &Path) -> io::Result<()> {
     }
 }
 
+fn prepare_artifact(scope: &Workspace, target: &Path) -> io::Result<PathBuf> {
+    let relative = target
+        .strip_prefix(scope.root())
+        .map_err(|_| invalid("output is outside workspace"))?;
+    let mut directory = scope.root().to_owned();
+    let parts: Vec<_> = relative.components().collect();
+    for (index, part) in parts.iter().enumerate() {
+        let std::path::Component::Normal(name) = part else {
+            return Err(invalid("invalid output path"));
+        };
+        let name = name
+            .to_str()
+            .ok_or_else(|| invalid("invalid output name"))?;
+        let next = scope.new_child(&directory, name)?;
+        if fs::symlink_metadata(&next).is_ok_and(|metadata| metadata.is_symlink()) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "output path is a symbolic link",
+            ));
+        }
+        if index + 1 == parts.len() {
+            return Ok(next);
+        }
+        match fs::create_dir(&next) {
+            Ok(()) => {}
+            Err(failure) if failure.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(failure) => return Err(failure),
+        }
+        directory = scope.resolve(&next)?;
+        if !directory.is_dir() {
+            return Err(invalid("output parent is not a directory"));
+        }
+    }
+    Err(invalid("missing output file name"))
+}
+
 pub fn build(
     scope: &Workspace,
     configuration: &BuildConfiguration,
     compiler: &Path,
     cancel: &AtomicBool,
 ) -> io::Result<BuildResult> {
-    let name = configuration
-        .entry
-        .file_stem()
-        .ok_or_else(|| invalid("missing entry file name"))?
-        .to_string_lossy();
-    let output = scope.new_child(scope.root(), "output")?;
-    if fs::symlink_metadata(&output).is_ok_and(|metadata| metadata.is_symlink()) {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "output directory is a symbolic link",
-        ));
-    }
-    let artifact = output.join(format!("{name}.amx"));
-    let arguments = arguments(scope, configuration, &artifact)?;
-    match fs::create_dir(&output) {
-        Ok(()) => {}
-        Err(failure) if failure.kind() == io::ErrorKind::AlreadyExists => {}
-        Err(failure) => return Err(failure),
-    }
-    let output = scope.resolve(&output)?;
-    let artifact = scope.new_child(&output, &format!("{name}.amx"))?;
+    // Validate compiler arguments before creating any output directories.
+    let arguments = arguments(scope, configuration, &configuration.output)?;
+    let artifact = prepare_artifact(scope, &configuration.output)?;
     if fs::symlink_metadata(&artifact)
         .is_ok_and(|metadata| metadata.is_symlink() || !metadata.is_file())
     {

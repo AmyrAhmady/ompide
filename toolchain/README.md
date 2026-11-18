@@ -205,7 +205,7 @@ The supported compiler arguments and diagnostic syntax were checked against
 [openmultiplayer/compiler v3.10.11](https://github.com/openmultiplayer/compiler/tree/v3.10.11),
 commit 38e9795439fff218fae5096d43c468acc2e513a1, particularly
 source/compiler/sc1.c and source/amx/amx.h. Rust builds explicit argument arrays,
-uses the project working directory and owns output/<entry-name>.amx. Diagnostic
+uses the project working directory and writes an AMX beside the compiled source by default. The manifest `output` field overrides the configured entry only. Diagnostic
 file(line) messages become scoped file URIs and zero-based line locations; raw
 stdout/stderr remain visible. Exit status and the 32-bit AMX header/size are
 verified. Failure/cancellation removes stale or partial output. Response files,

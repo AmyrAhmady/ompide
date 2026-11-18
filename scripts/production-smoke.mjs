@@ -111,7 +111,7 @@ try {
     page.getByText("Compiler exit code: 0", { exact: true })
   ).toBeVisible({ timeout: 30_000 });
   expect(
-    (await readFile(path.join(workspace, "output/main.amx"))).length
+    (await readFile(path.join(workspace, "main.amx"))).length
   ).toBeGreaterThan(56);
   await page.keyboard.press("Control+j");
   await page.locator(".monaco-editor").click({ position: { x: 250, y: 100 } });

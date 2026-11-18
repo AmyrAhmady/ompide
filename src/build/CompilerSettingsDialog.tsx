@@ -71,7 +71,7 @@ export function CompilerSettingsDialog({
     setError("");
     try {
       const { path, text } = project.manifest;
-      await workbench.saveCompilerSettings(
+      await workbench.saveProjectConfiguration(
         project,
         editCompilerManifest(path, text, target.field, nextArgs)
       );

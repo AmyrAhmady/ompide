@@ -111,12 +111,26 @@ export function editCompilerManifest(
   field: (string | number)[],
   args: string[]
 ): string {
+  return editManifestValue(
+    path,
+    text,
+    field,
+    field.length === 1 ? { args } : args
+  );
+}
+
+export function editManifestValue(
+  path: string,
+  text: string,
+  field: (string | number)[],
+  value: unknown
+): string {
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const value = field.length === 1 ? { args } : args;
   if (/\.ya?ml$/i.test(path)) {
     const document = parseDocument(text);
     if (document.errors.length) throw document.errors[0];
-    document.setIn(field, value);
+    if (value === undefined) document.deleteIn(field);
+    else document.setIn(field, value);
     return document.toString({ lineWidth: 0 }).replaceAll("\n", eol);
   }
   const indent = text.match(/^(\t+| +)"/m)?.[1] ?? "  ";
