@@ -82,7 +82,7 @@ export function ActivityBar({
         disabled={!build.enabled}
         onClick={() => build.run()}
       >
-        <Icon name="tools" size={24} />
+        <Icon name="build" size={24} />
       </button>
     </nav>
   );
