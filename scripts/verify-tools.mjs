@@ -394,11 +394,11 @@ async function verifyLsp(workspace, includeDirectory = workspace) {
       diagnostics = await request("textDocument/diagnostic", {
         textDocument: { uri },
       });
-      if (diagnostics.resultId?.includes(":full")) break;
+      if (diagnostics.items.some((item) => item.source === "pawnlint")) break;
       await new Promise((resolve) => setTimeout(resolve, 50));
     } while (Date.now() < lintDeadline);
     assert.ok(
-      diagnostics.resultId?.includes(":full"),
+      diagnostics.items.some((item) => item.source === "pawnlint"),
       JSON.stringify(diagnostics)
     );
     assert.ok(

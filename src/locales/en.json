@@ -306,6 +306,7 @@
   "settings.tabSize": "Tab size",
   "settings.insertSpaces": "Indent using spaces",
   "settings.wordWrap": "Word wrap",
+  "settings.inlayHints": "Inlay hints (parameter names in code)",
   "settings.minimap": "Minimap",
   "settings.formatOnSave": "Format on save",
   "settings.languageServer": "Pawn language server",

@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.11`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.12`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -85,6 +85,16 @@ These are immutable merge revisions, not floating `main` dependencies. The
 pawnlsp source base and local responsiveness/overlay patches remain unchanged;
 those changes still need upstream integration. The external-SDK pawn-project
 patch remains necessary too. Both platform manifests use this dependency set.
+
+Version `.12` uses diagnostic-content hashes for pull result IDs. Identical
+reports return `unchanged`, including workspace reports, without replacing editor
+markers. Once complete diagnostics have been shown, later pulls wait for the next
+complete lint pass instead of temporarily replacing warnings with analysis-only
+results. Initial opening can still show early analysis findings. Cancellation and
+real empty reports remain supported. Inlay hints reuse unchanged calls from the
+last completed analysis with positions adjusted to live text. Changed calls wait
+for fresh analysis, which requests an inlay refresh when the client supports it.
+The editor preference is off by default and persists explicit opt-in.
 
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in
