@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.12`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.13`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -96,9 +96,20 @@ last completed analysis with positions adjusted to live text. Changed calls wait
 for fresh analysis, which requests an inlay refresh when the client supports it.
 The editor preference is off by default and persists explicit opt-in.
 
+Version `.13` updates pawnfmt to v1.4.10 and adds checksum-verified parser and
+formatter fixes to the dependency patch. Raw angle-delimited case macros, arrow
+invocations and numeric macro headers retain opaque source spans. The formatter
+prints enum tags in the current parser's order, handles condition-style macro
+blocks, and preserves physical boundaries for stringizing arguments and potentially
+macro-qualified function headers. Strict parsing, semantic-token checks, structure
+checks and convergence checks remain enabled. Preparation tests the patched parser
+and formatter as well as the LSP. The dependency patch includes
+the companion library changes and regressions for upstream review; preparation
+and CI do not require local PawnKit checkouts.
+
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in
-pawn-project. Preparation runs parser, analyzer and lint tests, applies the patch
+pawn-project and applies the parser/formatter compatibility fixes above. Preparation runs parser, analyzer and lint tests, applies the patch
 in a disposable vendor tree, and runs the resolver and LSP tests. Build
 receipts and dependency notices record the patch hash.
 

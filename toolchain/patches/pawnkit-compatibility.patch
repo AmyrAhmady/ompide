@@ -50,3 +50,404 @@
 +		})
 +	}
 +}
+--- a/vendor/github.com/pawnkit/pawn-parser/declarations.go
++++ b/vendor/github.com/pawnkit/pawn-parser/declarations.go
+@@ -13,6 +13,23 @@
+ }
+ 
+ func (p *parser[N, S]) parseDeclaration() N {
++	if end, ok := p.arrowMacroEnd(); ok {
++		return p.parseArrowMacro(end)
++	}
++	if end, ok := p.numericMacroHeaderEnd(); ok {
++		first := p.cur()
++		last := first
++		for !p.atEnd() && p.cur().End.Offset <= end {
++			last = p.advance()
++		}
++		header := p.directiveSpan(KindMacroInvocation, first.Start.Offset, end, first.LeadingTrivia, last.TrailingTrivia)
++		body := p.parseBlock()
++		node := p.sink.NewNode(KindMacroInvocationBlock, header, body)
++		p.sink.SetField(node, fieldCondition, header)
++		p.sink.SetField(node, fieldBody, body)
++		return node
++	}
++
+ 	if p.knownMacroInvocationStart() {
+ 		return p.parseKnownMacroInvocation()
+ 	}
+@@ -243,3 +260,26 @@
+ 	}
+ 	return name
+ }
++
++// Literal macro captures can generate a function name (for example, a numeric
++// packet identifier). This is a macro header, not an ordinary tagged function.
++func (p *parser[N, S]) numericMacroHeaderEnd() (int, bool) {
++	if p.curKind() != token.Identifier || p.peekKind(1) != token.Colon || p.peekKind(2) != token.IntLiteral || p.peekKind(3) != token.LParen {
++		return 0, false
++	}
++	depth := 0
++	for i := 3; ; i++ {
++		current := p.peek(i)
++		switch current.Kind {
++		case token.EOF, token.Semicolon, token.LBrace, token.RBrace:
++			return 0, false
++		case token.LParen:
++			depth++
++		case token.RParen:
++			depth--
++			if depth == 0 {
++				return current.End.Offset, p.peekKind(i+1) == token.LBrace
++			}
++		}
++	}
++}
+--- a/vendor/github.com/pawnkit/pawn-parser/statements.go
++++ b/vendor/github.com/pawnkit/pawn-parser/statements.go
+@@ -54,6 +54,9 @@
+ 				return conditional
+ 			}
+ 		}
++		if end, ok := p.arrowMacroEnd(); ok {
++			return p.parseArrowMacro(end)
++		}
+ 		if p.inlineOperatorMacroBlockStart() {
+ 			return p.parseInlineOperatorMacroBlock()
+ 		}
+@@ -435,3 +438,56 @@
+ 	p.sink.AddChild(node, body)
+ 	return node
+ }
++
++// Textual arrow invocations are preprocessor syntax, not subtraction followed by
++// a greater-than expression. Discover only a complete, balanced statement on
++// this line; incomplete invocations still use ordinary error recovery.
++func (p *parser[N, S]) arrowMacroEnd() (int, bool) {
++	if p.curKind() != token.Identifier {
++		return 0, false
++	}
++	arrow, depth := false, 0
++	for i := 1; ; i++ {
++		current := p.peek(i)
++		if current.Start.Line != p.cur().Start.Line {
++			return 0, false
++		}
++		switch current.Kind {
++		case token.EOF, token.LBrace, token.RBrace:
++			return 0, false
++		case token.LParen, token.LBracket:
++			depth++
++		case token.RParen, token.RBracket:
++			depth--
++			if depth < 0 {
++				return 0, false
++			}
++		case token.Minus:
++			next := p.peek(i + 1)
++			if current.End.Offset == next.Start.Offset && next.Kind == token.Gt {
++				arrow = true
++			}
++		case token.Semicolon:
++			return current.End.Offset, arrow && depth == 0
++		}
++	}
++}
++
++func (p *parser[N, S]) parseArrowMacro(end int) N {
++	first := p.cur()
++	last := first
++	for !p.atEnd() && p.cur().End.Offset <= end {
++		last = p.advance()
++	}
++	if !p.at(token.KwElse) {
++		return p.directiveSpan(KindMacroInvocation, first.Start.Offset, end, first.LeadingTrivia, last.TrailingTrivia)
++	}
++	last = p.advance()
++	header := p.directiveSpan(KindMacroInvocation, first.Start.Offset, last.End.Offset, first.LeadingTrivia, last.TrailingTrivia)
++	body := p.parseControlledStatement()
++	node := p.sink.NewNode(KindMacroInvocationBlock, header, body)
++	p.sink.SetField(node, fieldCondition, header)
++	p.sink.SetField(node, fieldBody, body)
++	p.sink.SetField(node, fieldConsequence, body)
++	return node
++}
+--- a/vendor/github.com/pawnkit/pawn-parser/switches.go
++++ b/vendor/github.com/pawnkit/pawn-parser/switches.go
+@@ -113,6 +113,9 @@
+ func (p *parser[N, S]) parseCaseOperand() N {
+ 	first := p.cur()
+ 	end, ok := p.caseMacroEnds[first.Start.Offset]
++	if !ok {
++		end, ok = p.angleCaseMacroEnd()
++	}
+ 	if ok && first.Kind == token.Identifier && p.peekKind(1) == token.Lt {
+ 		for i := 2; ; i++ {
+ 			last := p.peek(i)
+@@ -133,3 +136,30 @@
+ 	}
+ 	return p.parseTernary()
+ }
++
++// A raw-source consumer cannot resolve macros from includes. The adjacent
++// name<text> spelling followed by a case delimiter is nevertheless unambiguous:
++// a relational greater-than expression would require a right operand after >.
++// Keep the payload opaque rather than interpreting its words as expressions.
++func (p *parser[N, S]) angleCaseMacroEnd() (int, bool) {
++	first := p.cur()
++	opening := p.peek(1)
++	if first.Kind != token.Identifier || opening.Kind != token.Lt || first.End.Offset != opening.Start.Offset {
++		return 0, false
++	}
++	for i := 2; ; i++ {
++		current := p.peek(i)
++		if current.Start.Line != first.Start.Line {
++			return 0, false
++		}
++		switch current.Kind {
++		case token.EOF, token.Semicolon, token.LBrace, token.RBrace, token.Colon:
++			return 0, false
++		case token.Gt:
++			next := p.peekKind(i + 1)
++			if i > 2 && (next == token.Colon || next == token.Comma || next == token.DotDot) {
++				return current.End.Offset, true
++			}
++		}
++	}
++}
+--- /dev/null
++++ b/vendor/github.com/pawnkit/pawn-parser/raw_macros_test.go
+@@ -0,0 +1,45 @@
++package parser
++
++import "testing"
++
++func TestRawMacroFormsRemainLosslessInBothTrees(t *testing.T) {
++	t.Parallel()
++	for _, source := range []string{
++		"main(){switch(value){case HASH<Next page>:{ShowDialog(playerid, page[playerid] += 1);}}}",
++		"main(){switch(value){case hash<One>, hash<Two>: return 1; default: return 0;}}",
++		"main(){switch(value){case FIRST<One> .. LAST<Two>: return 1;}}",
++		"main(){switch(value){case left < middle > right: return 1; case (_:1): return 2;}}",
++		"main(){extract params -> new first, second; else return 0; Use(first, second);}",
++		"main(){if(ready){unpack input -> new first; else {return 0;}}}",
++		"Packet:207(playerid, Stream:stream) { return 1; }",
++		"Link:short->long; main(){}",
++	} {
++		file := Parse([]byte(source))
++		compact := ParseCompact([]byte(source), ParseOptions{})
++		if file.Broken || file.HasParseErrors() || compact.HasParseErrors() {
++			t.Fatalf("%s: full=%+v compact=%+v", source, file.Diagnostics, compact.Diagnostics)
++		}
++		if string(file.Source) != source || string(compact.Source) != source {
++			t.Fatal("parser changed source")
++		}
++		if file.Root.End != compact.Expand().Root.End {
++			t.Fatal("compact and full trees disagree on source extent")
++		}
++	}
++}
++
++func TestMalformedMacroBoundariesStillReportErrors(t *testing.T) {
++	t.Parallel()
++	for _, source := range []string{
++		"main(){switch(value){case HASH<Next page> return 1;}}",
++		"main(){switch(value){case left < : return 1;}}",
++		"main(){switch(value){case left > : return 1;}}",
++		"main(){switch(value){case HASH<>: return 1;}}",
++		"Packet:207(playerid { return 1; }",
++		"main(){ extract params -> new first; else }",
++	} {
++		if file := Parse([]byte(source)); len(file.Diagnostics) == 0 {
++			t.Fatalf("accepted malformed source: %s", source)
++		}
++	}
++}
+--- a/vendor/github.com/pawnkit/pawnfmt/internal/format/enums.go
++++ b/vendor/github.com/pawnkit/pawnfmt/internal/format/enums.go
+@@ -18,12 +18,15 @@
+ 	}
+ 
+ 	parts = append(parts, doc.Text("enum"))
+-	if name := n.Field("name"); name != nil {
+-		parts = append(parts, doc.Text(" "), doc.Text(name.Text(s.source)))
++	tag, name := n.Field("tag"), n.Field("name")
++	if tag != nil || name != nil {
++		parts = append(parts, doc.Text(" "))
+ 	}
+-
+-	if tag := n.Field("tag"); tag != nil {
+-		parts = append(parts, doc.Text(tag.Text(s.source)))
++	if tag != nil {
++		parts = append(parts, s.formatTagPrefix(tag, true))
++	}
++	if name != nil {
++		parts = append(parts, doc.Text(name.Text(s.source)))
+ 	}
+ 
+ 	if increment := n.Field("increment"); increment != nil {
+--- a/vendor/github.com/pawnkit/pawnfmt/internal/format/simple_statements.go
++++ b/vendor/github.com/pawnkit/pawnfmt/internal/format/simple_statements.go
+@@ -78,6 +78,17 @@
+ 	args := n.Field("arguments")
+ 	body := n.Field("body")
+ 
++	if fn == nil {
++		header := n.Field("condition")
++		if header == nil {
++			return s.raw(n)
++		}
++		result := doc.Concat(s.formatNode(header), s.formatBranchBody(body))
++		if alternative := n.Field("alternative"); alternative != nil {
++			result = doc.Concat(result, doc.Text(" else"), s.formatBranchBody(alternative))
++		}
++		return result
++	}
+ 	return doc.Concat(
+ 		doc.Text(fn.Text(s.source)),
+ 		s.formatArgumentList(args),
+--- a/vendor/github.com/pawnkit/pawnfmt/internal/format/expressions.go
++++ b/vendor/github.com/pawnkit/pawnfmt/internal/format/expressions.go
+@@ -225,6 +225,15 @@
+ 		return doc.Text("()")
+ 	}
+ 
++	// A stringizing # at the start of a physical line can become a directive
++	// in Pawn's preprocessor. Keep this argument list's original line boundaries
++	// rather than introducing a line-leading # while exploding a long call.
++	for _, argument := range n.Children {
++		if (argument.Kind == parser.KindStringizeExpression || argument.Kind == parser.KindStringConcat) &&
++			argument.Start < len(s.source) && s.source[argument.Start] == '#' {
++			return s.raw(n)
++		}
++	}
+ 	if hasConditionalItem(n.Children) {
+ 		return s.formatDirectiveList(n.Children, "(", ")", false)
+ 	}
+--- a/vendor/github.com/pawnkit/pawnfmt/internal/format/functions.go
++++ b/vendor/github.com/pawnkit/pawnfmt/internal/format/functions.go
+@@ -2,11 +2,23 @@
+ 
+ import (
+ 	parser "github.com/pawnkit/pawn-parser"
++	"github.com/pawnkit/pawn-parser/token"
+ 	"github.com/pawnkit/pawnfmt/internal/config"
+ 	"github.com/pawnkit/pawnfmt/internal/doc"
+ )
+ 
+ func (s *state) formatFunction(n *parser.Node) doc.Doc { //nolint:gocyclo // Function syntax has several optional parts.
++	// Textual function macros can depend on the signature remaining on one
++	// physical line. Unknown tags may also be macro prefixes from includes.
++	// Preserve the header's layout while still formatting the function body.
++	if body, parameters := n.Field("body"), n.Field("parameters"); body != nil && parameters != nil && s.macroStyleHeader(n) {
++		last := parameters
++		if state := n.Field("state"); state != nil {
++			last = state
++		}
++		header := doc.RawTextBlock(string(s.source[n.Start:last.End]))
++		return doc.Concat(header, s.trailingDoc(last.TrailingTrivia()), s.joinBraceStyle(s.formatNode(body)))
++	}
+ 	var parts []doc.Doc
+ 
+ 	for _, c := range n.Children {
+@@ -265,3 +277,26 @@
+ 
+ 	return pos >= n.Start && source[pos] == '&'
+ }
++
++func (s *state) macroStyleHeader(n *parser.Node) bool {
++	if tag := n.Field("tag"); tag != nil {
++		// Built-in scalar tags are ordinary language syntax. Other tag-shaped
++		// prefixes may be textual macros supplied by an include.
++		name := ""
++		if len(tag.Children) > 0 {
++			name = tag.Children[0].Text(s.source)
++		}
++		if name != "Float" && name != "bool" && name != "_" {
++			return true
++		}
++	}
++	for _, child := range n.Children {
++		if child == n.Field("name") {
++			break
++		}
++		if child.Kind == parser.KindIdentifier && child.Tok.Kind == token.Identifier {
++			return true
++		}
++	}
++	return false
++}
+--- /dev/null
++++ b/vendor/github.com/pawnkit/pawnfmt/raw_macros_test.go
+@@ -0,0 +1,71 @@
++package pawnfmt_test
++
++import (
++	"bytes"
++	"github.com/pawnkit/pawnfmt"
++	"strings"
++	"testing"
++)
++
++func TestFormatMacroFormsPreservesTokensCommentsAndConverges(t *testing.T) {
++	t.Parallel()
++	for _, source := range []string{
++		"// keep header\nmain(){switch(value){case HASH<Next page>:{ShowDialog(playerid, page[playerid] += 1);}}}\n",
++		"main(){extract params -> new first, second; else {return 0;} Use(first,second);}",
++		"Packet:207(playerid, Stream:stream) // keep packet\n{return 1;}",
++		"Link:short->long; main(){}",
++		"enum _:Size { First, Last }; main(){}",
++		"enum Float:Values { First }; main(){}",
++		"main(){switch(value){case left < middle > right: return 1;}}",
++		"#define COUNT 2\nmain(){new text[128]; format(text,sizeof text,#COUNT \" a very long string which must not cause stringizing to move to a new directive line\");}",
++	} {
++		formatted, err := pawnfmt.Format([]byte(source), pawnfmt.Options{TabSize: 4})
++		if err != nil {
++			t.Fatalf("format %s: %v", source, err)
++		}
++		again, err := pawnfmt.Format(formatted, pawnfmt.Options{TabSize: 4})
++		if err != nil || !bytes.Equal(again, formatted) {
++			t.Fatalf("not idempotent: %s (%v)", formatted, err)
++		}
++		for _, marker := range []string{"HASH<Next page>", "extract params -> new first, second;", "Packet:207", "Link:short->long", "_:Size", "Float:Values", "// keep header", "// keep packet"} {
++			if strings.Contains(source, marker) && !bytes.Contains(formatted, []byte(marker)) {
++				t.Fatalf("lost macro/tag/comment %q: %s", marker, formatted)
++			}
++		}
++	}
++}
++
++func TestStrictFormatStillRefusesBrokenSource(t *testing.T) {
++	t.Parallel()
++	for _, source := range []string{"main(){ return 1 + ; }", "main(){switch(value){case HASH<Next page> return 1;}}"} {
++		if output, err := pawnfmt.Format([]byte(source), pawnfmt.Options{}); err == nil || output != nil {
++			t.Fatalf("formatted broken source: %s", output)
++		}
++	}
++}
++
++func TestStringizingArgumentsKeepPreprocessorLineBoundaries(t *testing.T) {
++	t.Parallel()
++	source := []byte("#define COUNT 2\nmain(){new text[128]; format(text,sizeof text,#COUNT \" a very long string which must not cause stringizing to move to a new directive line\");}")
++	formatted, err := pawnfmt.Format(source, pawnfmt.Options{TabSize: 4})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !bytes.Contains(formatted, []byte("format(text,sizeof text,#COUNT")) {
++		t.Fatalf("reflowed stringizing argument: %s", formatted)
++	}
++}
++
++func TestMacroFunctionHeaderKeepsPhysicalLinesWhileBodyFormats(t *testing.T) {
++	t.Parallel()
++	source := []byte("#define Callback:%0(%1) forward %0(%1); public %0(%1)\nCallback:Complete(first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth) // keep header\n{new value=1;return value;}")
++	formatted, err := pawnfmt.Format(source, pawnfmt.Options{TabSize: 4})
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, marker := range []string{"Callback:Complete(first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth)", "// keep header", "new value = 1;"} {
++		if !bytes.Contains(formatted, []byte(marker)) {
++			t.Fatalf("lost header layout or body formatting: %s", formatted)
++		}
++	}
++}

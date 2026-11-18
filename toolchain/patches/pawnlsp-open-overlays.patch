@@ -1,5 +1,5 @@
 diff --git a/go.mod b/go.mod
-index aec6433..452707e 100644
+index aec6433..0005d52 100644
 --- a/go.mod
 +++ b/go.mod
 @@ -3,13 +3,13 @@ module github.com/pawnkit/pawnlsp
@@ -11,9 +11,10 @@ index aec6433..452707e 100644
  	github.com/pawnkit/pawn-api v0.19.0
 -	github.com/pawnkit/pawn-parser v1.5.6
 -	github.com/pawnkit/pawn-project v0.3.3
+-	github.com/pawnkit/pawnfmt v1.4.4
 +	github.com/pawnkit/pawn-parser v1.5.12-0.20261113015839-fd7096f341f3
 +	github.com/pawnkit/pawn-project v0.34.2
- 	github.com/pawnkit/pawnfmt v1.4.4
++	github.com/pawnkit/pawnfmt v1.4.10
  	github.com/pawnkit/pawnkit-core v0.5.0
 -	github.com/pawnkit/pawnlint v1.8.12
 +	github.com/pawnkit/pawnlint v1.8.61-0.20261113014830-aa4c76333c3c
@@ -21,7 +22,7 @@ index aec6433..452707e 100644
  
  require (
 diff --git a/go.sum b/go.sum
-index f9fbf7a..87b8f2f 100644
+index f9fbf7a..301bba6 100644
 --- a/go.sum
 +++ b/go.sum
 @@ -10,20 +10,20 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
@@ -38,12 +39,14 @@ index f9fbf7a..87b8f2f 100644
 -github.com/pawnkit/pawn-parser v1.5.6/go.mod h1:6iG1RfoTtroAadrF5A60QZc/zwalxBwn2gbgCQ/QO8Y=
 -github.com/pawnkit/pawn-project v0.3.3 h1:XplAg9Qz1eo3GNVbT5j6gZwx8lAHN176Ydi4pU78xMo=
 -github.com/pawnkit/pawn-project v0.3.3/go.mod h1:hMeRnvAYqu5TeWkJKT7EVqw6z62wTiuGBuIvcWNZuYY=
+-github.com/pawnkit/pawnfmt v1.4.4 h1:T4jVPmacaR+tN7hgOH/F0KZKqqcHyGW7hIDL+XSpIow=
+-github.com/pawnkit/pawnfmt v1.4.4/go.mod h1:j9S8y940niZ6yxydu0Jh9Nz9K90rs1tg0mfw/euD00U=
 +github.com/pawnkit/pawn-parser v1.5.12-0.20261113015839-fd7096f341f3 h1:lj7vXLWeO4XeufbPGfpCgvpBeeNhTTrOR05FA4zfuMo=
 +github.com/pawnkit/pawn-parser v1.5.12-0.20261113015839-fd7096f341f3/go.mod h1:Egw7oGm4jkDpaWBvLkYItfNTZcAcvTg+gWjlAGL9rbI=
 +github.com/pawnkit/pawn-project v0.34.2 h1:0U3bSKSJJqEHjxdAcOyQuXrfF512rHrpDIqBrPuxEmo=
 +github.com/pawnkit/pawn-project v0.34.2/go.mod h1:caXLtXl6HEpoo+7Uom0vdNo68X9i+z30xTMZ0ZVGkv4=
- github.com/pawnkit/pawnfmt v1.4.4 h1:T4jVPmacaR+tN7hgOH/F0KZKqqcHyGW7hIDL+XSpIow=
- github.com/pawnkit/pawnfmt v1.4.4/go.mod h1:j9S8y940niZ6yxydu0Jh9Nz9K90rs1tg0mfw/euD00U=
++github.com/pawnkit/pawnfmt v1.4.10 h1:wWS9B//G9voGrT+uk2D6hjz+UyLQcToI77DOqaVV7ac=
++github.com/pawnkit/pawnfmt v1.4.10/go.mod h1:d2VTCbtjgbDZBmPC4+7IApR09m6RR9b8A126jbnh/Es=
  github.com/pawnkit/pawnkit-core v0.5.0 h1:faEI2LGaP9czSDaKxtw4qvGUNuft88qeR/MdW0jLmlg=
  github.com/pawnkit/pawnkit-core v0.5.0/go.mod h1:jGhXHEEzr8juezaRhh/AkGzX6S4eGQnprB83vrI1peU=
 -github.com/pawnkit/pawnlint v1.8.12 h1:9qbUZnCyKVc5XlR5sB62jtsnpdB73izNP2Zk7Vjyz50=
@@ -462,6 +465,58 @@ index 0000000..291d4c0
 +	cancel()
 +	if _, err := s.readyDiagnosticDocument(ctx, uri, true); err != context.Canceled {
 +		t.Fatalf("cancellation = %v", err)
++	}
++}
+diff --git a/lsp/format_macros_test.go b/lsp/format_macros_test.go
+new file mode 100644
+index 0000000..1d672f1
+--- /dev/null
++++ b/lsp/format_macros_test.go
+@@ -0,0 +1,46 @@
++package lsp
++
++import (
++	"bufio"
++	"bytes"
++	"encoding/json"
++	"strings"
++	"testing"
++)
++
++func TestFormattingPreservesRawMacroSyntaxAndTaggedEnums(t *testing.T) {
++	const uri = "file:///main.pwn"
++	source := "enum _:Size { First };\n" +
++		"Callback:Complete(first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth) {new value=1;return value;}\n" +
++		"Packet:207(playerid, Stream:stream) {return 1;}\n" +
++		"Link:short->long;\nmain(){switch(value){case HASH<Next page>: {ShowDialog(playerid,page[playerid]+=1);}} extract params -> new first, second; else return 0;}\n"
++	var output bytes.Buffer
++	s := &server{out: &output, documents: map[string]*document{uri: {URI: uri, Text: []byte(source)}}}
++	params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri}, "options": map[string]any{"tabSize": 4, "insertSpaces": true}})
++	if err := s.formatting(json.RawMessage("1"), params); err != nil {
++		t.Fatal(err)
++	}
++	body, err := readFrame(bufio.NewReader(&output))
++	if err != nil {
++		t.Fatal(err)
++	}
++	var response struct {
++		Result []textEdit      `json:"result"`
++		Error  json.RawMessage `json:"error"`
++	}
++	if err := json.Unmarshal(body, &response); err != nil {
++		t.Fatal(err)
++	}
++	if len(response.Error) > 0 || len(response.Result) != 1 {
++		t.Fatalf("invalid formatting response: %s", body)
++	}
++	formatted := response.Result[0].NewText
++	for _, marker := range []string{"HASH<Next page>", "_:Size", "Packet:207", "Link:short-"} {
++		if !strings.Contains(formatted, marker) {
++			t.Fatalf("formatter response missing %q: %s", marker, output.String())
++		}
++	}
++	if strings.Contains(output.String(), `"error"`) {
++		t.Fatalf("formatter rejected macro source: %s", output.String())
 +	}
 +}
 diff --git a/lsp/inlay.go b/lsp/inlay.go

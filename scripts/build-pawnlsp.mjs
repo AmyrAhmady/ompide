@@ -168,7 +168,12 @@ try {
     cwd: root,
     windowsHide: true,
   });
-  runGo(["test", "-mod=vendor", "github.com/pawnkit/pawn-project/paths"]);
+  runGo([
+    "test", "-mod=vendor",
+    "github.com/pawnkit/pawn-project/paths",
+    "github.com/pawnkit/pawn-parser",
+    "github.com/pawnkit/pawnfmt",
+  ]);
   runGo(["test", "-mod=vendor", "./..."]);
   runGo(["mod", "verify"]);
   const executable = path.join(staging, `pawnlsp${host.suffix}`);
