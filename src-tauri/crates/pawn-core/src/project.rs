@@ -791,13 +791,10 @@ mod tests {
                 .is_err()
         );
         let outside = fixture();
-        assert!(build_configuration_for_file(
-            &scope,
-            &config,
-            &outside.path().join("main.pwn"),
-            ""
-        )
-        .is_err());
+        assert!(
+            build_configuration_for_file(&scope, &config, &outside.path().join("main.pwn"), "")
+                .is_err()
+        );
     }
 
     #[test]
@@ -848,9 +845,11 @@ mod tests {
             "",
         )
         .unwrap();
-        assert!(configuration
-            .includes
-            .contains(&workspace::canonical(outside.path()).unwrap()));
+        assert!(
+            configuration
+                .includes
+                .contains(&workspace::canonical(outside.path()).unwrap())
+        );
         let preview: Value = serde_json::from_str(
             &preview(
                 &scope,
@@ -887,9 +886,11 @@ mod tests {
             json!(["include", "../shared SDK"])
         );
         let build = build_configuration(&scope, &configuration, "").unwrap();
-        assert!(build
-            .includes
-            .contains(&workspace::canonical(&sdk).unwrap()));
+        assert!(
+            build
+                .includes
+                .contains(&workspace::canonical(&sdk).unwrap())
+        );
     }
 
     #[test]

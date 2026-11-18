@@ -52,8 +52,18 @@ fn guess(bytes: &[u8]) -> &'static str {
     let sample = &bytes[..bytes.len().min(64 * 1024)];
     if sample.len() >= 8 && sample.len().is_multiple_of(2) {
         let pairs = sample.len() / 2;
-        let low = sample.chunks_exact(2).filter(|pair| pair[0] == 0).count();
-        let high = sample.chunks_exact(2).filter(|pair| pair[1] == 0).count();
+        let low = sample
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .filter(|pair| pair[0] == 0)
+            .count();
+        let high = sample
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .filter(|pair| pair[1] == 0)
+            .count();
         if high * 4 >= pairs * 3 && low * 4 < pairs {
             return UTF_16LE.name();
         }
@@ -89,12 +99,14 @@ pub fn decode(bytes: &[u8], requested: Option<&str>) -> io::Result<Decoded> {
             return Err(invalid("encodingInvalid"));
         }
         bytes
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|chunk| {
                 let value = if label == "utf-32le" {
-                    u32::from_le_bytes(chunk.try_into().unwrap())
+                    u32::from_le_bytes(*chunk)
                 } else {
-                    u32::from_be_bytes(chunk.try_into().unwrap())
+                    u32::from_be_bytes(*chunk)
                 };
                 char::from_u32(value).ok_or_else(|| invalid("encodingInvalid"))
             })

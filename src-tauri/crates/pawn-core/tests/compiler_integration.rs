@@ -51,10 +51,12 @@ fn real_compiler_success_failure_constants_and_cancelled_artifacts() {
         compiler::build(&scope, &configuration, &executable, &AtomicBool::new(false)).unwrap();
     let report = result.report.unwrap();
     assert_eq!(report.status, "failed");
-    assert!(report
-        .diagnostics
-        .iter()
-        .any(|item| item.code == "pawncc-017" && item.primary.range.start.line == 0));
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|item| item.code == "pawncc-017" && item.primary.range.start.line == 0)
+    );
     assert!(!root.path().join("main.amx").exists());
     fs::write(root.path().join("main.amx"), b"stale artifact").unwrap();
     let result =
