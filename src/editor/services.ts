@@ -46,6 +46,7 @@ function configuration(settings: Settings) {
     "editor.insertSpaces": settings.insertSpaces,
     "editor.wordWrap": settings.wordWrap ? "on" : "off",
     "editor.minimap.enabled": settings.minimap,
+    "editor.inlayHints.enabled": settings.inlayHints ? "on" : "off",
     "editor.wordBasedSuggestions": "off",
     // The pinned TextMate worker can apply stale state deltas after a large edit/theme
     // change. Use its standard, time-sliced tokenizer until the worker race is fixed.

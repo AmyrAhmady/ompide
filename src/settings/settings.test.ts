@@ -33,3 +33,9 @@ it("loads supported persisted preferences without accepting malformed values", (
     wordWrap: true,
   });
 });
+
+it("keeps inlay hints off by default and persists explicit opt-in", () => {
+  expect(parseSettings({}).inlayHints).toBe(false);
+  expect(parseSettings({ inlayHints: true }).inlayHints).toBe(true);
+  expect(parseSettings({ inlayHints: "on" }).inlayHints).toBe(false);
+});

@@ -136,18 +136,24 @@ function SettingsDialog({
             }}
           />
         </label>
-        {(["insertSpaces", "wordWrap", "minimap", "formatOnSave"] as const).map(
-          (key) => (
-            <label className="checkbox" key={key}>
-              <input
-                type="checkbox"
-                checked={settings[key]}
-                onChange={(event) => update({ [key]: event.target.checked })}
-              />
-              {t(`settings.${key}`)}
-            </label>
-          )
-        )}
+        {(
+          [
+            "insertSpaces",
+            "wordWrap",
+            "minimap",
+            "inlayHints",
+            "formatOnSave",
+          ] as const
+        ).map((key) => (
+          <label className="checkbox" key={key}>
+            <input
+              type="checkbox"
+              checked={settings[key]}
+              onChange={(event) => update({ [key]: event.target.checked })}
+            />
+            {t(`settings.${key}`)}
+          </label>
+        ))}
         <fieldset>
           <legend>{t("settings.languageServer")}</legend>
           <p>

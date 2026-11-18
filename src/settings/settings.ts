@@ -12,6 +12,7 @@ export interface Settings {
   insertSpaces: boolean;
   wordWrap: boolean;
   minimap: boolean;
+  inlayHints: boolean;
   formatOnSave: boolean;
   languageServerPath: string;
   compilerPath: string;
@@ -28,6 +29,7 @@ export const defaults: Settings = {
   insertSpaces: true,
   wordWrap: false,
   minimap: false,
+  inlayHints: false,
   formatOnSave: false,
   languageServerPath: "",
   compilerPath: "",
@@ -112,6 +114,7 @@ export function parseSettings(value: unknown): Settings {
     "insertSpaces",
     "wordWrap",
     "minimap",
+    "inlayHints",
     "formatOnSave",
   ] as const)
     if (typeof source[key] === "boolean") settings[key] = source[key];

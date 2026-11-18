@@ -189,28 +189,386 @@ index 0fc50df..7bf8f7f 100644
  }
  
  func containingFunctionName(root parser.SyntaxNode, offset int) string {
+diff --git a/lsp/diagnostics.go b/lsp/diagnostics.go
+index f68bc04..28b4139 100644
+--- a/lsp/diagnostics.go
++++ b/lsp/diagnostics.go
+@@ -2,6 +2,7 @@ package lsp
+ 
+ import (
+ 	"context"
++	"crypto/sha256"
+ 	"encoding/json"
+ 	"fmt"
+ 	"path/filepath"
+@@ -29,41 +30,93 @@ func (s *server) documentDiagnostics(ctx context.Context, id, raw json.RawMessag
+ 	}
+ 	progress := s.delayedProgress(params.WorkDoneToken, id, "Analysing Pawn document")
+ 	defer progress.finish()
+-	doc, err := s.readyDocumentContext(ctx, params.TextDocument.URI)
+-	if err != nil {
+-		return err
+-	}
+-	if doc == nil {
+-		return s.respond(id, map[string]any{"kind": "full", "items": []any{}})
+-	}
+-	full := doc.fullReady()
+-	graph, err := s.workspaceGraphContext(ctx, doc)
+-	if err != nil {
+-		return err
+-	}
+-	resultID := documentDiagnosticResultID(doc, full)
+-	if graph != nil {
+-		resultID += fmt.Sprintf(":%p", graph)
++	// Keep existing complete markers while the next lint pass is running.
++	// Initial opening can still show early analysis diagnostics.
++	s.mu.Lock()
++	completeBefore := s.completedDiagnostics[params.TextDocument.URI]
++	s.mu.Unlock()
++	for {
++		doc, err := s.readyDiagnosticDocument(ctx, params.TextDocument.URI, completeBefore)
++		if err != nil {
++			return err
++		}
++		if doc == nil {
++			return s.respond(id, map[string]any{"kind": "full", "items": []any{}})
++		}
++		graph, err := s.workspaceGraphContext(ctx, doc)
++		if err != nil {
++			return err
++		}
++		if s.document(doc.URI) != doc {
++			continue
++		}
++		full := doc.fullReady()
++		items := s.documentDiagnosticItems(doc, full, graph)
++		resultID := diagnosticContentID(items)
++		s.mu.Lock()
++		current := s.documents[doc.URI] == doc
++		if current && full {
++			if s.completedDiagnostics == nil {
++				s.completedDiagnostics = make(map[string]bool)
++			}
++			s.completedDiagnostics[doc.URI] = true
++		}
++		s.mu.Unlock()
++		if !current {
++			continue
++		}
++		if err := ctx.Err(); err != nil {
++			return err
++		}
++		if params.PreviousResultID == resultID {
++			return s.respond(id, map[string]any{"kind": "unchanged", "resultId": resultID})
++		}
++		return s.respond(id, map[string]any{"kind": "full", "resultId": resultID, "items": items})
+ 	}
+-	if params.PreviousResultID == resultID {
+-		return s.respond(id, map[string]any{"kind": "unchanged", "resultId": resultID})
++}
++
++func (s *server) readyDiagnosticDocument(ctx context.Context, uri string, complete bool) (*document, error) {
++	for {
++		doc, err := s.readyDocumentContext(ctx, uri)
++		if err != nil || doc == nil || !complete || doc.fullReady() {
++			return doc, err
++		}
++		select {
++		case <-doc.ready:
++		case <-ctx.Done():
++			return nil, ctx.Err()
++		}
++		if s.document(uri) == doc {
++			return doc, nil
++		}
+ 	}
+-	return s.respond(id, map[string]any{
+-		"kind": "full", "resultId": resultID, "items": s.documentDiagnosticItems(doc, full, graph),
+-	})
+ }
+ 
+-func documentDiagnosticResultID(doc *document, full bool) string {
+-	stage := "analysis"
+-	if full {
+-		stage = "full"
++// Result IDs describe diagnostic content, not document versions or graph pointers.
++// Sorting serialized diagnostics also makes IDs stable across harmless ordering
++// changes. Every protocol field contributes, including related locations and docs.
++func diagnosticContentID(items []lspDiagnostic) string {
++	keys := make([]string, 0, len(items))
++	for _, item := range items {
++		encoded, _ := json.Marshal(item) // lspDiagnostic contains only JSON-safe fields.
++		keys = append(keys, string(encoded))
+ 	}
+-	return fmt.Sprintf("%d:%d:%s", doc.Revision, doc.Version, stage)
++	sort.Strings(keys)
++	hash := sha256.New()
++	for _, key := range keys {
++		fmt.Fprintf(hash, "%d:", len(key))
++		hash.Write([]byte(key))
++	}
++	return fmt.Sprintf("diagnostics:%x", hash.Sum(nil))
+ }
+ 
+ func (s *server) workspaceDiagnostics(ctx context.Context, id, raw json.RawMessage) error {
+ 	var params struct {
+-		WorkDoneToken json.RawMessage `json:"workDoneToken"`
++		WorkDoneToken     json.RawMessage `json:"workDoneToken"`
++		PreviousResultIDs []struct {
++			URI   string `json:"uri"`
++			Value string `json:"value"`
++		} `json:"previousResultIds"`
+ 	}
+ 	if err := json.Unmarshal(raw, &params); err != nil && len(raw) != 0 {
+ 		return err
+@@ -78,6 +131,17 @@ func (s *server) workspaceDiagnostics(ctx context.Context, id, raw json.RawMessa
+ 	}
+ 	s.mu.Unlock()
+ 
++	previous := make(map[string]string, len(params.PreviousResultIDs))
++	for _, item := range params.PreviousResultIDs {
++		previous[item.URI] = item.Value
++	}
++	report := func(uri string, diagnostics []lspDiagnostic) map[string]any {
++		resultID := diagnosticContentID(diagnostics)
++		if previous[uri] == resultID {
++			return map[string]any{"uri": uri, "kind": "unchanged", "resultId": resultID}
++		}
++		return map[string]any{"uri": uri, "kind": "full", "resultId": resultID, "items": diagnostics}
++	}
+ 	items := make([]map[string]any, 0)
+ 	for _, index := range indexes {
+ 		var err error
+@@ -93,16 +157,12 @@ func (s *server) workspaceDiagnostics(ctx context.Context, id, raw json.RawMessa
+ 				if !workspaceDiagnosticURI(index.root, uri) {
+ 					continue
+ 				}
+-				items = append(items, map[string]any{
+-					"uri": uri.String(), "kind": "full", "items": dedupeDiagnostics(diagnostics),
+-				})
++				items = append(items, report(uri.String(), dedupeDiagnostics(diagnostics)))
+ 			}
+ 			continue
+ 		}
+ 		for uri, result := range index.files {
+-			items = append(items, map[string]any{
+-				"uri": uri.String(), "kind": "full", "items": standaloneWorkspaceDiagnosticItems(uri, result),
+-			})
++			items = append(items, report(uri.String(), standaloneWorkspaceDiagnosticItems(uri, result)))
+ 		}
+ 	}
+ 	sort.Slice(items, func(i, j int) bool {
+diff --git a/lsp/diagnostics_stability_test.go b/lsp/diagnostics_stability_test.go
+new file mode 100644
+index 0000000..291d4c0
+--- /dev/null
++++ b/lsp/diagnostics_stability_test.go
+@@ -0,0 +1,100 @@
++package lsp
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"strings"
++	"testing"
++	"time"
++
++	analysis "github.com/pawnkit/pawn-analysis"
++	coresource "github.com/pawnkit/pawnkit-core/source"
++	lintdiagnostic "github.com/pawnkit/pawnlint/pkg/diagnostic"
++)
++
++func TestDiagnosticContentIDTracksVisibleContentNotOrder(t *testing.T) {
++	first := lspDiagnostic{Message: "warning", Severity: 2, Code: "rule", Source: "pawnlint"}
++	second := lspDiagnostic{Message: "another warning", Severity: 2}
++	original := diagnosticContentID([]lspDiagnostic{first, second})
++	if diagnosticContentID([]lspDiagnostic{second, first}) != original {
++		t.Fatal("ordering changed content ID")
++	}
++	for _, field := range []string{"message", "severity", "range", "source", "code", "documentation", "related"} {
++		changed := first
++		switch field {
++		case "message":
++			changed.Message = "changed"
++		case "severity":
++			changed.Severity = 1
++		case "range":
++			changed.Range.Start.Line = 1
++		case "source":
++			changed.Source = "other"
++		case "code":
++			changed.Code = "other"
++		case "documentation":
++			changed.CodeDescription = &lspCodeDescription{Href: "https://example.com/rule"}
++		case "related":
++			changed.RelatedInformation = []lspDiagnosticRelatedInformation{{Message: "related"}}
++		}
++		if diagnosticContentID([]lspDiagnostic{changed, second}) == original {
++			t.Fatalf("%s did not change ID", field)
++		}
++	}
++	if diagnosticContentID(nil) != diagnosticContentID([]lspDiagnostic{}) {
++		t.Fatal("empty reports differ")
++	}
++}
++
++func TestDiagnosticRefreshRetainsCompleteReportUntilLintFinishes(t *testing.T) {
++	const uri = "file:///main.pwn"
++	text := []byte("main() {}\n")
++	result := analysis.Analyze(text, analysis.Options{URI: coresource.URI(uri)})
++	previous := &document{URI: uri, Text: text, Version: 1, Analysis: result, analysisReady: closedChannel(), ready: closedChannel(), Diagnostics: []lintdiagnostic.Diagnostic{{RuleID: "style", Message: "existing warning"}}}
++	var output bytes.Buffer
++	s := &server{out: &output, documents: map[string]*document{uri: previous}}
++	params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri}})
++	if err := s.documentDiagnostics(context.Background(), json.RawMessage("1"), params); err != nil {
++		t.Fatal(err)
++	}
++	id := diagnosticContentID(s.documentDiagnosticItems(previous, true, nil))
++	next := &document{URI: uri, Text: text, Version: 2, Analysis: result, analysisReady: closedChannel(), ready: make(chan struct{})}
++	s.documents[uri] = next
++	params, _ = json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri}, "previousResultId": id})
++	output.Reset()
++	done := make(chan error, 1)
++	go func() { done <- s.documentDiagnostics(context.Background(), json.RawMessage("2"), params) }()
++	select {
++	case <-done:
++		t.Fatal("incomplete lint report replaced existing warnings")
++	case <-time.After(40 * time.Millisecond):
++	}
++	next.Diagnostics = previous.Diagnostics
++	close(next.ready)
++	if err := <-done; err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(output.String(), `"kind":"unchanged"`) {
++		t.Fatalf("identical refresh replaced markers: %s", output.String())
++	}
++	// A confirmed empty report really removes the old warning.
++	next.Diagnostics = nil
++	output.Reset()
++	if err := s.documentDiagnostics(context.Background(), json.RawMessage("3"), params); err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(output.String(), `"kind":"full"`) || !strings.Contains(output.String(), `"items":[]`) {
++		t.Fatalf("fixed warning was retained: %s", output.String())
++	}
++}
++
++func TestWaitingForCompleteDiagnosticsIsCancellable(t *testing.T) {
++	const uri = "file:///main.pwn"
++	s := &server{documents: map[string]*document{uri: {URI: uri, analysisReady: closedChannel(), ready: make(chan struct{})}}}
++	ctx, cancel := context.WithCancel(context.Background())
++	cancel()
++	if _, err := s.readyDiagnosticDocument(ctx, uri, true); err != context.Canceled {
++		t.Fatalf("cancellation = %v", err)
++	}
++}
 diff --git a/lsp/inlay.go b/lsp/inlay.go
-index 25ed94d..6bb0ed4 100644
+index 25ed94d..ea1b4d8 100644
 --- a/lsp/inlay.go
 +++ b/lsp/inlay.go
-@@ -23,7 +23,7 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
- 	if doc == nil || doc.Analysis == nil || doc.Analysis.Parse == nil {
+@@ -1,6 +1,7 @@
+ package lsp
+ 
+ import (
++	"context"
+ 	"encoding/json"
+ 	"fmt"
+ 	"strings"
+@@ -9,7 +10,7 @@ import (
+ 	coresource "github.com/pawnkit/pawnkit-core/source"
+ )
+ 
+-func (s *server) inlayHints(id, raw json.RawMessage) error {
++func (s *server) inlayHints(ctx context.Context, id, raw json.RawMessage) error {
+ 	var params struct {
+ 		TextDocument struct {
+ 			URI string `json:"uri"`
+@@ -19,11 +20,17 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
+ 	if err := json.Unmarshal(raw, &params); err != nil {
+ 		return err
+ 	}
+-	doc := s.readyDocument(params.TextDocument.URI)
+-	if doc == nil || doc.Analysis == nil || doc.Analysis.Parse == nil {
++	live, cache, err := s.interactiveDocument(ctx, params.TextDocument.URI)
++	if err != nil {
++		return err
++	}
++	if live == nil || cache == nil || cache.doc.Analysis == nil || cache.doc.Analysis.Parse == nil {
  		return s.respond(id, []any{})
  	}
 -	index := doc.lineIndex()
-+	index := coresource.NewLineIndex(string(doc.text()))
++	doc := cache.doc
++	current := live.text()
++	index := coresource.NewLineIndex(string(current))
++	prefix, oldEnd, delta := unchangedSourceWindow(doc.Text, current)
  	start, err := index.Offset(coresource.Position{Line: params.Range.Start.Line, Character: params.Range.Start.Character}, coresource.UTF16)
  	if err != nil {
  		return s.respond(id, []any{})
-@@ -60,7 +60,7 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
+@@ -39,14 +46,25 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
+ 			return
+ 		}
+ 		rng := node.Range()
+-		if rng.End < int(start) || rng.Start > int(end) {
++		if ctx.Err() != nil {
++			return
++		}
++		shift := 0
++		if rng.End <= prefix {
++			// This call is wholly before the edit.
++		} else if rng.Start >= oldEnd {
++			shift = delta
++		} else {
++			return // Changed calls need fresh analysis; preserve all untouched calls.
++		}
++		if rng.End+shift < int(start) || rng.Start+shift > int(end) {
+ 			return
+ 		}
+ 		function, ok := call.Function()
+ 		if !ok {
+ 			return
+ 		}
+-		signature, ok := s.callSignature(doc, function.Text())
++		signature, ok := s.cachedCallSignature(cache, function.Text())
+ 		if !ok {
+ 			return
+ 		}
+@@ -60,13 +78,16 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
  				continue
  			}
  			hints = append(hints, map[string]any{
 -				"position":     offsetPosition(doc.text(), argument.Range().Start),
-+				"position":     offsetPositionWithIndex(index, argument.Range().Start),
++				"position":     offsetPositionWithIndex(index, argument.Range().Start+shift),
  				"label":        name + ":",
  				"kind":         2,
  				"paddingRight": true,
+ 			})
+ 		}
+ 	})
++	if err := ctx.Err(); err != nil {
++		return err
++	}
+ 	return s.respond(id, hints)
+ }
+ 
+@@ -97,3 +118,16 @@ func parameterName(parameter string) string {
+ 	}
+ 	return strings.TrimSuffix(strings.TrimSpace(parameter), "...")
+ }
++
++// A single conservative edit window covers multiple changes too. Only calls
++// entirely outside it are reused, so parameter labels cannot move onto edited code.
++func unchangedSourceWindow(old, current []byte) (prefix, oldEnd, delta int) {
++	for prefix < len(old) && prefix < len(current) && old[prefix] == current[prefix] {
++		prefix++
++	}
++	suffix := 0
++	for suffix < len(old)-prefix && suffix < len(current)-prefix && old[len(old)-1-suffix] == current[len(current)-1-suffix] {
++		suffix++
++	}
++	return prefix, len(old) - suffix, len(current) - len(old)
++}
 diff --git a/lsp/interactive_cache.go b/lsp/interactive_cache.go
 new file mode 100644
 index 0000000..2fa6084
@@ -423,10 +781,10 @@ index 0000000..2fa6084
 +}
 diff --git a/lsp/interactive_cache_test.go b/lsp/interactive_cache_test.go
 new file mode 100644
-index 0000000..35eb582
+index 0000000..1b2e865
 --- /dev/null
 +++ b/lsp/interactive_cache_test.go
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,186 @@
 +package lsp
 +
 +import (
@@ -578,6 +936,39 @@ index 0000000..35eb582
 +	waitForSignal(t, latest.analysisReady, "idle refresh")
 +	if doc := s.completionDocument(uri); doc == nil || doc.Version != 3 {
 +		t.Fatalf("cache did not advance to latest version: %+v", doc)
++	}
++}
++
++func TestInlayHintsReuseUnchangedCallsWithLivePositions(t *testing.T) {
++	const uri = "file:///main.pwn"
++	old := []byte("native Message(playerid, colour);\r\nmain() { Message(1, 2); Message(3, 4); }\r\n")
++	result := analysis.Analyze(old, analysis.Options{URI: coresource.URI(uri), RetainExpanded: true})
++	cache, err := buildInteractiveCache(context.Background(), &document{URI: uri, Text: old, Analysis: result})
++	if err != nil {
++		t.Fatal(err)
++	}
++	var output bytes.Buffer
++	live := &document{URI: uri, analysisReady: make(chan struct{})}
++	s := &server{out: &output, documents: map[string]*document{uri: live}, interactive: map[string]*interactiveCache{uri: cache}}
++	query := func(current []byte) string {
++		t.Helper()
++		output.Reset()
++		live.Text = current
++		params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri}, "range": lspRange{End: offsetPosition(current, len(current))}})
++		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
++		defer cancel()
++		if err := s.inlayHints(ctx, json.RawMessage("1"), params); err != nil {
++			t.Fatal(err)
++		}
++		return output.String()
++	}
++	moved := bytes.Replace(old, []byte("main()"), []byte("// 😀\r\nmain()"), 1)
++	if body := query(moved); strings.Count(body, `"label":"playerid:"`) != 2 || strings.Count(body, `"line":2`) != 4 {
++		t.Fatalf("shifted hints missing: %s", body)
++	}
++	changed := bytes.Replace(old, []byte("Message(1, 2)"), []byte("Changed(1, 2)"), 1)
++	if body := query(changed); strings.Count(body, `"label":"playerid:"`) != 1 {
++		t.Fatalf("edited call reused stale hints or removed untouched call: %s", body)
 +	}
 +}
 diff --git a/lsp/interactive_requests_test.go b/lsp/interactive_requests_test.go
@@ -839,10 +1230,10 @@ index 0000000..1028156
 +	}
 +}
 diff --git a/lsp/server.go b/lsp/server.go
-index 91bf675..23682ce 100644
+index 91bf675..8901e0d 100644
 --- a/lsp/server.go
 +++ b/lsp/server.go
-@@ -79,34 +79,36 @@ type publishQueue struct {
+@@ -79,34 +79,38 @@ type publishQueue struct {
  }
  
  type server struct {
@@ -869,31 +1260,33 @@ index 91bf675..23682ce 100644
 -	nextRequestID    atomic.Uint64
 -	lint             func(context.Context, *document, *lintproject.ParseCache, *analysis.Result) ([]diagnostic.Diagnostic, error)
 -	analysisTrace    func(string, int, analysis.TraceEvent)
-+	in                  *bufio.Reader
-+	out                 io.Writer
-+	documents           map[string]*document
-+	interactive         map[string]*interactiveCache
-+	interactiveRevision uint64
-+	names               sema.Resolver
-+	snapshot            *query.Snapshot
-+	shutdown            bool
-+	mu                  sync.Mutex
-+	writeMu             sync.Mutex
-+	workers             sync.WaitGroup
-+	requestWorkers      sync.WaitGroup
-+	requestCancels      map[string]context.CancelFunc
-+	progressCancels     map[string]context.CancelFunc
-+	workDoneProgress    bool
-+	rules               *lint.Registrar
-+	managedRoots        []string
-+	workspaces          map[string]*workspaceIndex
-+	projectRevision     int64
-+	parseCache          *lintproject.ParseCache
-+	tokenCache          *preprocess.TokenCache
-+	publishes           map[string]*publishQueue
-+	nextRequestID       atomic.Uint64
-+	lint                func(context.Context, *document, *lintproject.ParseCache, *analysis.Result) ([]diagnostic.Diagnostic, error)
-+	analysisTrace       func(string, int, analysis.TraceEvent)
++	in                   *bufio.Reader
++	out                  io.Writer
++	documents            map[string]*document
++	interactive          map[string]*interactiveCache
++	interactiveRevision  uint64
++	completedDiagnostics map[string]bool
++	names                sema.Resolver
++	snapshot             *query.Snapshot
++	shutdown             bool
++	mu                   sync.Mutex
++	writeMu              sync.Mutex
++	workers              sync.WaitGroup
++	requestWorkers       sync.WaitGroup
++	requestCancels       map[string]context.CancelFunc
++	progressCancels      map[string]context.CancelFunc
++	workDoneProgress     bool
++	inlayRefreshSupport  bool
++	rules                *lint.Registrar
++	managedRoots         []string
++	workspaces           map[string]*workspaceIndex
++	projectRevision      int64
++	parseCache           *lintproject.ParseCache
++	tokenCache           *preprocess.TokenCache
++	publishes            map[string]*publishQueue
++	nextRequestID        atomic.Uint64
++	lint                 func(context.Context, *document, *lintproject.ParseCache, *analysis.Result) ([]diagnostic.Diagnostic, error)
++	analysisTrace        func(string, int, analysis.TraceEvent)
  }
  
  const (
@@ -903,7 +1296,27 @@ index 91bf675..23682ce 100644
  )
  
  type apiNameResolver struct {
-@@ -449,57 +451,114 @@ func (s *server) handle(request message) (bool, error) {
+@@ -362,6 +366,11 @@ func (s *server) handle(request message) (bool, error) {
+ 	case "initialize":
+ 		var params struct {
+ 			Capabilities struct {
++				Workspace struct {
++					InlayHint struct {
++						RefreshSupport bool `json:"refreshSupport"`
++					} `json:"inlayHint"`
++				} `json:"workspace"`
+ 				Window struct {
+ 					WorkDoneProgress bool `json:"workDoneProgress"`
+ 				} `json:"window"`
+@@ -390,6 +399,7 @@ func (s *server) handle(request message) (bool, error) {
+ 		}
+ 		s.managedRoots = cleaned
+ 		s.workDoneProgress = params.Capabilities.Window.WorkDoneProgress
++		s.inlayRefreshSupport = params.Capabilities.Workspace.InlayHint.RefreshSupport
+ 		s.projectRevision++
+ 		return false, s.respond(request.ID, map[string]any{
+ 			"capabilities": map[string]any{
+@@ -449,57 +459,114 @@ func (s *server) handle(request message) (bool, error) {
  	case "pawnkit/didChangeManagedTools":
  		return false, s.didChangeManagedTools(request.Params)
  	case "workspace/symbol":
@@ -985,7 +1398,7 @@ index 91bf675..23682ce 100644
  	case "textDocument/inlayHint":
 -		return false, s.inlayHints(request.ID, request.Params)
 +		s.handleAsync(request, func(ctx context.Context) error {
-+			return s.inlayHints(request.ID, request.Params)
++			return s.inlayHints(ctx, request.ID, request.Params)
 +		})
 +		return false, nil
  	case "textDocument/documentColor":
@@ -1037,7 +1450,7 @@ index 91bf675..23682ce 100644
  	case "textDocument/formatting":
  		return false, s.formatting(request.ID, request.Params)
  	case "textDocument/rangeFormatting":
-@@ -663,6 +722,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
+@@ -663,6 +730,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
  	s.mu.Unlock()
  	s.refreshWorkspaceIndex(doc)
  	s.schedulePublish(doc, s.snapshot)
@@ -1045,7 +1458,7 @@ index 91bf675..23682ce 100644
  	return nil
  }
  
-@@ -779,6 +839,7 @@ func (s *server) didChange(raw json.RawMessage) error {
+@@ -779,6 +847,7 @@ func (s *server) didChange(raw json.RawMessage) error {
  		s.restartWorkspaceIndex(next)
  	}
  	s.schedulePublishAfter(next, s.snapshot, documentPublishDebounce)
@@ -1053,15 +1466,16 @@ index 91bf675..23682ce 100644
  	return nil
  }
  
-@@ -797,6 +858,7 @@ func (s *server) didClose(raw json.RawMessage) error {
+@@ -797,6 +866,8 @@ func (s *server) didClose(raw json.RawMessage) error {
  	}
  	s.mu.Lock()
  	delete(s.documents, params.TextDocument.URI)
 +	delete(s.interactive, params.TextDocument.URI)
++	delete(s.completedDiagnostics, params.TextDocument.URI)
  	inUse := false
  	if doc != nil {
  		for _, current := range s.documents {
-@@ -818,6 +880,7 @@ func (s *server) didClose(raw json.RawMessage) error {
+@@ -818,6 +889,7 @@ func (s *server) didClose(raw json.RawMessage) error {
  		return nil
  	}
  	s.restartWorkspaceIndex(doc)
@@ -1069,15 +1483,16 @@ index 91bf675..23682ce 100644
  	return nil
  }
  
-@@ -832,6 +895,7 @@ func (s *server) reloadProjects() error {
+@@ -832,6 +904,8 @@ func (s *server) reloadProjects() error {
  		}
  	}
  	s.projectRevision++
 +	s.interactive = nil
++	s.completedDiagnostics = nil
  	for _, index := range s.workspaces {
  		if index.cancel != nil {
  			index.cancel()
-@@ -973,7 +1037,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
+@@ -973,7 +1047,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
  	}
  	if shared == nil && analysisErr == nil {
  		shared, analysisErr = snapshot.Analyze(ctx, coresource.URI(doc.URI), analysis.Options{
@@ -1086,7 +1501,7 @@ index 91bf675..23682ce 100644
  			MaxOutputTokens:          analysisOutputTokenLimit,
  			Revision:                 fmt.Sprintf("%s:%T:%T:%d", doc.Path, doc.Includes, doc.Names, doc.Revision),
  			TokenCache:               s.tokenCache,
-@@ -988,6 +1052,19 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
+@@ -988,7 +1062,21 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
  		return ctx.Err()
  	}
  	doc.Analysis = shared
@@ -1104,9 +1519,11 @@ index 91bf675..23682ce 100644
 +	}
 +	s.mu.Unlock()
  	doc.markAnalysisReady()
++	s.requestInlayRefresh()
  	lintFn := s.lint
  	if lintFn == nil {
-@@ -1111,8 +1188,9 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
+ 		lintFn = lintDocument
+@@ -1111,8 +1199,9 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
  	doc := s.readyDocument(params.TextDocument.URI)
  	items := make([]map[string]any, 0)
  	if doc != nil && doc.Analysis != nil && doc.Analysis.Symbols != nil {
@@ -1117,6 +1534,64 @@ index 91bf675..23682ce 100644
  			items = append(items, map[string]any{
  				"name": item.Name, "kind": symbolKind(item.Kind),
  				"range": rng, "selectionRange": rng,
+@@ -2169,3 +2258,11 @@ func (s *server) write(value any) error {
+ 	_, err = s.out.Write(body)
+ 	return err
+ }
++
++func (s *server) requestInlayRefresh() {
++	if s.out == nil || !s.inlayRefreshSupport {
++		return
++	}
++	id := s.nextRequestID.Add(1)
++	_ = s.write(map[string]any{"jsonrpc": "2.0", "id": id, "method": "workspace/inlayHint/refresh"})
++}
+diff --git a/lsp/server_test.go b/lsp/server_test.go
+index 696891c..0f02aca 100644
+--- a/lsp/server_test.go
++++ b/lsp/server_test.go
+@@ -219,7 +219,7 @@ func TestServerReturnsUnchangedDiagnostics(t *testing.T) {
+ 	}
+ 	s := &server{out: &output, documents: map[string]*document{uri: doc}}
+ 	params, err := json.Marshal(map[string]any{
+-		"textDocument": map[string]any{"uri": uri}, "previousResultId": "2:1:full",
++		"textDocument": map[string]any{"uri": uri}, "previousResultId": diagnosticContentID(nil),
+ 	})
+ 	if err != nil {
+ 		t.Fatal(err)
+@@ -227,22 +227,11 @@ func TestServerReturnsUnchangedDiagnostics(t *testing.T) {
+ 	if err := s.documentDiagnostics(context.Background(), json.RawMessage("3"), params); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if !strings.Contains(output.String(), `"kind":"unchanged","resultId":"2:1:full"`) {
++	if !strings.Contains(output.String(), `"kind":"unchanged","resultId":"`+diagnosticContentID(nil)+`"`) {
+ 		t.Fatalf("server did not return unchanged diagnostics: %s", output.String())
+ 	}
+ }
+ 
+-func TestDocumentDiagnosticResultIDTracksReadiness(t *testing.T) {
+-	doc := &document{Version: 3, Revision: 4, ready: make(chan struct{})}
+-	if got := documentDiagnosticResultID(doc, doc.fullReady()); got != "4:3:analysis" {
+-		t.Fatalf("analysis result ID = %q", got)
+-	}
+-	close(doc.ready)
+-	if got := documentDiagnosticResultID(doc, doc.fullReady()); got != "4:3:full" {
+-		t.Fatalf("full result ID = %q", got)
+-	}
+-}
+-
+ func TestWorkspaceGraphIfReadyDoesNotBlockDocumentAnalysis(t *testing.T) {
+ 	root := t.TempDir()
+ 	s := &server{
+@@ -383,7 +372,7 @@ func TestPublishMakesAnalysisReadyBeforeLint(t *testing.T) {
+ 	if err := s.documentDiagnostics(context.Background(), json.RawMessage("1"), params); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if !strings.Contains(output.String(), `"resultId":"0:1:analysis"`) {
++	if !strings.Contains(output.String(), `"resultId":"diagnostics:`) {
+ 		t.Fatalf("partial diagnostic result missing: %s", output.String())
+ 	}
+ 	select {
 diff --git a/lsp/signature.go b/lsp/signature.go
 index 6a1296c..c97a8c6 100644
 --- a/lsp/signature.go
