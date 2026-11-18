@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.9`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.10`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -59,6 +59,18 @@ cancellable request workers so analysis does not block incoming typing updates.
 Completion filters candidates by prefix before checking local visibility and
 finds the enclosing function once per request. Inlay hints reuse one line index
 for the requested range.
+
+Version `.10` retains an immutable completion dictionary and memoized signatures
+from the last completed document analysis. Requests use live text for prefixes,
+UTF-16 positions and the active argument, without waiting for new diagnostics or
+workspace indexing. Local candidates keep their analyzed scope; ambiguous edited
+regions omit locals until refreshed. Initial opening still requires analysis.
+Document and workspace refreshes wait for one second of inactivity, cancel
+superseded work and keep only the newest pending document version. Includes in
+unsaved buffers contribute to the workspace analysis revision, preventing old
+macro values from surviving incremental reuse. Closing a document or reloading
+project configuration clears the relevant cache. Background read requests run
+outside the notification loop so they cannot hold up incoming typing updates.
 
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in

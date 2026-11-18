@@ -64,7 +64,7 @@ index f9fbf7a..11ffae1 100644
  github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
  github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
 diff --git a/lsp/completion.go b/lsp/completion.go
-index 0fc50df..c420891 100644
+index 0fc50df..7bf8f7f 100644
 --- a/lsp/completion.go
 +++ b/lsp/completion.go
 @@ -2,6 +2,7 @@ package lsp
@@ -75,7 +75,7 @@ index 0fc50df..c420891 100644
  	"encoding/json"
  	"sort"
  	"strconv"
-@@ -33,12 +34,15 @@ type completionData struct {
+@@ -33,13 +34,20 @@ type completionData struct {
  
  const maxCompletionItems = 500
  
@@ -86,14 +86,29 @@ index 0fc50df..c420891 100644
  		return err
  	}
 -	doc := s.readyDocument(params.TextDocument.URI)
-+	doc, err := s.readyDocumentContext(ctx, params.TextDocument.URI)
+-	offset, ok := documentOffset(doc, params.Position)
++	doc, cache, err := s.interactiveDocument(ctx, params.TextDocument.URI)
 +	if err != nil {
 +		return err
 +	}
- 	offset, ok := documentOffset(doc, params.Position)
++	if doc == nil || cache == nil {
++		return s.respond(id, []any{})
++	}
++	offset, offsetErr := doc.lineIndex().Offset(coresource.Position{Line: params.Position.Line, Character: params.Position.Character}, coresource.UTF16)
++	ok := offsetErr == nil
  	if !ok {
  		return s.respond(id, []any{})
-@@ -181,9 +185,18 @@ func completionItems(doc *document, prefix string, offset int) []map[string]any
+ 	}
+@@ -50,7 +58,7 @@ func (s *server) completion(id, raw json.RawMessage) error {
+ 		return s.respond(id, directiveCompletionItems(doc.text(), context))
+ 	}
+ 	prefix, _, _ := identifierAt(doc.text(), int(offset))
+-	items := completionItems(doc, prefix, int(offset))
++	items := cache.completionItems(doc.text(), prefix, int(offset))
+ 	items = s.workspaceCompletionItems(items, prefix)
+ 	items = apiCompletionItems(items, doc, prefix)
+ 	return s.respond(id, completionResponse(items))
+@@ -181,9 +189,18 @@ func completionItems(doc *document, prefix string, offset int) []map[string]any
  	}
  
  	if doc != nil && doc.Analysis != nil {
@@ -113,7 +128,58 @@ index 0fc50df..c420891 100644
  					continue
  				}
  				candidate := map[string]any{
-@@ -342,16 +355,15 @@ func symbolSourceURI(result *analysis.Result, item symbol.Symbol) string {
+@@ -273,14 +290,14 @@ func (s *server) resolveCompletion(id, raw json.RawMessage) error {
+ func (s *server) completionDetail(data completionData) string {
+ 	switch data.Kind {
+ 	case "local":
+-		doc := s.readyDocument(data.URI)
++		doc := s.completionDocument(data.URI)
+ 		if doc != nil && doc.Analysis != nil {
+ 			if item, ok := completionSymbol(doc.Analysis, data); ok {
+ 				return localDeclaration(doc.Analysis, item)
+ 			}
+ 		}
+ 	case "workspace":
+-		for _, occurrence := range s.workspaceOccurrences(data.Name) {
++		for _, occurrence := range workspaceOccurrencesFrom(s.availableWorkspaceResults(), data.Name) {
+ 			if occurrence.declaration && occurrence.uri.String() == data.URI && int(occurrence.span.Start) == data.Start {
+ 				return declarationText(occurrence.text, occurrence.span)
+ 			}
+@@ -292,7 +309,7 @@ func (s *server) completionDetail(data completionData) string {
+ func (s *server) completionDocumentation(data completionData) string {
+ 	switch data.Kind {
+ 	case "local":
+-		doc := s.readyDocument(data.URI)
++		doc := s.completionDocument(data.URI)
+ 		if doc == nil || doc.Analysis == nil {
+ 			return ""
+ 		}
+@@ -300,21 +317,21 @@ func (s *server) completionDocumentation(data completionData) string {
+ 			return localDocumentation(doc.Analysis, item)
+ 		}
+ 	case "macro":
+-		doc := s.readyDocument(data.URI)
++		doc := s.completionDocument(data.URI)
+ 		if doc != nil && doc.Analysis != nil && doc.Analysis.Preprocess != nil {
+ 			if macro, ok := doc.Analysis.Preprocess.Macros[data.Name]; ok {
+ 				return macroHover(doc.Analysis.Preprocess, macro)
+ 			}
+ 		}
+ 	case "api":
+-		doc := s.readyDocument(data.URI)
++		doc := s.completionDocument(data.URI)
+ 		if doc != nil {
+ 			if entry, ok := apiEntry(doc.Names, data.Name); ok {
+ 				return apiDocumentation(entry)
+ 			}
+ 		}
+ 	case "workspace":
+-		for _, occurrence := range s.workspaceOccurrences(data.Name) {
++		for _, occurrence := range workspaceOccurrencesFrom(s.availableWorkspaceResults(), data.Name) {
+ 			if occurrence.declaration && occurrence.uri.String() == data.URI && int(occurrence.span.Start) == data.Start {
+ 				return declarationDocumentation(occurrence.text, occurrence.span)
+ 			}
+@@ -342,16 +359,15 @@ func symbolSourceURI(result *analysis.Result, item symbol.Symbol) string {
  	return uri.String()
  }
  
@@ -155,6 +221,375 @@ index 25ed94d..6bb0ed4 100644
  				"label":        name + ":",
  				"kind":         2,
  				"paddingRight": true,
+diff --git a/lsp/interactive_cache.go b/lsp/interactive_cache.go
+new file mode 100644
+index 0000000..2fa6084
+--- /dev/null
++++ b/lsp/interactive_cache.go
+@@ -0,0 +1,204 @@
++package lsp
++
++import (
++	"context"
++	"maps"
++	"sort"
++	"strings"
++	"sync"
++
++	analysis "github.com/pawnkit/pawn-analysis"
++	"github.com/pawnkit/pawn-analysis/preprocess"
++	"github.com/pawnkit/pawn-analysis/symbol"
++	coresource "github.com/pawnkit/pawnkit-core/source"
++)
++
++// A completed analysis stays immutable and usable while its replacement is pending.
++// The live document supplies prefixes, call arguments and UTF-16 cursor positions.
++type interactiveCache struct {
++	doc               *document
++	candidates        []cachedCandidate
++	mu                sync.Mutex
++	signatures        map[string]signatureInformation
++	signatureRevision uint64
++}
++
++type cachedCandidate struct {
++	name   string
++	folded string
++	item   map[string]any
++	table  *symbol.Table
++	symbol symbol.Symbol
++}
++
++func buildInteractiveCache(ctx context.Context, doc *document) (*interactiveCache, error) {
++	text := doc.text()
++	cached := &document{
++		URI: doc.URI, Path: doc.Path, Root: doc.Root, Entry: doc.Entry, Text: text,
++		Index: coresource.NewLineIndex(string(text)), Version: doc.Version,
++		Analysis: doc.Analysis, Includes: doc.Includes, Candidates: doc.Candidates, Names: doc.Names,
++	}
++	cache := &interactiveCache{doc: cached, signatures: make(map[string]signatureInformation)}
++	for _, table := range navigationTables(doc.Analysis) {
++		for _, item := range table.Symbols {
++			if err := ctx.Err(); err != nil {
++				return nil, err
++			}
++			cache.candidates = append(cache.candidates, cachedCandidate{
++				name: item.Name, folded: strings.ToLower(item.Name), table: table, symbol: item,
++				item: map[string]any{
++					"label": item.Name, "kind": completionSymbolKind(item.Kind), "detail": symbolSummary(item),
++					"sortText": "0_" + strings.ToLower(item.Name),
++					"data":     completionData{Kind: "local", URI: doc.URI, Source: symbolSourceURI(doc.Analysis, item), Name: item.Name, Start: int(item.Span.Start)},
++				},
++			})
++		}
++	}
++	if doc.Analysis != nil && doc.Analysis.Preprocess != nil {
++		for _, macro := range doc.Analysis.Preprocess.Macros {
++			if err := ctx.Err(); err != nil {
++				return nil, err
++			}
++			detail, kind := "macro", 21
++			if macro.Kind == preprocess.MacroFunctionLike {
++				detail, kind = macroSignature(macro), 3
++			}
++			cache.candidates = append(cache.candidates, cachedCandidate{
++				name: macro.Name, folded: strings.ToLower(macro.Name),
++				item: map[string]any{
++					"label": macro.Name, "kind": kind, "detail": detail, "sortText": "1_" + strings.ToLower(macro.Name),
++					"data": completionData{Kind: "macro", URI: doc.URI, Name: macro.Name},
++				},
++			})
++		}
++	}
++	sort.SliceStable(cache.candidates, func(i, j int) bool { return completionItemLess(cache.candidates[i].item, cache.candidates[j].item) })
++	return cache, ctx.Err()
++}
++
++func (s *server) interactiveDocument(ctx context.Context, uri string) (*document, *interactiveCache, error) {
++	s.mu.Lock()
++	live, cache := s.documents[uri], s.interactive[uri]
++	s.mu.Unlock()
++	if live == nil || cache != nil {
++		return live, cache, ctx.Err()
++	}
++	doc, err := s.readyDocumentContext(ctx, uri)
++	if err != nil || doc == nil {
++		return doc, nil, err
++	}
++	s.mu.Lock()
++	live, cache = s.documents[uri], s.interactive[uri]
++	s.mu.Unlock()
++	// Also support documents constructed directly by protocol/unit-test consumers.
++	if cache == nil && doc.Analysis != nil {
++		cache, err = buildInteractiveCache(ctx, doc)
++	}
++	return live, cache, err
++}
++
++func (cache *interactiveCache) completionItems(live []byte, prefix string, offset int) []map[string]any {
++	oldOffset, locals := cachedSourceOffset(cache.doc.Text, live, offset)
++	functionName := ""
++	if locals && cache.doc.Analysis != nil && cache.doc.Analysis.Parse != nil {
++		functionName = containingFunctionName(cache.doc.Analysis.Parse.Syntax(), oldOffset)
++	}
++	scopes := make(map[*symbol.Table]symbol.ID)
++	for _, table := range navigationTables(cache.doc.Analysis) {
++		function, _ := callableByName(table, functionName)
++		scopes[table] = function.FuncScope
++	}
++	folded := strings.ToLower(prefix)
++	seen := make(map[string]bool)
++	items := make([]map[string]any, 0)
++	for _, candidate := range cache.candidates {
++		if seen[candidate.name] || !strings.HasPrefix(candidate.folded, folded) {
++			continue
++		}
++		if candidate.table != nil && !completionSymbolVisible(candidate.table, candidate.symbol, oldOffset, scopes[candidate.table]) {
++			continue
++		}
++		seen[candidate.name] = true
++		items = append(items, candidate.item)
++	}
++	return items
++}
++
++// Map the unchanged prefix/suffix to their original offsets. A cursor
++// inside the edit is ambiguous, so only file-level candidates are used there.
++func cachedSourceOffset(old, live []byte, offset int) (int, bool) {
++	prefix := 0
++	for prefix < len(old) && prefix < len(live) && old[prefix] == live[prefix] {
++		prefix++
++	}
++	if offset <= prefix {
++		return offset, true
++	}
++	suffix := 0
++	for suffix < len(old)-prefix && suffix < len(live)-prefix && old[len(old)-1-suffix] == live[len(live)-1-suffix] {
++		suffix++
++	}
++	if offset >= len(live)-suffix {
++		return len(old) - (len(live) - offset), true
++	}
++	return prefix, false
++}
++
++func (s *server) cachedCallSignature(cache *interactiveCache, name string) (signatureInformation, bool) {
++	s.mu.Lock()
++	revision := s.interactiveRevision
++	s.mu.Unlock()
++	cache.mu.Lock()
++	defer cache.mu.Unlock()
++	if cache.signatureRevision != revision {
++		cache.signatureRevision = revision
++		clear(cache.signatures)
++	}
++	if signature, ok := cache.signatures[name]; ok {
++		return signature, true
++	}
++	signature, ok := s.callSignature(cache.doc, name)
++	if ok {
++		cache.signatures[name] = signature
++	}
++	return signature, ok
++}
++
++// Resolve details from the same completed snapshot that supplied the candidate.
++func (s *server) completionDocument(uri string) *document {
++	s.mu.Lock()
++	cache := s.interactive[uri]
++	s.mu.Unlock()
++	if cache != nil {
++		return cache.doc
++	}
++	return s.readyDocument(uri)
++}
++
++// Interactive requests must never wait for diagnostics or workspace indexing.
++// Unchanged workspace results and the last complete open-buffer analyses remain
++// usable until the next idle refresh replaces them.
++func (s *server) availableWorkspaceResults() map[coresource.URI]*analysis.Result {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	results := make(map[coresource.URI]*analysis.Result)
++	for _, index := range s.workspaces {
++		var graph *analysis.Result
++		select {
++		case <-index.ready:
++			maps.Copy(results, index.files)
++			graph = index.graph
++		default:
++			graph = index.previous
++		}
++		if graph != nil && graph.Registry != nil {
++			if uri, ok := graph.Registry.URI(graph.File); ok {
++				results[uri] = graph
++			}
++		}
++	}
++	for uri, cache := range s.interactive {
++		results[coresource.URI(uri)] = cache.doc.Analysis
++	}
++	return results
++}
+diff --git a/lsp/interactive_cache_test.go b/lsp/interactive_cache_test.go
+new file mode 100644
+index 0000000..35eb582
+--- /dev/null
++++ b/lsp/interactive_cache_test.go
+@@ -0,0 +1,153 @@
++package lsp
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"strings"
++	"testing"
++	"time"
++
++	analysis "github.com/pawnkit/pawn-analysis"
++	coresource "github.com/pawnkit/pawnkit-core/source"
++)
++
++func TestCachedInteractiveRequestsUseLiveTextWhileAnalysisAndIndexingArePending(t *testing.T) {
++	const uri = "file:///main.pwn"
++	old := []byte("native SendClientMessage(playerid, const message[]);\nmain() {\n new ownLocal;\n \n}\nother() { new foreignLocal; }\n")
++	result, err := analysis.AnalyzeContext(context.Background(), old, analysis.Options{URI: coresource.URI(uri), RetainExpanded: true})
++	if err != nil {
++		t.Fatal(err)
++	}
++	cache, err := buildInteractiveCache(context.Background(), &document{URI: uri, Text: old, Analysis: result})
++	if err != nil {
++		t.Fatal(err)
++	}
++	var output bytes.Buffer
++	doc := &document{URI: uri, Text: old, Version: 2, analysisReady: make(chan struct{})}
++	s := &server{
++		out: &output, documents: map[string]*document{uri: doc}, interactive: map[string]*interactiveCache{uri: cache},
++		workspaces: map[string]*workspaceIndex{"pending": {ready: make(chan struct{})}},
++	}
++	request := func(method, insertion string) string {
++		t.Helper()
++		output.Reset()
++		live := bytes.Replace(old, []byte("\n \n"), []byte("\n "+insertion+"\n"), 1)
++		doc.Text, doc.Index = live, coresource.NewLineIndexBytes(live)
++		offset := bytes.Index(live, []byte("\n "+insertion+"\n")) + 2 + len(insertion)
++		params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri}, "position": offsetPosition(live, offset)})
++		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
++		defer cancel()
++		var err error
++		if method == "completion" {
++			err = s.completion(ctx, json.RawMessage("1"), params)
++		} else {
++			err = s.signatureHelp(ctx, json.RawMessage("1"), params)
++		}
++		if err != nil {
++			t.Fatalf("cached %s waited for pending analysis: %v", method, err)
++		}
++		return output.String()
++	}
++	if body := request("completion", "SendCli"); !strings.Contains(body, `"label":"SendClientMessage"`) {
++		t.Fatalf("cached completion missing: %s", body)
++	}
++	if body := request("completion", "own"); !strings.Contains(body, `"label":"ownLocal"`) {
++		t.Fatalf("local missing after shifted edit: %s", body)
++	}
++	if body := request("completion", "foreign"); strings.Contains(body, `"label":"foreignLocal"`) {
++		t.Fatalf("local escaped its function: %s", body)
++	}
++	if body := request("signature", "SendClientMessage(1, "); !strings.Contains(body, `"activeParameter":1`) || !strings.Contains(body, "const message[]") {
++		t.Fatalf("signature ignored live arguments: %s", body)
++	}
++	// A refreshed dictionary replaces both candidates and cached signatures.
++	updated := bytes.ReplaceAll(old, []byte("SendClientMessage(playerid, const message[])"), []byte("SendOther(value)"))
++	result, err = analysis.AnalyzeContext(context.Background(), updated, analysis.Options{URI: coresource.URI(uri), RetainExpanded: true})
++	if err != nil {
++		t.Fatal(err)
++	}
++	refreshed, err := buildInteractiveCache(context.Background(), &document{URI: uri, Text: updated, Analysis: result})
++	if err != nil {
++		t.Fatal(err)
++	}
++	s.interactive[uri] = refreshed
++	if body := request("completion", "Send"); !strings.Contains(body, `"label":"SendOther"`) || strings.Contains(body, `"label":"SendClientMessage"`) {
++		t.Fatalf("refresh retained removed candidate: %s", body)
++	}
++	if body := request("signature", "SendOther("); !strings.Contains(body, "SendOther(value)") {
++		t.Fatalf("refreshed signature missing: %s", body)
++	}
++	if err := s.didClose(json.RawMessage(`{"textDocument":{"uri":"file:///main.pwn"}}`)); err != nil {
++		t.Fatal(err)
++	}
++	if s.interactive[uri] != nil {
++		t.Fatal("closed document retained its interactive cache")
++	}
++}
++
++func TestCachedSourceOffsetsPreserveUnicodeAndCRLF(t *testing.T) {
++	old := []byte("// 😀\r\nmain() {\r\n new value;\r\n value;\r\n}\r\n")
++	at := bytes.Index(old, []byte(" value;"))
++	live := append(append(append([]byte{}, old[:at]...), []byte(" // hello\r\n")...), old[at:]...)
++	offset := bytes.LastIndex(live, []byte("value;"))
++	mapped, local := cachedSourceOffset(old, live, offset)
++	if !local || mapped != bytes.LastIndex(old, []byte("value;")) {
++		t.Fatalf("mapped=%d locals=%v", mapped, local)
++	}
++	// When multiple edits make a cursor's old scope ambiguous, omit locals.
++	if _, local := cachedSourceOffset([]byte("a unchanged b"), []byte("new changed text"), 6); local {
++		t.Fatal("ambiguous edit retained local scope")
++	}
++}
++
++func TestWorkspaceAnalysisRevisionTracksOnlyIncludeOverlays(t *testing.T) {
++	open := map[string][]byte{"/main.pwn": []byte("main() {}"), "/config.inc": []byte("#define VALUE 1")}
++	first := workspaceAnalysisRevision("/", "/main.pwn", open)
++	open["/main.pwn"] = []byte("main() { return 1; }")
++	if workspaceAnalysisRevision("/", "/main.pwn", open) != first {
++		t.Fatal("entry edit invalidated reusable include expansion")
++	}
++	open["/config.inc"] = []byte("#define VALUE 2")
++	if workspaceAnalysisRevision("/", "/main.pwn", open) == first {
++		t.Fatal("include edit retained stale preprocessing revision")
++	}
++}
++
++func TestInteractiveRefreshWaitsForIdleAndCancelsSupersededUpdates(t *testing.T) {
++	if documentPublishDebounce != time.Second {
++		t.Fatalf("idle delay = %s", documentPublishDebounce)
++	}
++	uri := tempDocumentURI(t)
++	s := &server{documents: map[string]*document{}}
++	defer func() { s.cancelDocuments(); s.workers.Wait() }()
++	open, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri, "version": 1, "text": "main() {}\n"}})
++	if err := s.didOpen(open); err != nil {
++		t.Fatal(err)
++	}
++	s.readyDocument(uri)
++	var superseded *document
++	for version := 2; version <= 3; version++ {
++		change, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": uri, "version": version}, "contentChanges": []any{map[string]any{"text": "main() { new latest; }\n"}}})
++		if err := s.didChange(change); err != nil {
++			t.Fatal(err)
++		}
++		if version == 2 {
++			superseded = s.document(uri)
++		}
++	}
++	latest := s.document(uri)
++	select {
++	case <-latest.analysisReady:
++		t.Fatal("refresh ran before idle delay")
++	case <-time.After(100 * time.Millisecond):
++	}
++	waitForSignal(t, superseded.analysisReady, "superseded refresh cancellation")
++	if superseded.Analysis != nil {
++		t.Fatal("superseded update was analyzed instead of cancelled")
++	}
++	waitForSignal(t, latest.analysisReady, "idle refresh")
++	if doc := s.completionDocument(uri); doc == nil || doc.Version != 3 {
++		t.Fatalf("cache did not advance to latest version: %+v", doc)
++	}
++}
 diff --git a/lsp/interactive_requests_test.go b/lsp/interactive_requests_test.go
 new file mode 100644
 index 0000000..3ac3a34
@@ -285,10 +720,10 @@ index 0000000..4a9911c
 +}
 diff --git a/lsp/open_overlays_test.go b/lsp/open_overlays_test.go
 new file mode 100644
-index 0000000..232e9f5
+index 0000000..1028156
 --- /dev/null
 +++ b/lsp/open_overlays_test.go
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,124 @@
 +package lsp
 +
 +import (
@@ -300,6 +735,7 @@ index 0000000..232e9f5
 +	"path/filepath"
 +	"strings"
 +	"testing"
++	"time"
 +
 +	coresource "github.com/pawnkit/pawnkit-core/source"
 +)
@@ -320,16 +756,67 @@ index 0000000..232e9f5
 +		}
 +	}
 +	mainURI, includeURI := coresource.FileURI(mainPath).String(), coresource.FileURI(includePath).String()
-+	var input bytes.Buffer
++	input, sender := io.Pipe()
++	output, receiver := io.Pipe()
++	defer input.Close()
++	defer sender.Close()
++	defer output.Close()
++	defer receiver.Close()
++	done := make(chan error, 1)
++	go func() { done <- Run(input, receiver); receiver.Close() }()
++	responses := make(chan []byte, 32)
++	go func() {
++		reader := bufio.NewReader(output)
++		for {
++			body, err := readFrame(reader)
++			if err != nil {
++				close(responses)
++				return
++			}
++			responses <- body
++		}
++	}()
++	wait := func(id int) string {
++		timeout := time.NewTimer(5 * time.Second)
++		defer timeout.Stop()
++		for {
++			select {
++			case body, ok := <-responses:
++				if !ok {
++					t.Fatal("server closed before response")
++				}
++				var response struct {
++					ID     int    `json:"id"`
++					Method string `json:"method"`
++				}
++				if err := json.Unmarshal(body, &response); err != nil {
++					t.Fatal(err)
++				}
++				if response.ID == id && response.Method == "" {
++					return string(body)
++				}
++			case <-timeout.C:
++				t.Fatal("timed out waiting for response")
++			}
++		}
++	}
 +	send := func(id int, method string, params any) {
 +		message := map[string]any{"jsonrpc": "2.0", "method": method, "params": params}
 +		if id != 0 {
 +			message["id"] = id
 +		}
-+		frame(t, &input, message)
++		var framed bytes.Buffer
++		frame(t, &framed, message)
++		if _, err := sender.Write(framed.Bytes()); err != nil {
++			t.Fatal(err)
++		}
 +	}
 +	hover := func(id int) {
 +		send(id, "textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": mainURI}, "position": map[string]any{"line": 1, "character": 18}})
++		expected := map[int]string{2: "#define LIMIT 10", 3: "#define LIMIT 20", 4: "#define LIMIT 30", 5: "#define LIMIT 10"}[id]
++		if body := wait(id); !strings.Contains(body, expected) {
++			t.Fatalf("hover %d = %s; want %q", id, body, expected)
++		}
 +	}
 +	open := func(uri, text string) {
 +		send(0, "textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "pawn", "version": 1, "text": text}})
@@ -347,53 +834,123 @@ index 0000000..232e9f5
 +	}
 +	hover(4)
 +	send(6, "workspace/symbol", map[string]any{"query": "IncludedHelper"})
++	symbols := wait(6)
++	if !strings.Contains(symbols, includeURI) || !strings.Contains(symbols, "IncludedHelper") {
++		t.Fatalf("included workspace symbol missing: %s", symbols)
++	}
 +	send(0, "textDocument/didClose", map[string]any{"textDocument": map[string]any{"uri": includeURI}})
 +	hover(5)
 +	send(0, "exit", nil)
-+	var output bytes.Buffer
-+	if err := Run(&input, &output); err != nil {
++	if err := <-done; err != nil {
 +		t.Fatal(err)
-+	}
-+	reader := bufio.NewReader(&output)
-+	responses := map[int]string{}
-+	for {
-+		body, err := readFrame(reader)
-+		if err == io.EOF {
-+			break
-+		}
-+		if err != nil {
-+			t.Fatal(err)
-+		}
-+		var message struct {
-+			ID     int    `json:"id"`
-+			Method string `json:"method"`
-+		}
-+		if err := json.Unmarshal(body, &message); err != nil {
-+			t.Fatal(err)
-+		}
-+		if message.ID != 0 && message.Method == "" {
-+			responses[message.ID] = string(body)
-+		}
-+	}
-+	for id, value := range map[int]string{2: "#define LIMIT 10", 3: "#define LIMIT 20", 4: "#define LIMIT 30", 5: "#define LIMIT 10"} {
-+		if !strings.Contains(responses[id], value) {
-+			t.Fatalf("hover %d = %s; want %q", id, responses[id], value)
-+		}
-+	}
-+	if !strings.Contains(responses[6], includeURI) || !strings.Contains(responses[6], "IncludedHelper") {
-+		t.Fatalf("included workspace symbol missing: %s", responses[6])
 +	}
 +	if actual, err := os.ReadFile(includePath); err != nil || string(actual) != diskText {
 +		t.Fatalf("unsaved buffer changed disk: %q, %v", actual, err)
 +	}
 +}
 diff --git a/lsp/server.go b/lsp/server.go
-index 91bf675..a8685dd 100644
+index 91bf675..23682ce 100644
 --- a/lsp/server.go
 +++ b/lsp/server.go
-@@ -464,7 +464,10 @@ func (s *server) handle(request message) (bool, error) {
+@@ -79,34 +79,36 @@ type publishQueue struct {
+ }
+ 
+ type server struct {
+-	in               *bufio.Reader
+-	out              io.Writer
+-	documents        map[string]*document
+-	names            sema.Resolver
+-	snapshot         *query.Snapshot
+-	shutdown         bool
+-	mu               sync.Mutex
+-	writeMu          sync.Mutex
+-	workers          sync.WaitGroup
+-	requestWorkers   sync.WaitGroup
+-	requestCancels   map[string]context.CancelFunc
+-	progressCancels  map[string]context.CancelFunc
+-	workDoneProgress bool
+-	rules            *lint.Registrar
+-	managedRoots     []string
+-	workspaces       map[string]*workspaceIndex
+-	projectRevision  int64
+-	parseCache       *lintproject.ParseCache
+-	tokenCache       *preprocess.TokenCache
+-	publishes        map[string]*publishQueue
+-	nextRequestID    atomic.Uint64
+-	lint             func(context.Context, *document, *lintproject.ParseCache, *analysis.Result) ([]diagnostic.Diagnostic, error)
+-	analysisTrace    func(string, int, analysis.TraceEvent)
++	in                  *bufio.Reader
++	out                 io.Writer
++	documents           map[string]*document
++	interactive         map[string]*interactiveCache
++	interactiveRevision uint64
++	names               sema.Resolver
++	snapshot            *query.Snapshot
++	shutdown            bool
++	mu                  sync.Mutex
++	writeMu             sync.Mutex
++	workers             sync.WaitGroup
++	requestWorkers      sync.WaitGroup
++	requestCancels      map[string]context.CancelFunc
++	progressCancels     map[string]context.CancelFunc
++	workDoneProgress    bool
++	rules               *lint.Registrar
++	managedRoots        []string
++	workspaces          map[string]*workspaceIndex
++	projectRevision     int64
++	parseCache          *lintproject.ParseCache
++	tokenCache          *preprocess.TokenCache
++	publishes           map[string]*publishQueue
++	nextRequestID       atomic.Uint64
++	lint                func(context.Context, *document, *lintproject.ParseCache, *analysis.Result) ([]diagnostic.Diagnostic, error)
++	analysisTrace       func(string, int, analysis.TraceEvent)
+ }
+ 
+ const (
+ 	analysisOutputTokenLimit = 8_000_000
+-	documentPublishDebounce  = 25 * time.Millisecond
++	documentPublishDebounce  = time.Second
+ )
+ 
+ type apiNameResolver struct {
+@@ -449,57 +451,114 @@ func (s *server) handle(request message) (bool, error) {
+ 	case "pawnkit/didChangeManagedTools":
+ 		return false, s.didChangeManagedTools(request.Params)
+ 	case "workspace/symbol":
+-		return false, s.workspaceSymbols(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.workspaceSymbols(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "workspace/diagnostic":
+ 		s.handleAsync(request, func(ctx context.Context) error {
+ 			return s.workspaceDiagnostics(ctx, request.ID, request.Params)
+ 		})
+ 		return false, nil
+ 	case "textDocument/codeAction":
+-		return false, s.codeActions(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.codeActions(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/prepareCallHierarchy":
+-		return false, s.prepareCallHierarchy(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.prepareCallHierarchy(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "callHierarchy/incomingCalls":
+-		return false, s.incomingCalls(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.incomingCalls(request.ID, request.Params)
++		})
++		return false, nil
  	case "callHierarchy/outgoingCalls":
- 		return false, s.outgoingCalls(request.ID, request.Params)
+-		return false, s.outgoingCalls(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.outgoingCalls(request.ID, request.Params)
++		})
++		return false, nil
  	case "textDocument/completion":
 -		return false, s.completion(request.ID, request.Params)
 +		s.handleAsync(request, func(ctx context.Context) error {
@@ -401,11 +958,86 @@ index 91bf675..a8685dd 100644
 +		})
 +		return false, nil
  	case "completionItem/resolve":
- 		return false, s.resolveCompletion(request.ID, request.Params)
+-		return false, s.resolveCompletion(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.resolveCompletion(request.ID, request.Params)
++		})
++		return false, nil
  	case "textDocument/documentSymbol":
-@@ -499,7 +502,10 @@ func (s *server) handle(request message) (bool, error) {
+-		return false, s.documentSymbols(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.documentSymbols(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/diagnostic":
+ 		s.handleAsync(request, func(ctx context.Context) error {
+ 			return s.documentDiagnostics(ctx, request.ID, request.Params)
+ 		})
+ 		return false, nil
+ 	case "textDocument/documentHighlight":
+-		return false, s.documentHighlights(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.documentHighlights(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/definition":
+-		return false, s.definition(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.definition(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/foldingRange":
+-		return false, s.foldingRanges(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.foldingRanges(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/inlayHint":
+-		return false, s.inlayHints(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.inlayHints(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/documentColor":
+ 		return false, s.documentColors(request.ID, request.Params)
+ 	case "textDocument/colorPresentation":
+ 		return false, s.colorPresentation(request.ID, request.Params)
+ 	case "textDocument/hover":
+-		return false, s.hover(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.hover(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/references":
+-		return false, s.references(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.references(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/prepareRename":
+-		return false, s.prepareRename(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.prepareRename(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/rename":
+-		return false, s.rename(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.rename(request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/semanticTokens/full":
+-		return false, s.semanticTokens(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.semanticTokens(request.ID, request.Params)
++		})
++		return false, nil
  	case "textDocument/selectionRange":
- 		return false, s.selectionRanges(request.ID, request.Params)
+-		return false, s.selectionRanges(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.selectionRanges(request.ID, request.Params)
++		})
++		return false, nil
  	case "textDocument/signatureHelp":
 -		return false, s.signatureHelp(request.ID, request.Params)
 +		s.handleAsync(request, func(ctx context.Context) error {
@@ -415,7 +1047,7 @@ index 91bf675..a8685dd 100644
  	case "textDocument/formatting":
  		return false, s.formatting(request.ID, request.Params)
  	case "textDocument/rangeFormatting":
-@@ -663,6 +669,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
+@@ -663,6 +722,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
  	s.mu.Unlock()
  	s.refreshWorkspaceIndex(doc)
  	s.schedulePublish(doc, s.snapshot)
@@ -423,7 +1055,7 @@ index 91bf675..a8685dd 100644
  	return nil
  }
  
-@@ -779,6 +786,7 @@ func (s *server) didChange(raw json.RawMessage) error {
+@@ -779,6 +839,7 @@ func (s *server) didChange(raw json.RawMessage) error {
  		s.restartWorkspaceIndex(next)
  	}
  	s.schedulePublishAfter(next, s.snapshot, documentPublishDebounce)
@@ -431,7 +1063,15 @@ index 91bf675..a8685dd 100644
  	return nil
  }
  
-@@ -818,6 +826,7 @@ func (s *server) didClose(raw json.RawMessage) error {
+@@ -797,6 +858,7 @@ func (s *server) didClose(raw json.RawMessage) error {
+ 	}
+ 	s.mu.Lock()
+ 	delete(s.documents, params.TextDocument.URI)
++	delete(s.interactive, params.TextDocument.URI)
+ 	inUse := false
+ 	if doc != nil {
+ 		for _, current := range s.documents {
+@@ -818,6 +880,7 @@ func (s *server) didClose(raw json.RawMessage) error {
  		return nil
  	}
  	s.restartWorkspaceIndex(doc)
@@ -439,7 +1079,15 @@ index 91bf675..a8685dd 100644
  	return nil
  }
  
-@@ -973,7 +982,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
+@@ -832,6 +895,7 @@ func (s *server) reloadProjects() error {
+ 		}
+ 	}
+ 	s.projectRevision++
++	s.interactive = nil
+ 	for _, index := range s.workspaces {
+ 		if index.cancel != nil {
+ 			index.cancel()
+@@ -973,7 +1037,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
  	}
  	if shared == nil && analysisErr == nil {
  		shared, analysisErr = snapshot.Analyze(ctx, coresource.URI(doc.URI), analysis.Options{
@@ -448,7 +1096,27 @@ index 91bf675..a8685dd 100644
  			MaxOutputTokens:          analysisOutputTokenLimit,
  			Revision:                 fmt.Sprintf("%s:%T:%T:%d", doc.Path, doc.Includes, doc.Names, doc.Revision),
  			TokenCache:               s.tokenCache,
-@@ -1111,8 +1120,9 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
+@@ -988,6 +1052,19 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
+ 		return ctx.Err()
+ 	}
+ 	doc.Analysis = shared
++	cache, err := buildInteractiveCache(ctx, doc)
++	if err != nil {
++		return err
++	}
++	s.mu.Lock()
++	if ctx.Err() == nil && s.documents[doc.URI] == doc {
++		if s.interactive == nil {
++			s.interactive = make(map[string]*interactiveCache)
++		}
++		s.interactive[doc.URI] = cache
++		s.interactiveRevision++
++	}
++	s.mu.Unlock()
+ 	doc.markAnalysisReady()
+ 	lintFn := s.lint
+ 	if lintFn == nil {
+@@ -1111,8 +1188,9 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
  	doc := s.readyDocument(params.TextDocument.URI)
  	items := make([]map[string]any, 0)
  	if doc != nil && doc.Analysis != nil && doc.Analysis.Symbols != nil {
@@ -460,10 +1128,10 @@ index 91bf675..a8685dd 100644
  				"name": item.Name, "kind": symbolKind(item.Kind),
  				"range": rng, "selectionRange": rng,
 diff --git a/lsp/signature.go b/lsp/signature.go
-index 6a1296c..9a8e8e0 100644
+index 6a1296c..c97a8c6 100644
 --- a/lsp/signature.go
 +++ b/lsp/signature.go
-@@ -1,6 +1,7 @@
+@@ -1,21 +1,30 @@
  package lsp
  
  import (
@@ -471,8 +1139,10 @@ index 6a1296c..9a8e8e0 100644
  	"encoding/json"
  	"strconv"
  	"strings"
-@@ -9,12 +10,15 @@ import (
+ 
+ 	"github.com/pawnkit/pawn-analysis/preprocess"
  	"github.com/pawnkit/pawn-api/pawnapi"
++	coresource "github.com/pawnkit/pawnkit-core/source"
  )
  
 -func (s *server) signatureHelp(id, raw json.RawMessage) error {
@@ -482,18 +1152,79 @@ index 6a1296c..9a8e8e0 100644
  		return err
  	}
 -	doc := s.readyDocument(params.TextDocument.URI)
-+	doc, err := s.readyDocumentContext(ctx, params.TextDocument.URI)
+-	offset, ok := documentOffset(doc, params.Position)
++	doc, cache, err := s.interactiveDocument(ctx, params.TextDocument.URI)
 +	if err != nil {
 +		return err
 +	}
- 	offset, ok := documentOffset(doc, params.Position)
++	if doc == nil || cache == nil {
++		return s.respond(id, nil)
++	}
++	offset, offsetErr := doc.lineIndex().Offset(coresource.Position{Line: params.Position.Line, Character: params.Position.Character}, coresource.UTF16)
++	ok := offsetErr == nil
  	if !ok {
  		return s.respond(id, nil)
+ 	}
+@@ -23,7 +32,7 @@ func (s *server) signatureHelp(id, raw json.RawMessage) error {
+ 	if !ok {
+ 		return s.respond(id, nil)
+ 	}
+-	signature, ok := s.callSignature(doc, name)
++	signature, ok := s.cachedCallSignature(cache, name)
+ 	if !ok {
+ 		return s.respond(id, nil)
+ 	}
+@@ -86,7 +95,7 @@ func (s *server) callSignatureSeen(doc *document, name string, seen map[string]b
+ 			}
+ 		}
+ 	}
+-	occurrences := s.workspaceOccurrences(name)
++	occurrences := workspaceOccurrencesFrom(s.availableWorkspaceResults(), name)
+ 	if workspaceDeclarationCount(occurrences) == 1 {
+ 		for _, occurrence := range occurrences {
+ 			if occurrence.declaration {
 diff --git a/lsp/workspace.go b/lsp/workspace.go
-index f834c01..3dbcce0 100644
+index f834c01..c0f68d5 100644
 --- a/lsp/workspace.go
 +++ b/lsp/workspace.go
-@@ -257,10 +257,12 @@ func analyzeWorkspaceEntry(
+@@ -2,6 +2,7 @@ package lsp
+ 
+ import (
+ 	"context"
++	"crypto/sha256"
+ 	"encoding/json"
+ 	"fmt"
+ 	"os"
+@@ -80,6 +81,7 @@ func (s *server) startWorkspaceIndexAfter(doc *document, delay time.Duration, pr
+ 		previous: previous,
+ 	}
+ 	s.workspaces[doc.Root] = index
++	s.interactiveRevision++
+ 	open := make(map[string][]byte)
+ 	for _, current := range s.documents {
+ 		if current.Root == doc.Root {
+@@ -100,6 +102,11 @@ func (s *server) startWorkspaceIndexAfter(doc *document, delay time.Duration, pr
+ 		defer func() {
+ 			closeDiagnostics()
+ 			close(index.ready)
++			s.mu.Lock()
++			if s.workspaces[doc.Root] == index {
++				s.interactiveRevision++
++			}
++			s.mu.Unlock()
+ 		}()
+ 		if delay > 0 {
+ 			timer := time.NewTimer(delay)
+@@ -159,7 +166,7 @@ func (s *server) restartWorkspaceIndex(doc *document) {
+ 	}
+ 	delete(s.workspaces, doc.Root)
+ 	s.mu.Unlock()
+-	s.startWorkspaceIndexAfter(doc, 150*time.Millisecond, previous)
++	s.startWorkspaceIndexAfter(doc, documentPublishDebounce, previous)
+ }
+ 
+ func reusableWorkspaceGraph(index *workspaceIndex) *analysis.Result {
+@@ -257,10 +264,12 @@ func analyzeWorkspaceEntry(
  			return nil, err
  		}
  	}
@@ -501,13 +1232,14 @@ index f834c01..3dbcce0 100644
 +	// compatible expansions. Keep token/trivia caches but rebuild changed code.
  	return analysis.AnalyzeContext(ctx, text, analysis.Options{
  		URI: coresource.FileURI(entry), Includes: workspaceOverlayResolver{base: includes, open: open}, Names: names, RetainExpanded: true,
- 		Revision: root, MaxOutputTokens: analysisOutputTokenLimit, TokenCache: tokenCache, Previous: previous,
+-		Revision: root, MaxOutputTokens: analysisOutputTokenLimit, TokenCache: tokenCache, Previous: previous,
 -		ReuseCompatibleExpansion: true, CollectFunctionFacts: true,
++		Revision: workspaceAnalysisRevision(root, entry, open), MaxOutputTokens: analysisOutputTokenLimit, TokenCache: tokenCache, Previous: previous,
 +		ReuseCompatibleExpansion: false, CollectFunctionFacts: true,
  	})
  }
  
-@@ -309,35 +311,41 @@ func (s *server) workspaceSymbols(id, raw json.RawMessage) error {
+@@ -309,35 +318,41 @@ func (s *server) workspaceSymbols(id, raw json.RawMessage) error {
  	queryText := strings.ToLower(params.Query)
  	items := make([]map[string]any, 0)
  	seen := make(map[string]bool)
@@ -572,6 +1304,53 @@ index f834c01..3dbcce0 100644
  		}
  	}
  	sort.Slice(items, func(i, j int) bool {
+@@ -349,9 +364,13 @@ func (s *server) workspaceSymbols(id, raw json.RawMessage) error {
+ }
+ 
+ func (s *server) workspaceOccurrences(name string) []workspaceOccurrence {
++	return workspaceOccurrencesFrom(s.workspaceResults(), name)
++}
++
++func workspaceOccurrencesFrom(results map[coresource.URI]*analysis.Result, name string) []workspaceOccurrence {
+ 	items := make([]workspaceOccurrence, 0)
+ 	seen := make(map[string]bool)
+-	for _, result := range s.workspaceResults() {
++	for _, result := range results {
+ 		if result == nil || result.Symbols == nil || result.Preprocess == nil {
+ 			continue
+ 		}
+@@ -432,7 +451,7 @@ func (s *server) workspaceCompletionItems(items []map[string]any, prefix string)
+ 			indexes[label] = index
+ 		}
+ 	}
+-	for _, result := range s.workspaceResults() {
++	for _, result := range s.availableWorkspaceResults() {
+ 		if result == nil || result.Symbols == nil {
+ 			continue
+ 		}
+@@ -519,3 +538,22 @@ func skipWorkspaceDirectory(name string) bool {
+ func workspaceSourceExtension(extension string) bool {
+ 	return strings.EqualFold(extension, ".pwn") || strings.EqualFold(extension, ".inc")
+ }
++
++// Include overlays must invalidate incremental preprocessing even if the entry
++// text is unchanged. Entry-only edits can still reuse compatible analysis.
++func workspaceAnalysisRevision(root, entry string, open map[string][]byte) string {
++	keys := make([]string, 0, len(open))
++	for path := range open {
++		if workspacePathKey(path) != workspacePathKey(entry) {
++			keys = append(keys, path)
++		}
++	}
++	sort.Strings(keys)
++	hash := sha256.New()
++	for _, path := range keys {
++		text := open[path]
++		fmt.Fprintf(hash, "%d:%s%d:", len(path), path, len(text))
++		hash.Write(text)
++	}
++	return fmt.Sprintf("%s:%x", root, hash.Sum(nil))
++}
 diff --git a/lsp/workspace_diagnostics_reuse_test.go b/lsp/workspace_diagnostics_reuse_test.go
 new file mode 100644
 index 0000000..594cd73
