@@ -1,5 +1,216 @@
+diff --git a/go.mod b/go.mod
+index aec6433..526be67 100644
+--- a/go.mod
++++ b/go.mod
+@@ -3,10 +3,10 @@ module github.com/pawnkit/pawnlsp
+ go 1.26.5
+ 
+ require (
+-	github.com/pawnkit/pawn-analysis v0.30.3
++	github.com/pawnkit/pawn-analysis v0.30.24
+ 	github.com/pawnkit/pawn-api v0.19.0
+-	github.com/pawnkit/pawn-parser v1.5.6
+-	github.com/pawnkit/pawn-project v0.3.3
++	github.com/pawnkit/pawn-parser v1.5.11
++	github.com/pawnkit/pawn-project v0.34.2
+ 	github.com/pawnkit/pawnfmt v1.4.4
+ 	github.com/pawnkit/pawnkit-core v0.5.0
+ 	github.com/pawnkit/pawnlint v1.8.12
+@@ -26,3 +26,9 @@ require (
+ )
+ 
+ tool golang.org/x/vuln/cmd/govulncheck
++
++replace github.com/pawnkit/pawn-analysis => github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55
++
++replace github.com/pawnkit/pawn-parser => github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279
++
++replace github.com/pawnkit/pawnlint => github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932
+diff --git a/go.sum b/go.sum
+index f9fbf7a..11ffae1 100644
+--- a/go.sum
++++ b/go.sum
+@@ -1,3 +1,9 @@
++github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55 h1:TntsyDOnEKSWrd5wkGpiguwolGXaIORUTCtpS6g28/k=
++github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55/go.mod h1:+SSXoxEkbhb6pQqO4MrkpX/9BkDPowjTOV3M8HRvLjA=
++github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279 h1:aWWXKyKJ1GvqMd25LOUKMp0Xj3tCClYQA5KNdRxlIA0=
++github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279/go.mod h1:Egw7oGm4jkDpaWBvLkYItfNTZcAcvTg+gWjlAGL9rbI=
++github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932 h1:mvfqH0LV/xN1dmHtmERugjrgj07JNsJ8rXzpFi8Vkm0=
++github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932/go.mod h1:iT3gJI+hyX+lNUygqw/Flx5oDJ2vnFC7v1aIfnz0axo=
+ github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
+ github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
+ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+@@ -10,20 +16,14 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+ github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+ github.com/google/renameio v0.1.0 h1:GOZbcHa3HfsPKPlmyPyN2KEohoMXOhdMbHrvbpl2QaA=
+ github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
+-github.com/pawnkit/pawn-analysis v0.30.3 h1:KQ5pJmUomJxDbjEIpUROZyukEKEBRVyr7BPU+D6vsis=
+-github.com/pawnkit/pawn-analysis v0.30.3/go.mod h1:xP7YJ5mlkEDF3CxC1CVW76RP83hyGS5yrXJqnwg7Dng=
+ github.com/pawnkit/pawn-api v0.19.0 h1:vOBOpCMrwMCem2YtxO9VdpwBv2MTD/CvTLmzS8/F2wo=
+ github.com/pawnkit/pawn-api v0.19.0/go.mod h1:kG0iHjG85iOU27geni1yaXk2WfSmJuhUoWkSrhUS7Ik=
+-github.com/pawnkit/pawn-parser v1.5.6 h1:6RZCmFvCpQC/EZJqQXsz0vYCQjpw/pZwaGLjY0DYrR8=
+-github.com/pawnkit/pawn-parser v1.5.6/go.mod h1:6iG1RfoTtroAadrF5A60QZc/zwalxBwn2gbgCQ/QO8Y=
+-github.com/pawnkit/pawn-project v0.3.3 h1:XplAg9Qz1eo3GNVbT5j6gZwx8lAHN176Ydi4pU78xMo=
+-github.com/pawnkit/pawn-project v0.3.3/go.mod h1:hMeRnvAYqu5TeWkJKT7EVqw6z62wTiuGBuIvcWNZuYY=
++github.com/pawnkit/pawn-project v0.34.2 h1:0U3bSKSJJqEHjxdAcOyQuXrfF512rHrpDIqBrPuxEmo=
++github.com/pawnkit/pawn-project v0.34.2/go.mod h1:caXLtXl6HEpoo+7Uom0vdNo68X9i+z30xTMZ0ZVGkv4=
+ github.com/pawnkit/pawnfmt v1.4.4 h1:T4jVPmacaR+tN7hgOH/F0KZKqqcHyGW7hIDL+XSpIow=
+ github.com/pawnkit/pawnfmt v1.4.4/go.mod h1:j9S8y940niZ6yxydu0Jh9Nz9K90rs1tg0mfw/euD00U=
+ github.com/pawnkit/pawnkit-core v0.5.0 h1:faEI2LGaP9czSDaKxtw4qvGUNuft88qeR/MdW0jLmlg=
+ github.com/pawnkit/pawnkit-core v0.5.0/go.mod h1:jGhXHEEzr8juezaRhh/AkGzX6S4eGQnprB83vrI1peU=
+-github.com/pawnkit/pawnlint v1.8.12 h1:9qbUZnCyKVc5XlR5sB62jtsnpdB73izNP2Zk7Vjyz50=
+-github.com/pawnkit/pawnlint v1.8.12/go.mod h1:1DI43RD9sUGMw3+NWSdW61xyEbkxCYmlfBPozvbok7U=
+ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+ github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
+diff --git a/lsp/completion.go b/lsp/completion.go
+index 0fc50df..c420891 100644
+--- a/lsp/completion.go
++++ b/lsp/completion.go
+@@ -2,6 +2,7 @@ package lsp
+ 
+ import (
+ 	"bytes"
++	"context"
+ 	"encoding/json"
+ 	"sort"
+ 	"strconv"
+@@ -33,12 +34,15 @@ type completionData struct {
+ 
+ const maxCompletionItems = 500
+ 
+-func (s *server) completion(id, raw json.RawMessage) error {
++func (s *server) completion(ctx context.Context, id, raw json.RawMessage) error {
+ 	var params textPositionParams
+ 	if err := json.Unmarshal(raw, &params); err != nil {
+ 		return err
+ 	}
+-	doc := s.readyDocument(params.TextDocument.URI)
++	doc, err := s.readyDocumentContext(ctx, params.TextDocument.URI)
++	if err != nil {
++		return err
++	}
+ 	offset, ok := documentOffset(doc, params.Position)
+ 	if !ok {
+ 		return s.respond(id, []any{})
+@@ -181,9 +185,18 @@ func completionItems(doc *document, prefix string, offset int) []map[string]any
+ 	}
+ 
+ 	if doc != nil && doc.Analysis != nil {
++		foldedPrefix := strings.ToLower(prefix)
++		functionName := ""
++		if doc.Analysis.Parse != nil {
++			functionName = containingFunctionName(doc.Analysis.Parse.Syntax(), offset)
++		}
+ 		for _, table := range navigationTables(doc.Analysis) {
++			function, _ := callableByName(table, functionName)
+ 			for _, item := range table.Symbols {
+-				if !completionSymbolVisible(doc, table, item, offset) {
++				if foldedPrefix != "" && !strings.HasPrefix(strings.ToLower(item.Name), foldedPrefix) {
++					continue
++				}
++				if !completionSymbolVisible(table, item, offset, function.FuncScope) {
+ 					continue
+ 				}
+ 				candidate := map[string]any{
+@@ -342,16 +355,15 @@ func symbolSourceURI(result *analysis.Result, item symbol.Symbol) string {
+ 	return uri.String()
+ }
+ 
+-func completionSymbolVisible(doc *document, table *symbol.Table, item symbol.Symbol, offset int) bool {
++func completionSymbolVisible(table *symbol.Table, item symbol.Symbol, offset int, functionScope symbol.ID) bool {
+ 	scope, ok := table.Scope(item.Scope)
+ 	if !ok || scope.Kind == symbol.ScopeFile {
+ 		return ok
+ 	}
+-	if item.Span.Start > coresource.Offset(offset) || doc.Analysis == nil || doc.Analysis.Parse == nil {
++	if item.Span.Start > coresource.Offset(offset) || functionScope == 0 {
+ 		return false
+ 	}
+-	function, ok := callableByName(table, containingFunctionName(doc.Analysis.Parse.Syntax(), offset))
+-	return ok && function.FuncScope != 0 && scopeWithin(table, item.Scope, function.FuncScope)
++	return scopeWithin(table, item.Scope, functionScope)
+ }
+ 
+ func containingFunctionName(root parser.SyntaxNode, offset int) string {
+diff --git a/lsp/inlay.go b/lsp/inlay.go
+index 25ed94d..6bb0ed4 100644
+--- a/lsp/inlay.go
++++ b/lsp/inlay.go
+@@ -23,7 +23,7 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
+ 	if doc == nil || doc.Analysis == nil || doc.Analysis.Parse == nil {
+ 		return s.respond(id, []any{})
+ 	}
+-	index := doc.lineIndex()
++	index := coresource.NewLineIndex(string(doc.text()))
+ 	start, err := index.Offset(coresource.Position{Line: params.Range.Start.Line, Character: params.Range.Start.Character}, coresource.UTF16)
+ 	if err != nil {
+ 		return s.respond(id, []any{})
+@@ -60,7 +60,7 @@ func (s *server) inlayHints(id, raw json.RawMessage) error {
+ 				continue
+ 			}
+ 			hints = append(hints, map[string]any{
+-				"position":     offsetPosition(doc.text(), argument.Range().Start),
++				"position":     offsetPositionWithIndex(index, argument.Range().Start),
+ 				"label":        name + ":",
+ 				"kind":         2,
+ 				"paddingRight": true,
+diff --git a/lsp/interactive_requests_test.go b/lsp/interactive_requests_test.go
+new file mode 100644
+index 0000000..3ac3a34
+--- /dev/null
++++ b/lsp/interactive_requests_test.go
+@@ -0,0 +1,47 @@
++package lsp
++
++import (
++	"bytes"
++	"encoding/json"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestInteractiveRequestsAllowCancellationDuringAnalysis(t *testing.T) {
++	t.Parallel()
++	for _, method := range []string{"textDocument/completion", "textDocument/signatureHelp"} {
++		t.Run(method, func(t *testing.T) {
++			t.Parallel()
++			const uri = "file:///main.pwn"
++			doc := &document{URI: uri, analysisReady: make(chan struct{})}
++			var output bytes.Buffer
++			s := &server{out: &output, documents: map[string]*document{uri: doc}}
++			request := message{
++				ID: json.RawMessage("1"), Method: method,
++				Params: json.RawMessage(`{"textDocument":{"uri":"file:///main.pwn"},"position":{"line":0,"character":0}}`),
++			}
++			returned := make(chan error, 1)
++			go func() {
++				_, err := s.handle(request)
++				returned <- err
++			}()
++			select {
++			case err := <-returned:
++				if err != nil {
++					t.Fatal(err)
++				}
++			case <-time.After(time.Second):
++				close(doc.analysisReady)
++				<-returned
++				s.requestWorkers.Wait()
++				t.Fatal("request blocked processing while analysis was pending")
++			}
++			s.cancelRequest(json.RawMessage(`{"id":1}`))
++			s.requestWorkers.Wait()
++			if !strings.Contains(output.String(), `"code":-32800`) {
++				t.Fatalf("missing cancellation response: %s", output.String())
++			}
++		})
++	}
++}
 diff --git a/lsp/open_overlays.go b/lsp/open_overlays.go
 new file mode 100644
+index 0000000..4a9911c
 --- /dev/null
 +++ b/lsp/open_overlays.go
 @@ -0,0 +1,69 @@
@@ -74,6 +285,7 @@ new file mode 100644
 +}
 diff --git a/lsp/open_overlays_test.go b/lsp/open_overlays_test.go
 new file mode 100644
+index 0000000..232e9f5
 --- /dev/null
 +++ b/lsp/open_overlays_test.go
 @@ -0,0 +1,98 @@
@@ -176,10 +388,34 @@ new file mode 100644
 +	}
 +}
 diff --git a/lsp/server.go b/lsp/server.go
-index 91bf675..fcd9909 100644
+index 91bf675..a8685dd 100644
 --- a/lsp/server.go
 +++ b/lsp/server.go
-@@ -663,6 +663,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
+@@ -464,7 +464,10 @@ func (s *server) handle(request message) (bool, error) {
+ 	case "callHierarchy/outgoingCalls":
+ 		return false, s.outgoingCalls(request.ID, request.Params)
+ 	case "textDocument/completion":
+-		return false, s.completion(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.completion(ctx, request.ID, request.Params)
++		})
++		return false, nil
+ 	case "completionItem/resolve":
+ 		return false, s.resolveCompletion(request.ID, request.Params)
+ 	case "textDocument/documentSymbol":
+@@ -499,7 +502,10 @@ func (s *server) handle(request message) (bool, error) {
+ 	case "textDocument/selectionRange":
+ 		return false, s.selectionRanges(request.ID, request.Params)
+ 	case "textDocument/signatureHelp":
+-		return false, s.signatureHelp(request.ID, request.Params)
++		s.handleAsync(request, func(ctx context.Context) error {
++			return s.signatureHelp(ctx, request.ID, request.Params)
++		})
++		return false, nil
+ 	case "textDocument/formatting":
+ 		return false, s.formatting(request.ID, request.Params)
+ 	case "textDocument/rangeFormatting":
+@@ -663,6 +669,7 @@ func (s *server) didOpen(raw json.RawMessage) error {
  	s.mu.Unlock()
  	s.refreshWorkspaceIndex(doc)
  	s.schedulePublish(doc, s.snapshot)
@@ -187,7 +423,7 @@ index 91bf675..fcd9909 100644
  	return nil
  }
  
-@@ -779,6 +780,7 @@ func (s *server) didChange(raw json.RawMessage) error {
+@@ -779,6 +786,7 @@ func (s *server) didChange(raw json.RawMessage) error {
  		s.restartWorkspaceIndex(next)
  	}
  	s.schedulePublishAfter(next, s.snapshot, documentPublishDebounce)
@@ -195,7 +431,7 @@ index 91bf675..fcd9909 100644
  	return nil
  }
  
-@@ -818,6 +820,7 @@ func (s *server) didClose(raw json.RawMessage) error {
+@@ -818,6 +826,7 @@ func (s *server) didClose(raw json.RawMessage) error {
  		return nil
  	}
  	s.restartWorkspaceIndex(doc)
@@ -203,7 +439,7 @@ index 91bf675..fcd9909 100644
  	return nil
  }
  
-@@ -973,7 +976,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
+@@ -973,7 +982,7 @@ func (s *server) publish(ctx context.Context, doc *document, snapshot *query.Sna
  	}
  	if shared == nil && analysisErr == nil {
  		shared, analysisErr = snapshot.Analyze(ctx, coresource.URI(doc.URI), analysis.Options{
@@ -212,7 +448,7 @@ index 91bf675..fcd9909 100644
  			MaxOutputTokens:          analysisOutputTokenLimit,
  			Revision:                 fmt.Sprintf("%s:%T:%T:%d", doc.Path, doc.Includes, doc.Names, doc.Revision),
  			TokenCache:               s.tokenCache,
-@@ -1112,7 +1115,8 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
+@@ -1111,8 +1120,9 @@ func (s *server) documentSymbols(id, raw json.RawMessage) error {
  	doc := s.readyDocument(params.TextDocument.URI)
  	items := make([]map[string]any, 0)
  	if doc != nil && doc.Analysis != nil && doc.Analysis.Symbols != nil {
@@ -222,6 +458,37 @@ index 91bf675..fcd9909 100644
 +			rng := offsetRangeWithIndex(index, int(item.Span.Start), int(item.Span.End))
  			items = append(items, map[string]any{
  				"name": item.Name, "kind": symbolKind(item.Kind),
+ 				"range": rng, "selectionRange": rng,
+diff --git a/lsp/signature.go b/lsp/signature.go
+index 6a1296c..9a8e8e0 100644
+--- a/lsp/signature.go
++++ b/lsp/signature.go
+@@ -1,6 +1,7 @@
+ package lsp
+ 
+ import (
++	"context"
+ 	"encoding/json"
+ 	"strconv"
+ 	"strings"
+@@ -9,12 +10,15 @@ import (
+ 	"github.com/pawnkit/pawn-api/pawnapi"
+ )
+ 
+-func (s *server) signatureHelp(id, raw json.RawMessage) error {
++func (s *server) signatureHelp(ctx context.Context, id, raw json.RawMessage) error {
+ 	var params textPositionParams
+ 	if err := json.Unmarshal(raw, &params); err != nil {
+ 		return err
+ 	}
+-	doc := s.readyDocument(params.TextDocument.URI)
++	doc, err := s.readyDocumentContext(ctx, params.TextDocument.URI)
++	if err != nil {
++		return err
++	}
+ 	offset, ok := documentOffset(doc, params.Position)
+ 	if !ok {
+ 		return s.respond(id, nil)
 diff --git a/lsp/workspace.go b/lsp/workspace.go
 index f834c01..3dbcce0 100644
 --- a/lsp/workspace.go
@@ -307,6 +574,7 @@ index f834c01..3dbcce0 100644
  	sort.Slice(items, func(i, j int) bool {
 diff --git a/lsp/workspace_diagnostics_reuse_test.go b/lsp/workspace_diagnostics_reuse_test.go
 new file mode 100644
+index 0000000..594cd73
 --- /dev/null
 +++ b/lsp/workspace_diagnostics_reuse_test.go
 @@ -0,0 +1,49 @@
@@ -359,68 +627,3 @@ new file mode 100644
 +		previous = current
 +	}
 +}
-diff --git a/go.mod b/go.mod
-index aec6433..526be67 100644
---- a/go.mod
-+++ b/go.mod
-@@ -3,10 +3,10 @@ module github.com/pawnkit/pawnlsp
- go 1.26.5
- 
- require (
--	github.com/pawnkit/pawn-analysis v0.30.3
-+	github.com/pawnkit/pawn-analysis v0.30.24
- 	github.com/pawnkit/pawn-api v0.19.0
--	github.com/pawnkit/pawn-parser v1.5.6
--	github.com/pawnkit/pawn-project v0.3.3
-+	github.com/pawnkit/pawn-parser v1.5.11
-+	github.com/pawnkit/pawn-project v0.34.2
- 	github.com/pawnkit/pawnfmt v1.4.4
- 	github.com/pawnkit/pawnkit-core v0.5.0
- 	github.com/pawnkit/pawnlint v1.8.12
-@@ -26,3 +26,9 @@ require (
- )
- 
- tool golang.org/x/vuln/cmd/govulncheck
-+
-+replace github.com/pawnkit/pawn-analysis => github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55
-+
-+replace github.com/pawnkit/pawn-parser => github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279
-+
-+replace github.com/pawnkit/pawnlint => github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932
-diff --git a/go.sum b/go.sum
-index f9fbf7a..11ffae1 100644
---- a/go.sum
-+++ b/go.sum
-@@ -1,3 +1,9 @@
-+github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55 h1:TntsyDOnEKSWrd5wkGpiguwolGXaIORUTCtpS6g28/k=
-+github.com/AmyrAhmady/pawn-analysis v0.0.0-20261111171718-ffc1adb39c55/go.mod h1:+SSXoxEkbhb6pQqO4MrkpX/9BkDPowjTOV3M8HRvLjA=
-+github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279 h1:aWWXKyKJ1GvqMd25LOUKMp0Xj3tCClYQA5KNdRxlIA0=
-+github.com/AmyrAhmady/pawn-parser v0.0.0-20261111171621-aef31f442279/go.mod h1:Egw7oGm4jkDpaWBvLkYItfNTZcAcvTg+gWjlAGL9rbI=
-+github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932 h1:mvfqH0LV/xN1dmHtmERugjrgj07JNsJ8rXzpFi8Vkm0=
-+github.com/AmyrAhmady/pawnlint v0.0.0-20261111173848-bed18272a932/go.mod h1:iT3gJI+hyX+lNUygqw/Flx5oDJ2vnFC7v1aIfnz0axo=
- github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
- github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
- github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
-@@ -10,20 +16,14 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
- github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
- github.com/google/renameio v0.1.0 h1:GOZbcHa3HfsPKPlmyPyN2KEohoMXOhdMbHrvbpl2QaA=
- github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
--github.com/pawnkit/pawn-analysis v0.30.3 h1:KQ5pJmUomJxDbjEIpUROZyukEKEBRVyr7BPU+D6vsis=
--github.com/pawnkit/pawn-analysis v0.30.3/go.mod h1:xP7YJ5mlkEDF3CxC1CVW76RP83hyGS5yrXJqnwg7Dng=
- github.com/pawnkit/pawn-api v0.19.0 h1:vOBOpCMrwMCem2YtxO9VdpwBv2MTD/CvTLmzS8/F2wo=
- github.com/pawnkit/pawn-api v0.19.0/go.mod h1:kG0iHjG85iOU27geni1yaXk2WfSmJuhUoWkSrhUS7Ik=
--github.com/pawnkit/pawn-parser v1.5.6 h1:6RZCmFvCpQC/EZJqQXsz0vYCQjpw/pZwaGLjY0DYrR8=
--github.com/pawnkit/pawn-parser v1.5.6/go.mod h1:6iG1RfoTtroAadrF5A60QZc/zwalxBwn2gbgCQ/QO8Y=
--github.com/pawnkit/pawn-project v0.3.3 h1:XplAg9Qz1eo3GNVbT5j6gZwx8lAHN176Ydi4pU78xMo=
--github.com/pawnkit/pawn-project v0.3.3/go.mod h1:hMeRnvAYqu5TeWkJKT7EVqw6z62wTiuGBuIvcWNZuYY=
-+github.com/pawnkit/pawn-project v0.34.2 h1:0U3bSKSJJqEHjxdAcOyQuXrfF512rHrpDIqBrPuxEmo=
-+github.com/pawnkit/pawn-project v0.34.2/go.mod h1:caXLtXl6HEpoo+7Uom0vdNo68X9i+z30xTMZ0ZVGkv4=
- github.com/pawnkit/pawnfmt v1.4.4 h1:T4jVPmacaR+tN7hgOH/F0KZKqqcHyGW7hIDL+XSpIow=
- github.com/pawnkit/pawnfmt v1.4.4/go.mod h1:j9S8y940niZ6yxydu0Jh9Nz9K90rs1tg0mfw/euD00U=
- github.com/pawnkit/pawnkit-core v0.5.0 h1:faEI2LGaP9czSDaKxtw4qvGUNuft88qeR/MdW0jLmlg=
- github.com/pawnkit/pawnkit-core v0.5.0/go.mod h1:jGhXHEEzr8juezaRhh/AkGzX6S4eGQnprB83vrI1peU=
--github.com/pawnkit/pawnlint v1.8.12 h1:9qbUZnCyKVc5XlR5sB62jtsnpdB73izNP2Zk7Vjyz50=
--github.com/pawnkit/pawnlint v1.8.12/go.mod h1:1DI43RD9sUGMw3+NWSdW61xyEbkxCYmlfBPozvbok7U=
- github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
- github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
- github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
