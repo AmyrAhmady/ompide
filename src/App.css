@@ -730,6 +730,13 @@ hr {
   border-bottom: 1px solid var(--editorError-foreground);
   background: var(--editorWidget-background);
 }
+.error-banner > span {
+  min-width: 0;
+  max-height: 25vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .error-banner button {
   border: 0;
   background: none;

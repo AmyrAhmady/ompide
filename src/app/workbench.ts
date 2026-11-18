@@ -33,6 +33,7 @@ import {
   type OpenGitDiff,
 } from "../sourceControl/types";
 import { protocolUri } from "../lib/uri";
+import { formattingFailure } from "../language/errors";
 import { languageFeatures, type LanguageFeatures } from "../language/features";
 import { RecoveryPolicy } from "../language/recovery";
 import { commands } from "vscode";
@@ -700,6 +701,7 @@ export class Workbench {
     const document = this.documents.get(uri);
     if (!document) return true;
     let formatSkipped = false;
+    let formatFailure: unknown;
     if (
       this.state.settings.formatOnSave &&
       !document.largeFile &&
@@ -719,6 +721,7 @@ export class Workbench {
         ]);
       } catch (error) {
         console.warn(error);
+        formatFailure = error;
         formatSkipped = true;
       } finally {
         clearTimeout(timer);
@@ -785,7 +788,15 @@ export class Workbench {
           })
           .catch(console.warn);
     }
-    if (formatSkipped) this.report({ code: "savedWithoutFormatting" });
+    if (formatSkipped)
+      this.report(
+        formatFailure
+          ? {
+              code: "savedWithoutFormattingReason",
+              parameters: { reason: describeError(formatFailure) },
+            }
+          : { code: "savedWithoutFormatting" }
+      );
     return true;
   }
 
@@ -1425,17 +1436,23 @@ export class Workbench {
     )
       return;
     const version = document.model.getVersionId();
-    const edits = await client.sendRequest<TextEdit[] | null>(
-      "textDocument/formatting",
-      {
-        textDocument: { uri: protocolUri(document.model.uri) },
-        options: {
-          tabSize: this.state.settings.tabSize,
-          insertSpaces: this.state.settings.insertSpaces,
+    let edits: TextEdit[] | null;
+    try {
+      edits = await client.sendRequest<TextEdit[] | null>(
+        "textDocument/formatting",
+        {
+          textDocument: { uri: protocolUri(document.model.uri) },
+          options: {
+            tabSize: this.state.settings.tabSize,
+            insertSpaces: this.state.settings.insertSpaces,
+          },
         },
-      },
-      cancellation
-    );
+        cancellation
+      );
+    } catch (error) {
+      if (cancellation?.isCancellationRequested) return;
+      throw formattingFailure(error);
+    }
     if (cancellation?.isCancellationRequested) return;
     if (
       document.model.isDisposed() ||
