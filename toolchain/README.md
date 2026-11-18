@@ -25,7 +25,7 @@ prepared from the compiler archive. The license texts must accompany packaging.
 
 ## Patched language server
 
-The bundled server is `0.33.75-pawnide.10`, based on the upstream v0.33.75 commit
+The bundled server is `0.33.75-pawnide.11`, based on the upstream v0.33.75 commit
 listed above. It remains the real PawnKit executable over standard LSP. The patch
 in `patches/pawnlsp-open-overlays.patch` makes document analysis use unsaved include
 buffers, invalidates affected open parents on include open/change/close, and
@@ -39,13 +39,13 @@ correction. Token caching, trivia reuse, debounce and background analysis remain
 enabled. A synchronous workspace-analysis regression fails before this fix;
 real protocol tests cover repeated full-text and full-range valid/invalid edits.
 
-Version `.6` pins pawn-analysis at `ffc1adb39c55` and pawn-parser at
+Version `.6` originally pinned pawn-analysis at `ffc1adb39c55` and pawn-parser at
 `aef31f442279` through checksum-verified Go module replacements. These revisions
 carry the fixes for textual macros, generated declarations, conditional control
 flow, and chained Pawn comparisons. Go resolves the pinned revisions through
 its normal module cache.
 
-Version `.7` pins pawnlint at `bed18272a932`. Editor linting uses the shared
+Version `.7` originally pinned pawnlint at `bed18272a932`. Editor linting uses the shared
 analysis result for syntax diagnostics when it matches the current file and
 revision. This keeps the background lint pass from re-reporting raw syntax
 errors for valid textual macros.
@@ -71,6 +71,20 @@ unsaved buffers contribute to the workspace analysis revision, preventing old
 macro values from surviving incremental reuse. Closing a document or reloading
 project configuration clears the relevant cache. Background read requests run
 outside the notification loop so they cannot hold up incoming typing updates.
+
+Version `.11` removes the three fork replacements in favor of merged upstream
+revisions, pinned through ordinary Go module requirements and checksums:
+
+| Module | Upstream revision | Merge |
+| --- | --- | --- |
+| pawn-analysis | `v0.30.25-0.20261115022903-d15123ee97b7` | [PR #4](https://github.com/pawnkit/pawn-analysis/pull/4) |
+| pawn-parser | `v1.5.12-0.20261113015839-fd7096f341f3` | [PR #2](https://github.com/pawnkit/pawn-parser/pull/2) |
+| pawnlint | `v1.8.61-0.20261113014830-aa4c76333c3c` | [PR #20](https://github.com/pawnkit/pawnlint/pull/20) |
+
+These are immutable merge revisions, not floating `main` dependencies. The
+pawnlsp source base and local responsiveness/overlay patches remain unchanged;
+those changes still need upstream integration. The external-SDK pawn-project
+patch remains necessary too. Both platform manifests use this dependency set.
 
 The dependency patch at `patches/pawnkit-compatibility.patch` is pinned by
 checksum in `pawnlsp-build.json`. It permits external SDK include paths in
