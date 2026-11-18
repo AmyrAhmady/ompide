@@ -366,7 +366,7 @@ hr {
   background: var(--panelTab-activeBackground);
   color: var(--panelTab-activeForeground);
 }
-.panel-tabs-heading button:hover {
+.panel-tabs-heading button:hover:not([aria-selected="true"]) {
   background: var(--list-hoverBackground);
 }
 .panel-count {

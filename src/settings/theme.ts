@@ -235,7 +235,7 @@ export function themeVariables(theme: Theme): Record<string, string> {
     "windowControl.closeBackground":
       c["button.hoverBackground"] ?? c["button.background"],
     "windowControl.closeForeground": c["button.foreground"],
-    "panelTab.activeBackground": c["tab.activeBackground"],
+    "panelTab.activeBackground": `color-mix(in srgb, ${c["list.activeSelectionBackground"]} 55%, ${c["panel.background"]})`,
     "panelTab.activeForeground":
       c["panelTitle.activeForeground"] ?? c["editor.foreground"],
     "toolbar.buttonBackground":
